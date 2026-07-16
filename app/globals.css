@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f6f3ec;
+  --surface: #ffffff;
+  --ink: #1e2a20;
+  --soft: #5a6557;
+  --pine: #2c5e3f;
+  --pine-dark: #21492f;
+  --line: #e4ddcf;
+  --amber: #f59e0b;
+  --coral: #ef5b3c;
+  --cream: #fdfbf6;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-soft: var(--soft);
+  --color-pine: var(--pine);
+  --color-pine-dark: var(--pine-dark);
+  --color-line: var(--line);
+  --color-amber: var(--amber);
+  --color-coral: var(--coral);
+  --color-cream: var(--cream);
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-instrument), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+/* „ai" v názvu tainy — jádro brandu */
+.ai-mark {
+  background: linear-gradient(120deg, var(--amber) 10%, var(--coral) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-style: italic;
+}
+
+.ai-chip {
+  background: linear-gradient(120deg, #fef3c7, #ffe4d6);
+  border: 1px solid #f8caa4;
+}
+
+/* Jemná papírová textura pozadí */
+.paper {
+  background-image: radial-gradient(var(--line) 0.8px, transparent 0.8px);
+  background-size: 22px 22px;
+}
+
+/* Vstupy */
+.field {
+  @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none transition placeholder:text-soft/60 focus:border-pine focus:ring-2 focus:ring-pine/15;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-full bg-pine px-6 py-3.5 text-[15px] font-semibold text-white transition hover:bg-pine-dark active:scale-[0.98] disabled:opacity-40;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-surface px-6 py-3.5 text-[15px] font-semibold text-ink transition hover:border-pine/40 active:scale-[0.98];
+}
+
+/* Animace nadechnutí při načtení */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rise-1 { animation-delay: 0.06s; }
+.rise-2 { animation-delay: 0.14s; }
+.rise-3 { animation-delay: 0.22s; }
+.rise-4 { animation-delay: 0.3s; }
+
+/* Pulz nahrávání hlasu */
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(239, 91, 60, 0.35); }
+  70% { box-shadow: 0 0 0 22px rgba(239, 91, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 91, 60, 0); }
+}
+.recording { animation: pulse-ring 1.4s ease-out infinite; }

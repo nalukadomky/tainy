@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# lokální SQLite databáze (obnovitelná přes `npm run db:push && npm run db:seed`)
+*.db
+*.db-journal
+prisma/*.db
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

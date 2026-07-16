@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Site {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  tagline      String        @default("")
+  description  String        @default("")
+  propertyType String        @default("chata")
+  pricePerNight Int
+  pricingMode  String        @default("unit")
+  weekendPct   Int           @default(0)
+  maxGuests    Int           @default(4)
+  amenities    String        @default("")
+  themeColor   String        @default("pine")
+  tier         String        @default("start")
+  contactEmail String        @default("")
+  contactPhone String        @default("")
+  createdAt    DateTime      @default(now())
+  reservations Reservation[]
+  costs        Cost[]
+  priceRules   PriceRule[]
+}
+
+model PriceRule {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  pct       Int
+  createdAt DateTime @default(now())
+}
+
+model Reservation {
+  id         String   @id @default(cuid())
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guestName  String
+  email      String
+  phone      String   @default("")
+  guests     Int
+  startDate  DateTime
+  endDate    DateTime
+  totalPrice Int
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+}
+
+model Cost {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  label     String
+  amount    Int
+  category  String   @default("provoz")
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+}

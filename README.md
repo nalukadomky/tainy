@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# tainy
 
-## Getting Started
+Nejrychlejší cesta k vlastnímu prezentačnímu webu s **rezervacemi ubytování** — s AI asistentem,
+který web upraví za tebe. Mobile-first, česky.
 
-First, run the development server:
+- **Prezentační web + onboarding** – marketingová landing page a krokový průvodce vytvořením webu
+- **Veřejný web nemovitosti** (`/w/[slug]`) – prezentace + rezervační kalendář (den příjezdu/odjezdu
+  jako půlden), flexibilní ceník, mock Stripe checkout
+- **Administrace** (`/admin`) – dashboard výdělků, správa rezervací a hostů, evidence nákladů,
+  editace webu a ceníku, **hlasový AI asistent** (tarif Pro)
+
+Podrobná specifikace produktu je v [PROMPT.md](PROMPT.md).
+
+## Stack
+
+Next.js (App Router) · TypeScript · Tailwind CSS 4 · Prisma + SQLite · Anthropic Claude API
+
+## Lokální spuštění
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:push      # vytvoří SQLite databázi (prisma/dev.db)
+npm run db:seed      # naplní demo web „Chata Meduňka" + rezervace a náklady
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo web: `/w/demo` · Demo administrace: `/admin`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Konfigurace
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Vytvoř soubor `.env` (je gitignorovaný):
 
-## Learn More
+```
+DATABASE_URL="file:./dev.db"
+ANTHROPIC_API_KEY=      # volitelné – bez klíče běží AI asistent v ukázkovém režimu
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Ceník (jak se počítá)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Cena se počítá **noc po noci**: základní cena za noc (za nemovitost, nebo za osobu) + víkendová
+přirážka v % (noci pá–ne) + sezónní období v ± %. Procenta se sčítají.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Poznámka k nasazení
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Aplikace používá **SQLite**, které na serverless platformách (Vercel) nefunguje pro zápis
+(read-only filesystem). Pro živé nasazení je potřeba hostovaná databáze (např. Turso/libSQL,
+Vercel Postgres, Neon) — stačí změnit `datasource` v `prisma/schema.prisma` a `DATABASE_URL`.
