@@ -13,35 +13,35 @@ Podrobná specifikace produktu je v [PROMPT.md](PROMPT.md).
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS 4 · Prisma + SQLite · Anthropic Claude API
+Next.js (App Router) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL (Supabase) · Anthropic Claude API
 
 ## Lokální spuštění
 
 ```bash
 npm install
-npm run db:push      # vytvoří SQLite databázi (prisma/dev.db)
-npm run db:seed      # naplní demo web „Chata Meduňka" + rezervace a náklady
-npm run dev          # http://localhost:3000
+cp .env.example .env  # a doplň DATABASE_URL / DIRECT_URL ze Supabase
+npm run db:push       # vytvoří tabulky v databázi
+npm run db:seed       # naplní demo web „Chata Meduňka" + rezervace a náklady
+npm run dev           # http://localhost:3000
 ```
 
 Demo web: `/w/demo` · Demo administrace: `/admin`
 
 ## Konfigurace
 
-Vytvoř soubor `.env` (je gitignorovaný):
+Zkopíruj `.env.example` do `.env` (je gitignorovaný) a doplň:
 
-```
-DATABASE_URL="file:./dev.db"
-ANTHROPIC_API_KEY=      # volitelné – bez klíče běží AI asistent v ukázkovém režimu
-```
+- `DATABASE_URL` – Supabase Transaction pooler (port 6543, `?pgbouncer=true`) – běh aplikace
+- `DIRECT_URL` – Supabase Session/Direct (port 5432) – migrace `prisma db push`
+- `ANTHROPIC_API_KEY` – volitelné; bez klíče běží AI asistent v ukázkovém režimu
 
 ## Ceník (jak se počítá)
 
 Cena se počítá **noc po noci**: základní cena za noc (za nemovitost, nebo za osobu) + víkendová
 přirážka v % (noci pá–ne) + sezónní období v ± %. Procenta se sčítají.
 
-## Poznámka k nasazení
+## Nasazení na Vercel
 
-Aplikace používá **SQLite**, které na serverless platformách (Vercel) nefunguje pro zápis
-(read-only filesystem). Pro živé nasazení je potřeba hostovaná databáze (např. Turso/libSQL,
-Vercel Postgres, Neon) — stačí změnit `datasource` v `prisma/schema.prisma` a `DATABASE_URL`.
+Databáze běží na **Supabase (PostgreSQL)**, takže aplikace funguje i v serverless prostředí.
+Ve Vercelu stačí nastavit proměnné prostředí `DATABASE_URL`, `DIRECT_URL` a (volitelně)
+`ANTHROPIC_API_KEY`. Build spouští `prisma generate` automaticky (`postinstall`).
