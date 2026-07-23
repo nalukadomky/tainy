@@ -10,6 +10,7 @@ datasource db {
 
 model Site {
   id           String        @id @default(cuid())
+  ownerId      String?       @db.Uuid
   slug         String        @unique
   name         String
   tagline      String        @default("")
@@ -28,6 +29,8 @@ model Site {
   reservations Reservation[]
   costs        Cost[]
   priceRules   PriceRule[]
+
+  @@index([ownerId])
 }
 
 model PriceRule {

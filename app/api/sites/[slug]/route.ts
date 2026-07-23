@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 
 const EDITABLE = [
   "name",
@@ -37,6 +38,11 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+
+  // Editovat web smí jen jeho vlastník
+  const guard = await requireSiteOwnerBySlug(slug);
+  if (!guard.ok) return deny(guard.status);
+
   const body = await req.json();
   const data: Record<string, string | number> = {};
   for (const key of EDITABLE) {
@@ -56,8 +62,7 @@ export async function PATCH(
     }
   }
 
-  const existing = await prisma.site.findUnique({ where: { slug } });
-  if (!existing) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
+  const existing = guard.site;
 
   // Sezónní období: pokud přijde pole priceRules, nahradí se celé
   let rulesOps: ReturnType<typeof prisma.priceRule.deleteMany>[] = [];
@@ -76,7 +81,6 @@ export async function PATCH(
       );
     rulesOps = [
       prisma.priceRule.deleteMany({ where: { siteId: existing.id } }),
-      // createMany je v SQLite podporované
       prisma.priceRule.createMany({ data: cleaned }),
     ] as never[];
   }

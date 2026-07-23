@@ -33,7 +33,19 @@ Zkopíruj `.env.example` do `.env` (je gitignorovaný) a doplň:
 
 - `DATABASE_URL` – Supabase Transaction pooler (port 6543, `?pgbouncer=true`) – běh aplikace
 - `DIRECT_URL` – Supabase Session/Direct (port 5432) – migrace `prisma db push`
+- `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` – **povinné** pro přihlášení (Supabase Auth)
 - `ANTHROPIC_API_KEY` – volitelné; bez klíče běží AI asistent v ukázkovém režimu
+
+### Přihlášení (Supabase Auth)
+
+Registrace i login běží přes Supabase Auth (Google OAuth + e-mail/heslo). V Supabase dashboardu je potřeba:
+
+1. **Authentication → Providers → Google:** zapnout a vložit Google OAuth Client ID + Secret
+   (redirect URI v Google Cloud: `https://<ref>.supabase.co/auth/v1/callback`).
+2. **Authentication → URL Configuration:** Site URL + do Redirect URLs přidat
+   `http://localhost:3000/auth/callback` a `https://<doména>/auth/callback`.
+3. **Authentication → Email → „Confirm email":** vypnout pro plynulý funnel (nebo nechat zapnuté —
+   registrace pak zobrazí „zkontroluj e-mail").
 
 ## Ceník (jak se počítá)
 
@@ -43,5 +55,6 @@ přirážka v % (noci pá–ne) + sezónní období v ± %. Procenta se sčítaj
 ## Nasazení na Vercel
 
 Databáze běží na **Supabase (PostgreSQL)**, takže aplikace funguje i v serverless prostředí.
-Ve Vercelu stačí nastavit proměnné prostředí `DATABASE_URL`, `DIRECT_URL` a (volitelně)
-`ANTHROPIC_API_KEY`. Build spouští `prisma generate` automaticky (`postinstall`).
+Ve Vercelu nastav proměnné `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` a (volitelně) `ANTHROPIC_API_KEY`. Build spouští
+`prisma generate` automaticky (`postinstall`).

@@ -16,7 +16,7 @@ type SiteInfo = {
 
 type Step = "termin" | "udaje" | "platba" | "hotovo";
 
-export function BookingWidget({ site }: { site: SiteInfo }) {
+export function BookingWidget({ site, preview = false }: { site: SiteInfo; preview?: boolean }) {
   const [step, setStep] = useState<Step>("termin");
   const [booked, setBooked] = useState<BookedRange[]>([]);
   const [startDate, setStartDate] = useState<string | null>(null);
@@ -29,11 +29,12 @@ export function BookingWidget({ site }: { site: SiteInfo }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (preview) return; // v náhledu neexistuje slug/DB — kalendář je prázdný
     fetch(`/api/availability?site=${site.slug}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setBooked)
       .catch(() => {});
-  }, [site.slug]);
+  }, [site.slug, preview]);
 
   const price = useMemo(() => {
     if (!startDate || !endDate || endDate <= startDate) return null;
@@ -192,14 +193,20 @@ export function BookingWidget({ site }: { site: SiteInfo }) {
                 {error}
               </p>
             )}
-            <button
-              type="button"
-              className="btn-primary w-full"
-              disabled={!price || price.nights < 1}
-              onClick={() => setStep("udaje")}
-            >
-              {price ? "Pokračovat →" : "Vyber termín v kalendáři"}
-            </button>
+            {preview ? (
+              <p className="rounded-xl bg-bg px-4 py-3 text-center text-sm text-soft">
+                👀 Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou zaplatit.
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary w-full"
+                disabled={!price || price.nights < 1}
+                onClick={() => setStep("udaje")}
+              >
+                {price ? "Pokračovat →" : "Vyber termín v kalendáři"}
+              </button>
+            )}
           </div>
         )}
 

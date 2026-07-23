@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { getUser, deny } from "@/lib/auth";
 
 // Hlasový AI asistent (tier tainy Pro): dostane přepis hlasového pokynu
 // a aktuální obsah webu, vrátí odpověď + sadu úprav, které rovnou aplikujeme.
@@ -69,6 +70,12 @@ export async function POST(req: NextRequest) {
 
   const site = await prisma.site.findUnique({ where: { slug } });
   if (!site) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
+
+  // Upravovat web přes asistenta smí jen jeho vlastník
+  const user = await getUser();
+  if (!user) return deny(401);
+  if (site.ownerId !== user.id) return deny(403);
+
   if (site.tier !== "pro") {
     return NextResponse.json(
       { error: "Hlasový asistent je součástí tarifu tainy Pro." },

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUser, deny } from "@/lib/auth";
 
 function slugify(name: string): string {
   return name
@@ -11,12 +12,21 @@ function slugify(name: string): string {
     .slice(0, 48);
 }
 
+// Vrací pouze weby přihlášeného uživatele (napájí přepínač webů v administraci).
 export async function GET() {
-  const sites = await prisma.site.findMany({ orderBy: { createdAt: "asc" } });
+  const user = await getUser();
+  if (!user) return NextResponse.json([]);
+  const sites = await prisma.site.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
   return NextResponse.json(sites);
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getUser();
+  if (!user) return deny(401);
+
   const body = await req.json();
   if (!body.name || !body.pricePerNight) {
     return NextResponse.json({ error: "Chybí název nebo cena za noc." }, { status: 400 });
@@ -29,6 +39,7 @@ export async function POST(req: NextRequest) {
   const site = await prisma.site.create({
     data: {
       slug,
+      ownerId: user.id,
       name: String(body.name),
       tagline: String(body.tagline ?? ""),
       description: String(body.description ?? ""),

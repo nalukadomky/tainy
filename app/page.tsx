@@ -54,8 +54,8 @@ export default function Home() {
             <Link href="/w/demo" className="hidden text-sm font-medium text-soft hover:text-ink sm:block">
               Demo web
             </Link>
-            <Link href="/admin" className="hidden text-sm font-medium text-soft hover:text-ink sm:block">
-              Demo administrace
+            <Link href="/login" className="text-sm font-medium text-soft hover:text-ink">
+              Přihlásit se
             </Link>
             <Link href="/onboarding" className="btn-primary !px-5 !py-2.5 text-sm">
               Vytvořit web
@@ -90,7 +90,7 @@ export default function Home() {
               </Link>
             </div>
             <p className="rise rise-4 mt-4 text-sm text-soft">
-              Bez registrace a bez karty. Demo si proklikáš za minutu.
+              Web si sestavíš a prohlédneš zdarma — účet stačí založit, až se ti bude líbit.
             </p>
           </div>
         </div>

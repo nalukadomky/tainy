@@ -50,13 +50,25 @@ export type Cost = {
   date: string;
 };
 
-export function getSiteSlug(): string {
-  if (typeof window === "undefined") return "demo";
-  return localStorage.getItem("tainy.site") || "demo";
+export function getSiteSlug(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("tainy.site");
 }
 
-// Jednoduchý datový hook administrace: načte web + rezervace + náklady
-// pro web zvolený v localStorage (výchozí je demo).
+// Vrátí slug prvního webu přihlášeného uživatele (nebo null).
+async function firstOwnedSlug(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/sites");
+    if (!res.ok) return null;
+    const sites = await res.json();
+    return Array.isArray(sites) && sites.length ? sites[0].slug : null;
+  } catch {
+    return null;
+  }
+}
+
+// Datový hook administrace: načte web + rezervace + náklady pro web přihlášeného
+// uživatele (uložený v localStorage, jinak jeho první web).
 export function useAdminData() {
   const [slug, setSlug] = useState<string | null>(null);
   const [site, setSite] = useState<Site | null>(null);
@@ -66,26 +78,44 @@ export function useAdminData() {
   const [error, setError] = useState("");
 
   const reload = useCallback(async (s?: string) => {
-    const useSlug = s ?? getSiteSlug();
-    setSlug(useSlug);
     setLoading(true);
     setError("");
     try {
+      let useSlug = s ?? getSiteSlug();
+
+      // Není-li uložený web, vezmi první vlastní web uživatele
+      if (!useSlug) {
+        useSlug = await firstOwnedSlug();
+        if (!useSlug) {
+          window.location.href = "/onboarding";
+          return;
+        }
+        localStorage.setItem("tainy.site", useSlug);
+      }
+      setSlug(useSlug);
+
       const [siteRes, resRes, costRes] = await Promise.all([
         fetch(`/api/sites/${useSlug}`),
         fetch(`/api/reservations?site=${useSlug}`),
         fetch(`/api/costs?site=${useSlug}`),
       ]);
-      if (!siteRes.ok) {
-        // Web (např. po smazání DB) neexistuje — vrátíme se k demu
-        if (useSlug !== "demo") {
-          localStorage.setItem("tainy.site", "demo");
-          return reload("demo");
+
+      // Uložený web už není náš (403) nebo neexistuje (404) — zkus první vlastní
+      if (!siteRes.ok || !resRes.ok) {
+        const first = await firstOwnedSlug();
+        if (!first) {
+          window.location.href = "/onboarding";
+          return;
         }
-        throw new Error("Web nenalezen. Vytvoř si nový v průvodci.");
+        if (first !== useSlug) {
+          localStorage.setItem("tainy.site", first);
+          return reload(first);
+        }
+        throw new Error("Web se nepodařilo načíst.");
       }
+
       setSite(await siteRes.json());
-      setReservations(resRes.ok ? await resRes.json() : []);
+      setReservations(await resRes.json());
       setCosts(costRes.ok ? await costRes.json() : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Načtení dat selhalo.");

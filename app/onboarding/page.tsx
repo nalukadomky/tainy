@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AmenityPicker } from "@/components/AmenityPicker";
+import { SiteView, type SiteViewData } from "@/components/SiteView";
 
 const PROPERTY_TYPES = ["chata", "tiny house", "apartmán", "penzion", "glamping", "roubenka"];
 
@@ -44,6 +45,49 @@ type Form = {
   tier: "start" | "pro";
 };
 
+// Víkendová cena (Pá–Ne) → přirážka v % oproti ceně Po–Čt (formát modelu).
+function weekendPctOf(form: Form): number {
+  return form.weekendPrice && Number(form.pricePerNight) > 0
+    ? Math.round((Number(form.weekendPrice) / Number(form.pricePerNight) - 1) * 100)
+    : 0;
+}
+
+// Tělo pro POST /api/sites (uloží se jako draft do localStorage).
+function buildDraft(form: Form) {
+  return {
+    name: form.name,
+    propertyType: form.propertyType,
+    tagline: form.tagline,
+    description: form.description,
+    maxGuests: form.maxGuests,
+    pricingMode: form.pricingMode,
+    tier: form.tier,
+    contactEmail: form.contactEmail,
+    contactPhone: form.contactPhone,
+    pricePerNight: Number(form.pricePerNight),
+    weekendPct: weekendPctOf(form),
+    amenities: form.amenities.join(", "),
+  };
+}
+
+// Data pro živý náhled webu.
+function draftToSiteView(form: Form): SiteViewData {
+  return {
+    name: form.name,
+    tagline: form.tagline,
+    description: form.description,
+    propertyType: form.propertyType,
+    pricePerNight: Number(form.pricePerNight) || 0,
+    pricingMode: form.pricingMode,
+    weekendPct: weekendPctOf(form),
+    maxGuests: form.maxGuests,
+    amenities: form.amenities.join(", "),
+    contactEmail: form.contactEmail,
+    contactPhone: form.contactPhone,
+    priceRules: [],
+  };
+}
+
 function Wizard() {
   const router = useRouter();
   const params = useSearchParams();
@@ -74,34 +118,46 @@ function Wizard() {
     { title: "Kapacita a ceny", valid: Number(form.pricePerNight) > 0 },
     { title: "Vybavení a kontakt", valid: true },
     { title: "Vyber si tarif", valid: true },
+    { title: "Náhled tvého webu", valid: true },
   ];
+  const PREVIEW_STEP = steps.length - 1;
 
-  async function submit() {
+  // Web se zatím nevytváří — draft se drží v prohlížeči a vznikne až po přihlášení.
+  function claim() {
     setSaving(true);
-    setError("");
-    try {
-      const res = await fetch("/api/sites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          pricePerNight: Number(form.pricePerNight),
-          // Víkendová cena (Pá–Ne) se do modelu ukládá jako přirážka v % oproti ceně Po–Čt
-          weekendPct:
-            form.weekendPrice && Number(form.pricePerNight) > 0
-              ? Math.round((Number(form.weekendPrice) / Number(form.pricePerNight) - 1) * 100)
-              : 0,
-          amenities: form.amenities.join(", "),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Něco se pokazilo.");
-      localStorage.setItem("tainy.site", data.slug);
-      router.push("/admin?vitej=1");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Něco se pokazilo.");
-      setSaving(false);
-    }
+    localStorage.setItem("tainy.draft", JSON.stringify(buildDraft(form)));
+    router.push("/onboarding/dokoncit");
+  }
+
+  // Krok „Náhled" = plnohodnotný živý web přes celou obrazovku + lišta s CTA.
+  if (step === PREVIEW_STEP) {
+    return (
+      <div className="min-h-dvh bg-cream">
+        <div className="sticky top-0 z-50 border-b border-line bg-cream/90 backdrop-blur">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setStep(PREVIEW_STEP - 1)}
+              className="text-sm text-soft transition hover:text-ink"
+            >
+              ← Upravit
+            </button>
+            <span className="hidden text-xs font-semibold uppercase tracking-wider text-soft sm:block">
+              Náhled tvého webu
+            </span>
+            <button
+              type="button"
+              onClick={claim}
+              disabled={saving}
+              className="btn-primary !px-5 !py-2 text-sm"
+            >
+              {saving ? "Moment…" : "Chci tento web →"}
+            </button>
+          </div>
+        </div>
+        <SiteView site={draftToSiteView(form)} preview />
+      </div>
+    );
   }
 
   return (
@@ -371,20 +427,14 @@ function Wizard() {
             ← Zpět
           </button>
         )}
-        {step < steps.length - 1 ? (
-          <button
-            type="button"
-            className="btn-primary flex-1"
-            disabled={!steps[step].valid}
-            onClick={() => setStep(step + 1)}
-          >
-            Pokračovat →
-          </button>
-        ) : (
-          <button type="button" className="btn-primary flex-1" disabled={saving} onClick={submit}>
-            {saving ? "Vytvářím web…" : "🎉 Vytvořit můj web"}
-          </button>
-        )}
+        <button
+          type="button"
+          className="btn-primary flex-1"
+          disabled={!steps[step].valid}
+          onClick={() => setStep(step + 1)}
+        >
+          {step === PREVIEW_STEP - 1 ? "Zobrazit náhled →" : "Pokračovat →"}
+        </button>
       </div>
     </div>
   );

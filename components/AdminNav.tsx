@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
+import { createClient } from "@/lib/supabase/client";
 
 const ITEMS = [
   { href: "/admin", label: "Přehled", icon: "📊" },
@@ -15,8 +16,15 @@ const ITEMS = [
 
 export function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <>
@@ -29,22 +37,32 @@ export function AdminNav() {
               Administrace
             </span>
           </div>
-          {/* Desktop navigace */}
-          <nav className="hidden items-center gap-1 sm:flex">
-            {ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                  isActive(item.href)
-                    ? "bg-ink text-white"
-                    : "text-soft hover:bg-line/50 hover:text-ink"
-                } ${item.ai && !isActive(item.href) ? "ai-chip !text-ink" : ""}`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex items-center gap-1">
+            {/* Desktop navigace */}
+            <nav className="hidden items-center gap-1 sm:flex">
+              {ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                    isActive(item.href)
+                      ? "bg-ink text-white"
+                      : "text-soft hover:bg-line/50 hover:text-ink"
+                  } ${item.ai && !isActive(item.href) ? "ai-chip !text-ink" : ""}`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+            <button
+              type="button"
+              onClick={signOut}
+              className="ml-1 rounded-full px-3.5 py-2 text-sm font-medium text-soft transition hover:bg-line/50 hover:text-ink"
+              title="Odhlásit se"
+            >
+              Odhlásit
+            </button>
+          </div>
         </div>
       </header>
 
