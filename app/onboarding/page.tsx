@@ -4,8 +4,30 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { AmenityPicker } from "@/components/AmenityPicker";
 
 const PROPERTY_TYPES = ["chata", "tiny house", "apartmán", "penzion", "glamping", "roubenka"];
+
+const AMENITY_SUGGESTIONS = [
+  "Wi-Fi",
+  "Parkování",
+  "Kuchyň",
+  "Sauna",
+  "Vířivka",
+  "Kamna na dřevo",
+  "Krb",
+  "Terasa",
+  "Gril",
+  "Bazén",
+  "Klimatizace",
+  "Myčka",
+  "Pračka",
+  "TV",
+  "Zahrada",
+  "Snídaně",
+  "Domácí mazlíčci vítáni",
+  "Bezbariérový přístup",
+];
 
 type Form = {
   name: string;
@@ -14,8 +36,9 @@ type Form = {
   description: string;
   maxGuests: number;
   pricePerNight: string;
+  weekendPrice: string;
   pricingMode: "unit" | "person";
-  amenities: string;
+  amenities: string[];
   contactEmail: string;
   contactPhone: string;
   tier: "start" | "pro";
@@ -34,8 +57,9 @@ function Wizard() {
     description: "",
     maxGuests: 4,
     pricePerNight: "",
+    weekendPrice: "",
     pricingMode: "unit",
-    amenities: "",
+    amenities: [],
     contactEmail: "",
     contactPhone: "",
     tier: params.get("tier") === "pro" ? "pro" : "start",
@@ -62,6 +86,12 @@ function Wizard() {
         body: JSON.stringify({
           ...form,
           pricePerNight: Number(form.pricePerNight),
+          // Víkendová cena (Pá–Ne) se do modelu ukládá jako přirážka v % oproti ceně Po–Čt
+          weekendPct:
+            form.weekendPrice && Number(form.pricePerNight) > 0
+              ? Math.round((Number(form.weekendPrice) / Number(form.pricePerNight) - 1) * 100)
+              : 0,
+          amenities: form.amenities.join(", "),
         }),
       });
       const data = await res.json();
@@ -209,38 +239,55 @@ function Wizard() {
                 ))}
               </div>
             </div>
-            <label className="block">
+            <div>
               <span className="mb-1.5 block text-sm font-medium">
                 Cena za noc (Kč{form.pricingMode === "person" && " za osobu"})
               </span>
-              <input
-                className="field"
-                type="number"
-                inputMode="numeric"
-                placeholder="2900"
-                value={form.pricePerNight}
-                onChange={(e) => set("pricePerNight", e.target.value)}
-              />
-            </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-soft">Všední dny (Po–Čt)</span>
+                  <input
+                    className="field"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="2900"
+                    value={form.pricePerNight}
+                    onChange={(e) => set("pricePerNight", e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-soft">Víkend (Pá–Ne)</span>
+                  <input
+                    className="field"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={form.pricePerNight || "3400"}
+                    value={form.weekendPrice}
+                    onChange={(e) => set("weekendPrice", e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
             <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
-              💰 Víkendovou přirážku a sezónní ceny (± %) nastavíš po vytvoření webu v administraci.
+              💰 Víkend necháš prázdný = stejná cena jako ve všední dny. Sezónní ceny (± %) doladíš
+              po vytvoření webu v administraci.
             </p>
           </>
         )}
 
         {step === 3 && (
           <>
-            <label className="block">
+            <div>
               <span className="mb-1.5 block text-sm font-medium">
-                Vybavení <span className="text-soft">(oddělené čárkou)</span>
+                Vybavení <span className="text-soft">(klikni na nabídku nebo napiš vlastní)</span>
               </span>
-              <textarea
-                className="field min-h-24"
-                placeholder="Sauna, Wi-Fi, Kamna na dřevo, Terasa, Parkování"
+              <AmenityPicker
                 value={form.amenities}
-                onChange={(e) => set("amenities", e.target.value)}
+                onChange={(next) => set("amenities", next)}
+                suggestions={AMENITY_SUGGESTIONS}
+                placeholder="Napiš vybavení a stiskni Enter…"
               />
-            </label>
+            </div>
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium">Kontaktní e-mail</span>
               <input
