@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       label: String(body.label),
       amount: Math.round(amount),
       category: String(body.category ?? "provoz"),
+      repeat: ["monthly", "yearly"].includes(body.repeat) ? body.repeat : "once",
       date: body.date ? new Date(String(body.date)) : new Date(),
     },
   });

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { DEV_LOGIN_COOKIE, devLoginEnabled } from "@/lib/dev-login";
 
 // Obnoví Supabase session a ochrání /admin (nepřihlášené přesměruje na /login).
 export async function updateSession(request: NextRequest) {
@@ -29,7 +30,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith("/admin")) {
+  // Vývojové přihlášení: tady stačí přítomnost cookie, účet ověří getUser() v layoutu.
+  const devUser = devLoginEnabled() && request.cookies.has(DEV_LOGIN_COOKIE);
+
+  if (!user && !devUser && request.nextUrl.pathname.startsWith("/admin")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", request.nextUrl.pathname);

@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
-import { czk } from "@/lib/pricing";
+import { applyAdjust, czk } from "@/lib/pricing";
+import { toIBAN, formatIBAN } from "@/lib/payment";
+import { PhotoManager } from "@/components/PhotoManager";
+import { Dropdown } from "@/components/Dropdown";
+import { AdjustField } from "@/components/AdjustField";
+import { parseCategories, serializeCategories, type GuestCategory } from "@/lib/guests";
+
+// Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
+function ibanPreview(account: string): string {
+  const iban = toIBAN(account);
+  return iban ? `Uloží se jako ${formatIBAN(iban)}` : "Tohle číslo účtu neumím přečíst — zkontroluj ho.";
+}
 
 export default function SiteEditPage() {
   const { slug, site, loading, error, reload } = useAdminData();
@@ -25,6 +36,7 @@ export default function SiteEditPage() {
 
   const set = <K extends keyof Site>(key: K, value: Site[K]) =>
     setForm((f) => (f ? { ...f, [key]: value } : f));
+  const setPhotos = useCallback((photos: string) => set("photos", photos), []);
 
   const setRule = (index: number, patch: Partial<PriceRule>) =>
     setForm((f) =>
@@ -53,6 +65,17 @@ export default function SiteEditPage() {
     reload(newSlug);
   }
 
+  const categories = parseCategories(form?.guestCategories ?? "", form?.pricingMode);
+  // Náhled víkendové ceny počítá stejnou funkcí jako ostrý ceník.
+  const vikendovaCena = form
+    ? applyAdjust(form.pricePerNight, { value: form.weekendValue, unit: form.weekendUnit })
+    : 0;
+
+  function setCategory(key: GuestCategory["key"], patch: Partial<GuestCategory>) {
+    const next = categories.map((c) => (c.key === key ? { ...c, ...patch } : c));
+    set("guestCategories", serializeCategories(next));
+  }
+
   if (loading || !form) return <p className="py-16 text-center text-soft">Načítám web…</p>;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
@@ -73,17 +96,13 @@ export default function SiteEditPage() {
           </p>
         </div>
         {sites.length > 1 && (
-          <select
-            className="field !w-auto !py-2 text-sm"
+          <Dropdown
+            label="Nemovitost"
+            align="right"
             value={slug ?? "demo"}
-            onChange={(e) => switchSite(e.target.value)}
-          >
-            {sites.map((s) => (
-              <option key={s.slug} value={s.slug}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onChange={switchSite}
+            items={sites.map((s) => ({ value: s.slug, label: s.name }))}
+          />
         )}
       </div>
 
@@ -122,6 +141,15 @@ export default function SiteEditPage() {
             {form.tier === "pro" ? "Zpět na Start" : "✨ Aktivovat Pro (demo)"}
           </button>
         </div>
+      </div>
+
+      {/* Fotky */}
+      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div>
+          <h2 className="font-display text-lg font-semibold">Fotky</h2>
+          <p className="text-sm text-soft">Takhle je hosté uvidí na webu. Změny se ukládají hned.</p>
+        </div>
+        <PhotoManager slug={form.slug} value={form.photos} onChange={setPhotos} />
       </div>
 
       {/* Ceník */}
@@ -170,25 +198,19 @@ export default function SiteEditPage() {
               onChange={(e) => set("pricePerNight", Number(e.target.value))}
             />
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">
-              Víkend (pá–ne) <span className="text-soft">± %</span>
-            </span>
-            <input
-              className="field"
-              type="number"
-              value={form.weekendPct}
-              onChange={(e) => set("weekendPct", Number(e.target.value))}
-            />
-          </label>
+          <AdjustField
+            label="Víkend (pá–ne)"
+            value={{ value: form.weekendValue, unit: form.weekendUnit }}
+            onChange={(a) => {
+              set("weekendValue", a.value);
+              set("weekendUnit", a.unit);
+            }}
+          />
         </div>
 
         <p className="rounded-xl bg-bg px-4 py-2.5 text-sm text-soft">
           Všední noc: <strong className="text-ink">{czk(form.pricePerNight)}</strong> · Víkendová
-          noc:{" "}
-          <strong className="text-ink">
-            {czk(Math.round(form.pricePerNight * (1 + (form.weekendPct || 0) / 100)))}
-          </strong>
+          noc: <strong className="text-ink">{czk(vikendovaCena)}</strong>
           {form.pricingMode === "person" && " (za osobu)"}
         </p>
 
@@ -242,15 +264,14 @@ export default function SiteEditPage() {
                     />
                   </label>
                 </div>
-                <label className="block w-28">
-                  <span className="mb-1 block text-xs text-soft">Úprava ceny ± %</span>
-                  <input
-                    className="field !py-2 text-sm"
-                    type="number"
-                    value={r.pct}
-                    onChange={(e) => setRule(i, { pct: Number(e.target.value) })}
+                <div className="max-w-56">
+                  <AdjustField
+                    compact
+                    label="Úprava ceny"
+                    value={{ value: r.value, unit: r.unit }}
+                    onChange={(a) => setRule(i, { value: a.value, unit: a.unit })}
                   />
-                </label>
+                </div>
               </div>
             ))}
           </div>
@@ -267,7 +288,7 @@ export default function SiteEditPage() {
                   ...f,
                   priceRules: [
                     ...f.priceRules,
-                    { label: "Nové období", startDate: iso(today), endDate: iso(in30), pct: 10 },
+                    { label: "Nové období", startDate: iso(today), endDate: iso(in30), value: 10, unit: "pct" as const },
                   ],
                 };
               })
@@ -276,8 +297,220 @@ export default function SiteEditPage() {
             + Přidat období
           </button>
           <p className="mt-2 text-xs text-soft">
-            Kladná procenta cenu v období zvyšují, záporná fungují jako sleva (např. −15).
+            Procenta cenu upravují (kladná zvyšují, záporná fungují jako sleva), koruny nastaví pevnou cenu noci. Pevná cena přebíjí procenta i víkend.
           </p>
+        </div>
+      </div>
+
+      {/* Skladba hostů */}
+      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div>
+          <h2 className="font-display text-lg font-semibold">Skladba hostů</h2>
+          <p className="text-sm text-soft">
+            Buď se hosté nedělí a host zadá jen počet osob, nebo si vybere po kategoriích a každá
+            může mít vlastní cenu.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          {(
+            [
+              ["total", "Jen počet osob"],
+              ["split", "Rozdělit kategorie"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => set("guestMode", mode)}
+              className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                form.guestMode === mode
+                  ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
+                  : "border-line text-soft hover:border-pine/40"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {form.guestMode === "split" && (
+          <div className="space-y-2">
+            {categories.map((c) => (
+              <div
+                key={c.key}
+                className={`space-y-3 rounded-xl border p-3.5 transition ${
+                  c.enabled ? "border-line" : "border-line/60 bg-bg/50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="accent-[var(--pine)]"
+                    checked={c.enabled}
+                    aria-label={`Nabízet kategorii ${c.label}`}
+                    onChange={(e) => setCategory(c.key, { enabled: e.target.checked })}
+                  />
+                  <input
+                    className="field min-w-0 flex-1 !py-2 text-sm"
+                    aria-label={`Název kategorie ${c.label}`}
+                    value={c.label}
+                    onChange={(e) => setCategory(c.key, { label: e.target.value })}
+                  />
+                </div>
+
+                {c.enabled && (
+                  <>
+                    <div className="max-w-56">
+                      <AdjustField
+                        compact
+                        label={form.pricingMode === "person" ? "Cena za noc" : "Příplatek za noc"}
+                        value={c.adjust}
+                        onChange={(adjust) => setCategory(c.key, { adjust })}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-soft">
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="accent-[var(--pine)]"
+                          checked={c.capacity}
+                          onChange={(e) => setCategory(c.key, { capacity: e.target.checked })}
+                        />
+                        počítá se do kapacity
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="accent-[var(--pine)]"
+                          checked={c.tax}
+                          onChange={(e) => setCategory(c.key, { tax: e.target.checked })}
+                        />
+                        platí poplatek z pobytu
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            <p className="text-xs text-soft">
+              {form.pricingMode === "person"
+                ? "Procenta se počítají z ceny za dospělou osobu (−50 % = poloviční cena), koruny nastaví pevnou cenu za osobu a noc."
+                : "Procenta se počítají z ceny za nemovitost, koruny jsou pevný příplatek za osobu a noc. Nula = v ceně."}{" "}
+              Poplatek z pobytu ze zákona neplatí osoby do 18 let.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          <button className="btn-primary" disabled={saving} onClick={save}>
+            {saving ? "Ukládám…" : "Uložit změny"}
+          </button>
+          {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
+        </div>
+      </div>
+
+      {/* Pravidla pobytu a poplatky */}
+      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div>
+          <h2 className="font-display text-lg font-semibold">Pravidla pobytu a poplatky</h2>
+          <p className="text-sm text-soft">
+            Podle tohohle nastavení hosté vidí konečnou cenu a nemůžou rezervovat termín, který ti nevyhovuje.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Nejkratší pobyt (nocí)</span>
+            <input
+              className="field"
+              type="number"
+              min={1}
+              value={form.minNights}
+              onChange={(e) => set("minNights", Number(e.target.value))}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Rezervovat nejdříve (dní předem)</span>
+            <input
+              className="field"
+              type="number"
+              min={0}
+              value={form.leadTimeDays}
+              onChange={(e) => set("leadTimeDays", Number(e.target.value))}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Příjezd od</span>
+            <input
+              className="field"
+              type="time"
+              value={form.checkInTime}
+              onChange={(e) => set("checkInTime", e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Odjezd do</span>
+            <input
+              className="field"
+              type="time"
+              value={form.checkOutTime}
+              onChange={(e) => set("checkOutTime", e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Úklidový poplatek (Kč za pobyt)</span>
+            <input
+              className="field"
+              type="number"
+              min={0}
+              value={form.cleaningFee}
+              onChange={(e) => set("cleaningFee", Number(e.target.value))}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Poplatek z pobytu (Kč / osoba / noc)</span>
+            <input
+              className="field"
+              type="number"
+              min={0}
+              value={form.touristTax}
+              onChange={(e) => set("touristTax", Number(e.target.value))}
+            />
+            <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">Číslo účtu pro QR platbu</span>
+          <input
+            className="field"
+            placeholder="19-2000145399/0800"
+            value={form.bankAccount}
+            onChange={(e) => set("bankAccount", e.target.value)}
+          />
+          <span className="mt-1 block text-xs text-soft">
+            {form.bankAccount
+              ? ibanPreview(form.bankAccount)
+              : "Bez čísla účtu se hostům nabídne jen domluva s tebou."}
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">Storno podmínky</span>
+          <textarea
+            className="field min-h-20"
+            placeholder="Zrušení do 14 dní před příjezdem zdarma, poté se záloha nevrací."
+            value={form.cancellationPolicy}
+            onChange={(e) => set("cancellationPolicy", e.target.value)}
+          />
+        </label>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button className="btn-primary" disabled={saving} onClick={save}>
+            {saving ? "Ukládám…" : "Uložit změny"}
+          </button>
+          {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
         </div>
       </div>
 

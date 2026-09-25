@@ -1,24 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
+import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
+import { parseCategories, serializeCategories } from "@/lib/guests";
 
-const EDITABLE = [
+const TEXT_FIELDS = [
   "name",
   "tagline",
   "description",
   "propertyType",
-  "pricePerNight",
-  "pricingMode",
-  "weekendPct",
-  "maxGuests",
   "amenities",
+  "photos",
   "themeColor",
   "tier",
   "contactEmail",
   "contactPhone",
+  "bankAccount",
+  "cancellationPolicy",
 ] as const;
 
-const NUMERIC = ["pricePerNight", "maxGuests"];
+// Celá čísla s rozsahem, ve kterém dávají smysl.
+const NUMBER_FIELDS: Record<string, { min: number; max: number }> = {
+  pricePerNight: { min: 0, max: 1_000_000 },
+  maxGuests: { min: 1, max: 50 },
+  minNights: { min: 1, max: 90 },
+  leadTimeDays: { min: 0, max: 365 },
+  cleaningFee: { min: 0, max: 100_000 },
+  touristTax: { min: 0, max: 10_000 },
+};
+
+const TIME_FIELDS = ["checkInTime", "checkOutTime"] as const;
+
+const MAX_PHOTOS = 40;
+
+/** Procenta drží v rozumném pásmu, pevná částka je nezáporná koruna. */
+function clampAdjust(value: unknown, unit: "pct" | "czk"): number {
+  const n = Math.round(Number(value) || 0);
+  return unit === "czk" ? Math.max(0, Math.min(1_000_000, n)) : Math.max(-100, Math.min(500, n));
+}
 
 export async function GET(
   _req: NextRequest,
@@ -30,7 +48,12 @@ export async function GET(
     include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
   if (!site) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
-  return NextResponse.json(site);
+
+  // Číslo účtu vidí jen vlastník — hostovi se ukazuje až v QR platbě jeho rezervace.
+  const user = await getUser();
+  if (site.ownerId && site.ownerId === user?.id) return NextResponse.json(site);
+  const { bankAccount: _bankAccount, ownerId: _ownerId, ...publicSite } = site;
+  return NextResponse.json(publicSite);
 }
 
 export async function PATCH(
@@ -45,21 +68,52 @@ export async function PATCH(
 
   const body = await req.json();
   const data: Record<string, string | number> = {};
-  for (const key of EDITABLE) {
+  for (const key of TEXT_FIELDS) {
     if (body[key] === undefined || body[key] === null) continue;
-    if (NUMERIC.includes(key)) {
-      const n = Number(body[key]);
-      if (!Number.isFinite(n) || n < 0) continue;
-      data[key] = Math.round(n);
-    } else if (key === "weekendPct") {
-      const n = Number(body[key]);
-      if (!Number.isFinite(n)) continue;
-      data[key] = Math.max(-90, Math.min(500, Math.round(n)));
-    } else if (key === "pricingMode") {
-      data[key] = body[key] === "person" ? "person" : "unit";
-    } else {
-      data[key] = String(body[key]);
-    }
+    data[key] = String(body[key]).slice(0, 5000);
+  }
+  // Fotky: dlouhé URL z úložiště by se do 5 000 znaků nevešly — řádek se neusekává
+  // uprostřed, jen se omezí počet fotek.
+  if (typeof body.photos === "string") {
+    data.photos = body.photos
+      .split("\n")
+      .map((line: string) => line.trim().slice(0, 600))
+      .filter(Boolean)
+      .slice(0, MAX_PHOTOS)
+      .join("\n");
+  }
+  for (const [key, range] of Object.entries(NUMBER_FIELDS)) {
+    if (body[key] === undefined || body[key] === null) continue;
+    const n = Number(body[key]);
+    if (!Number.isFinite(n)) continue;
+    data[key] = Math.max(range.min, Math.min(range.max, Math.round(n)));
+  }
+  for (const key of TIME_FIELDS) {
+    if (typeof body[key] !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body[key])) continue;
+    data[key] = body[key];
+  }
+  if (body.pricingMode !== undefined) {
+    data.pricingMode = body.pricingMode === "person" ? "person" : "unit";
+  }
+
+  // Víkendová úprava: procenta mají jiný smysluplný rozsah než pevná částka.
+  if (body.weekendValue !== undefined && body.weekendValue !== null) {
+    const unit = body.weekendUnit === "czk" ? "czk" : "pct";
+    data.weekendUnit = unit;
+    data.weekendValue = clampAdjust(body.weekendValue, unit);
+  }
+
+  if (body.guestMode !== undefined) {
+    data.guestMode = body.guestMode === "split" ? "split" : "total";
+  }
+  // Katalog kategorií projde stejným parserem jako při čtení, takže se
+  // do databáze nikdy nedostane cizí klíč ani nesmyslná hodnota.
+  if (body.guestCategories !== undefined && body.guestCategories !== null) {
+    const raw =
+      typeof body.guestCategories === "string"
+        ? body.guestCategories
+        : JSON.stringify(body.guestCategories);
+    data.guestCategories = serializeCategories(parseCategories(raw));
   }
 
   const existing = guard.site;
@@ -73,7 +127,8 @@ export async function PATCH(
         label: String(r.label ?? "Sezóna").slice(0, 60),
         startDate: new Date(String(r.startDate)),
         endDate: new Date(String(r.endDate)),
-        pct: Math.max(-90, Math.min(500, Math.round(Number(r.pct) || 0))),
+        value: clampAdjust(r.value, r.unit === "czk" ? "czk" : "pct"),
+        unit: r.unit === "czk" ? "czk" : "pct",
       }))
       .filter(
         (r: { startDate: Date; endDate: Date }) =>

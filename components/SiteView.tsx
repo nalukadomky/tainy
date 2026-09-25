@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { czk, type PriceRuleInput, type PricingMode } from "@/lib/pricing";
 import { BookingWidget } from "@/components/BookingWidget";
+import type { BookedRange } from "@/components/DayPicker";
+import { Gallery } from "@/components/Gallery";
+import { parsePhotos } from "@/lib/photos";
+import { defaultCategories, type GuestCategory } from "@/lib/guests";
 import { Wordmark } from "@/components/Logo";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
@@ -16,19 +20,42 @@ export type SiteViewData = {
   propertyType: string;
   pricePerNight: number;
   pricingMode: PricingMode;
-  weekendPct: number;
+  weekend: import("@/lib/pricing").Adjust;
   maxGuests: number;
   amenities: string;
   contactEmail: string;
   contactPhone: string;
   priceRules: PriceRuleInput[];
+  photos?: string;
+  guestMode?: string;
+  categories?: GuestCategory[];
+  // Pravidla pobytu a poplatky — v náhledu průvodce nemusí být vyplněné.
+  minNights?: number;
+  leadTimeDays?: number;
+  checkInTime?: string;
+  checkOutTime?: string;
+  cleaningFee?: number;
+  touristTax?: number;
+  paymentMode?: string;
+  cancellationPolicy?: string;
 };
 
-const GALLERY = ["🌲", "🛁", "🔥", "🌄", "☕️", "🌙"];
+// Nálada místo fotek — dokud si majitel v průvodci žádné nenahrál
+const PLACEHOLDERS = ["🌲", "🛁", "🔥", "🌄", "☕️", "🌙"];
 
-export function SiteView({ site, preview = false }: { site: SiteViewData; preview?: boolean }) {
+export function SiteView({
+  site,
+  preview = false,
+  booked = [],
+}: {
+  site: SiteViewData;
+  preview?: boolean;
+  /** Obsazenost ze serveru, aby byl kalendář vyplněný v prvním renderu. */
+  booked?: BookedRange[];
+}) {
   const perPerson = site.pricingMode === "person";
   const priceSuffix = perPerson ? "/ os. / noc" : "/ noc";
+  const photos = parsePhotos(site.photos ?? "", site.name);
   const amenities = site.amenities
     .split(",")
     .map((a) => a.trim())
@@ -67,25 +94,31 @@ export function SiteView({ site, preview = false }: { site: SiteViewData; previe
       </section>
 
       <section className="mx-auto max-w-4xl px-5 pt-8">
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {GALLERY.map((g, i) => (
-            <div
-              key={i}
-              className={`flex items-center justify-center rounded-2xl border border-line text-4xl sm:text-5xl ${
-                i === 0 ? "col-span-2 row-span-2 aspect-square sm:aspect-[4/3]" : "aspect-square"
-              }`}
-              style={{
-                background: `linear-gradient(135deg, ${i % 2 ? "#eef2ea" : "#f3ece0"}, ${
-                  i % 3 ? "#e6ecdf" : "#efe6d6"
-                })`,
-              }}
-              aria-hidden
-            >
-              {g}
+        {photos.length > 0 ? (
+          <Gallery photos={photos} siteName={site.name} />
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {PLACEHOLDERS.map((g, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-center rounded-2xl border border-line text-4xl sm:text-5xl ${
+                    i === 0 ? "col-span-2 row-span-2 aspect-square sm:aspect-[4/3]" : "aspect-square"
+                  }`}
+                  style={{
+                    background: `linear-gradient(135deg, ${i % 2 ? "#eef2ea" : "#f3ece0"}, ${
+                      i % 3 ? "#e6ecdf" : "#efe6d6"
+                    })`,
+                  }}
+                  aria-hidden
+                >
+                  {g}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-soft">Sem přijdou tvoje fotky — v demu zatím nálada.</p>
+            <p className="mt-2 text-xs text-soft">Sem přijdou tvoje fotky — zatím tu je jen nálada.</p>
+          </>
+        )}
       </section>
 
       <section className="mx-auto grid max-w-4xl gap-10 px-5 py-10 sm:grid-cols-[1.4fr_1fr]">
@@ -133,23 +166,34 @@ export function SiteView({ site, preview = false }: { site: SiteViewData; previe
         </div>
       </section>
 
-      <section id="rezervace" className="border-t border-line bg-bg">
+      <section id="rezervace" className="scroll-mt-16 border-t border-line bg-bg">
         <div className="mx-auto max-w-4xl px-5 py-10 sm:py-14">
           <h2 className="font-display text-3xl font-semibold tracking-tight">Rezervace</h2>
           <p className="mt-2 text-soft">
-            Vyber termín a počet hostů — platba proběhne bezpečně přes Stripe.
+            Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.
           </p>
           <div className="mt-6">
             <BookingWidget
               preview={preview}
+              initialBooked={booked}
               site={{
                 slug: site.slug ?? "",
                 name: site.name,
                 pricePerNight: site.pricePerNight,
                 pricingMode: site.pricingMode,
-                weekendPct: site.weekendPct,
+                weekend: site.weekend,
                 priceRules: site.priceRules,
                 maxGuests: site.maxGuests,
+                minNights: site.minNights ?? 1,
+                leadTimeDays: site.leadTimeDays ?? 0,
+                checkInTime: site.checkInTime ?? "15:00",
+                checkOutTime: site.checkOutTime ?? "10:00",
+                cleaningFee: site.cleaningFee ?? 0,
+                touristTax: site.touristTax ?? 0,
+                paymentMode: site.paymentMode ?? "qr",
+                cancellationPolicy: site.cancellationPolicy ?? "",
+                guestMode: site.guestMode ?? "total",
+                categories: site.categories ?? defaultCategories(site.pricingMode),
               }}
             />
           </div>

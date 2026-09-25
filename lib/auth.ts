@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { DEV_LOGIN_COOKIE, devLoginEnabled } from "@/lib/dev-login";
 
 // Aktuálně přihlášený uživatel ze Supabase session (nebo null).
 export async function getUser(): Promise<User | null> {
+  if (devLoginEnabled()) {
+    const devId = (await cookies()).get(DEV_LOGIN_COOKIE)?.value;
+    if (devId && /^[0-9a-f-]{36}$/i.test(devId)) {
+      // Aplikaci z uživatele stačí id a e-mail.
+      const rows = await prisma.$queryRaw<{ id: string; email: string }[]>`
+        SELECT id::text, email FROM auth.users WHERE id = ${devId}::uuid LIMIT 1`;
+      if (rows.length) return { id: rows[0].id, email: rows[0].email } as User;
+    }
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

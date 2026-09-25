@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
+import { Dropdown } from "@/components/Dropdown";
 import { createClient } from "@/lib/supabase/client";
 
 const ITEMS = [
@@ -17,11 +19,29 @@ const ITEMS = [
 export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [sites, setSites] = useState<{ slug: string; name: string }[]>([]);
+  const [current, setCurrent] = useState<string>("");
+
+  useEffect(() => {
+    setCurrent(localStorage.getItem("tainy.site") ?? "");
+    fetch("/api/sites")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setSites(Array.isArray(list) ? list : []))
+      .catch(() => {});
+  }, []);
+
+  // Data administrace se načítají v hooku při mountu, takže přepnutí
+  // nemovitosti znamená načíst stránku znovu — jinak by zůstala stará čísla.
+  function switchSite(slug: string) {
+    localStorage.setItem("tainy.site", slug);
+    window.location.reload();
+  }
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   async function signOut() {
     await createClient().auth.signOut();
+    await fetch("/auth/dev", { method: "DELETE" }); // vývojové přihlášení, pokud je
     router.push("/");
     router.refresh();
   }
@@ -33,9 +53,19 @@ export function AdminNav() {
         <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-3">
           <div className="flex items-center gap-3">
             <Logo className="text-xl" />
-            <span className="rounded-full bg-line/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-soft">
-              Administrace
-            </span>
+            {sites.length > 1 ? (
+              <Dropdown
+                label="Nemovitost"
+                size="sm"
+                value={current || sites[0]?.slug}
+                onChange={switchSite}
+                items={sites.map((s) => ({ value: s.slug, label: s.name }))}
+              />
+            ) : (
+              <span className="rounded-full bg-line/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-soft">
+                Administrace
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {/* Desktop navigace */}

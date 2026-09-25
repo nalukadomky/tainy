@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { addDays, nightsOf, todayISO } from "@/lib/stay";
+import { plural } from "@/lib/pricing";
 
 // Kalendář výběru termínu. Den má dvě poloviny (dopoledne / odpoledne):
 // den odjezdu je obsazený jen dopoledne, den příjezdu jen odpoledne.
@@ -14,6 +16,12 @@ type Props = {
   start: string | null;
   end: string | null;
   onChange: (range: { start: string | null; end: string | null }) => void;
+  /** Nejkratší možný pobyt v nocích. */
+  minNights?: number;
+  /** Nejdřívější možný den příjezdu (ISO) — plyne z `leadTimeDays` webu. */
+  earliest?: string;
+  /** Cena jedné noci začínající daným dnem; null = cenu nezobrazovat. */
+  priceOf?: (iso: string) => number | null;
 };
 
 const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
@@ -34,29 +42,42 @@ const HALF_COLOR: Record<HalfState, string> = {
   selected: "var(--pine)",
 };
 
-export function DayPicker({ booked, start, end, onChange }: Props) {
-  const today = useMemo(() => {
-    const t = new Date();
-    return new Date(t.getFullYear(), t.getMonth(), t.getDate());
-  }, []);
-  const todayIso = isoLocal(today);
-  const [view, setView] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+/** Zkrácená cena do buňky kalendáře: 2 900 → „2,9k". */
+function shortPrice(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1).replace(".", ",")}k` : String(n);
+}
+
+export function DayPicker({ booked, start, end, onChange, minNights = 1, earliest, priceOf }: Props) {
+  const today = useMemo(() => todayISO(), []);
+  const firstBookable = earliest && earliest > today ? earliest : today;
+  const [view, setView] = useState(() => {
+    const [y, m] = firstBookable.split("-").map(Number);
+    return { y, m: m - 1 };
+  });
   const [hint, setHint] = useState("");
 
-  // Poloviny dne: dopoledne (am) a odpoledne (pm)
-  function halves(day: string): { am: HalfState; pm: HalfState } {
-    let am: HalfState = "free";
-    let pm: HalfState = "free";
+  // Obsazenost se z rozsahů rozbalí jednou do množin, takže dotaz na den
+  // je konstantní — jinak by se pro každou buňku procházely všechny rezervace.
+  const occupied = useMemo(() => {
+    const am = new Set<string>(); // dopoledne obsazeno (den odjezdu a dny uvnitř)
+    const pm = new Set<string>(); // odpoledne obsazeno (den příjezdu a dny uvnitř)
     for (const b of booked) {
-      if (day > b.start && day < b.end) { am = "booked"; pm = "booked"; }
-      else if (day === b.start) pm = "booked";
-      else if (day === b.end) am = am === "booked" ? am : "booked";
+      for (let d = b.start; d < b.end; d = addDays(d, 1)) {
+        pm.add(d);
+        if (d !== b.start) am.add(d);
+      }
+      am.add(b.end); // den odjezdu je obsazený jen dopoledne
     }
+    return { am, pm };
+  }, [booked]);
+
+  function halves(day: string): { am: HalfState; pm: HalfState } {
+    let am: HalfState = occupied.am.has(day) ? "booked" : "free";
+    let pm: HalfState = occupied.pm.has(day) ? "booked" : "free";
     if (start) {
-      const sel = { s: start, e: end ?? start };
-      if (day > sel.s && end && day < end) { am = "selected"; pm = "selected"; }
+      if (end && day > start && day < end) { am = "selected"; pm = "selected"; }
       else {
-        if (day === sel.s) pm = "selected";
+        if (day === start) pm = "selected";
         if (end && day === end) am = "selected";
       }
     }
@@ -71,7 +92,13 @@ export function DayPicker({ booked, start, end, onChange }: Props) {
     setHint("");
     const h = halves(day);
     const fullyBooked = h.am === "booked" && h.pm === "booked";
-    if (day < todayIso || fullyBooked) return;
+    if (day < firstBookable || fullyBooked) return;
+
+    // Klik na už vybraný příjezd nebo odjezd výběr zruší — cesta zpět, když host překlikl.
+    if (day === start || day === end) {
+      onChange({ start: null, end: null });
+      return;
+    }
 
     if (!start || (start && end)) {
       // nový výběr — den příjezdu nesmí mít obsazené odpoledne
@@ -91,97 +118,132 @@ export function DayPicker({ booked, start, end, onChange }: Props) {
       setHint("Vybraný termín zasahuje do obsazených dnů — zkus kratší pobyt nebo jiné datum.");
       return;
     }
+    if (nightsOf(start, day) < minNights) {
+      setHint(`Nejkratší možný pobyt je ${minNights} ${plural(minNights, "noc", "noci", "nocí")}.`);
+      return;
+    }
     onChange({ start, end: day });
   }
 
-  // Mřížka měsíce (týden začíná pondělím)
-  const cells = useMemo(() => {
-    const first = new Date(view.getFullYear(), view.getMonth(), 1);
-    const lead = (first.getDay() + 6) % 7;
-    const daysInMonth = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
-    const out: (string | null)[] = Array(lead).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      out.push(isoLocal(new Date(view.getFullYear(), view.getMonth(), d)));
-    }
-    return out;
-  }, [view]);
+  const canGoBack =
+    view.y * 12 + view.m > Number(firstBookable.slice(0, 4)) * 12 + Number(firstBookable.slice(5, 7)) - 1;
 
-  const canGoBack = view > new Date(today.getFullYear(), today.getMonth(), 1);
+  function shift(by: number) {
+    const total = view.y * 12 + view.m + by;
+    setView({ y: Math.floor(total / 12), m: ((total % 12) + 12) % 12 });
+  }
+
+  function renderMonth(offset: number) {
+    const total = view.y * 12 + view.m + offset;
+    const y = Math.floor(total / 12);
+    const m = ((total % 12) + 12) % 12;
+
+    const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const cells: (string | null)[] = Array(lead).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(isoLocal(new Date(y, m, d)));
+
+    return (
+      <div className="min-w-0 flex-1">
+        <p className="mb-2 text-center font-display text-base font-semibold capitalize">
+          {MONTHS[m]} {y}
+        </p>
+        <div className="grid grid-cols-7 text-center text-[11px] font-semibold uppercase tracking-wider text-soft">
+          {WEEKDAYS.map((w) => (
+            <span key={w} className="py-1">{w}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1">
+          {cells.map((day, i) => {
+            if (!day) return <span key={`x${i}`} />;
+            const h = halves(day);
+            const past = day < firstBookable;
+            const fullyBooked = h.am === "booked" && h.pm === "booked";
+            const isEdgeSelected = h.am === "selected" || h.pm === "selected";
+            const disabled = past || fullyBooked;
+            const cisloNaTmave = h.am === "selected";
+            const cenaNaTmave = h.pm === "selected";
+            const price = !disabled && h.pm !== "booked" && priceOf ? priceOf(day) : null;
+
+            return (
+              <button
+                key={day}
+                type="button"
+                disabled={disabled}
+                onClick={() => clickDay(day)}
+                aria-label={day}
+                className={`relative mx-auto flex h-12 w-full max-w-12 flex-col items-center justify-center rounded-xl leading-none transition ${
+                  past ? "text-line" : fullyBooked ? "text-soft/50" : "text-ink hover:ring-2 hover:ring-pine/25"
+                } ${isEdgeSelected ? "font-semibold" : ""} ${
+                  day === today ? "ring-1 ring-line" : ""
+                }`}
+                style={{
+                  background:
+                    h.am === "free" && h.pm === "free"
+                      ? undefined
+                      : `linear-gradient(to bottom right, ${HALF_COLOR[h.am]} 50%, ${HALF_COLOR[h.pm]} 50%)`,
+                }}
+              >
+                <span
+                  className={`text-sm ${
+                    cisloNaTmave
+                      ? "text-white drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]"
+                      : isEdgeSelected
+                        ? "drop-shadow-[0_0_2px_rgba(255,255,255,0.9)]"
+                        : ""
+                  }`}
+                >
+                  {Number(day.slice(8))}
+                </span>
+                {price !== null && (
+                  <span
+                    className={`mt-0.5 text-[9px] ${
+                      cenaNaTmave
+                        ? "text-white/85 drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]"
+                        : "text-soft"
+                    }`}
+                  >
+                    {shortPrice(price)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* Hlavička měsíce */}
+      {/* Hlavička s přepínáním měsíců */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           aria-label="Předchozí měsíc"
           disabled={!canGoBack}
-          onClick={() => setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))}
+          onClick={() => shift(-1)}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-soft transition hover:border-pine/40 hover:text-ink disabled:opacity-30"
         >
           ←
         </button>
-        <span className="font-display text-lg font-semibold capitalize">
-          {MONTHS[view.getMonth()]} {view.getFullYear()}
+        <span className="text-xs font-medium uppercase tracking-wider text-soft">
+          {!start ? "Vyber den příjezdu" : !end ? "Vyber den odjezdu" : "Vybraný termín"}
         </span>
         <button
           type="button"
           aria-label="Další měsíc"
-          onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
+          onClick={() => shift(1)}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-soft transition hover:border-pine/40 hover:text-ink"
         >
           →
         </button>
       </div>
 
-      {/* Dny v týdnu */}
-      <div
-        className="mt-3 grid grid-cols-7 text-center text-[11px] font-semibold uppercase tracking-wider text-soft"
-        style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
-      >
-        {WEEKDAYS.map((w) => (
-          <span key={w} className="py-1">{w}</span>
-        ))}
-      </div>
-
-      {/* Mřížka dnů */}
-      <div
-        className="grid grid-cols-7 gap-y-1"
-        style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
-      >
-        {cells.map((day, i) => {
-          if (!day) return <span key={`x${i}`} />;
-          const h = halves(day);
-          const past = day < todayIso;
-          const fullyBooked = h.am === "booked" && h.pm === "booked";
-          const fullySelected = h.am === "selected" && h.pm === "selected";
-          const isEdgeSelected = h.am === "selected" || h.pm === "selected";
-          const disabled = past || fullyBooked;
-          return (
-            <button
-              key={day}
-              type="button"
-              disabled={disabled}
-              onClick={() => clickDay(day)}
-              aria-label={day}
-              className={`relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl text-sm transition sm:h-11 sm:w-11 ${
-                past ? "text-line" : fullyBooked ? "text-soft/50" : "text-ink hover:ring-2 hover:ring-pine/25"
-              } ${fullySelected || isEdgeSelected ? "font-semibold" : ""} ${
-                fullySelected ? "!text-white" : ""
-              } ${day === todayIso ? "ring-1 ring-line" : ""}`}
-              style={{
-                background:
-                  h.am === "free" && h.pm === "free"
-                    ? undefined
-                    : `linear-gradient(135deg, ${HALF_COLOR[h.am]} 50%, ${HALF_COLOR[h.pm]} 50%)`,
-              }}
-            >
-              <span className={isEdgeSelected && !fullySelected ? "drop-shadow-[0_0_2px_rgba(255,255,255,0.9)]" : ""}>
-                {Number(day.slice(8))}
-              </span>
-            </button>
-          );
-        })}
+      {/* Jeden měsíc na mobilu, dva vedle sebe na širší obrazovce */}
+      <div className="mt-3 flex gap-6">
+        {renderMonth(0)}
+        <div className="hidden min-w-0 flex-1 sm:block">{renderMonth(1)}</div>
       </div>
 
       {/* Legenda */}
@@ -195,7 +257,7 @@ export function DayPicker({ booked, start, end, onChange }: Props) {
         <span className="flex items-center gap-1.5">
           <i
             className="h-3.5 w-3.5 rounded-[4px] border border-line"
-            style={{ background: "linear-gradient(135deg, #ddd3c1 50%, transparent 50%)" }}
+            style={{ background: "linear-gradient(to bottom right, #ddd3c1 50%, transparent 50%)" }}
           />
           půlden — příjezd / odjezd
         </span>

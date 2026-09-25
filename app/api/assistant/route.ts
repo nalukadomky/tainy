@@ -24,7 +24,7 @@ const OUTPUT_SCHEMA = {
         description: nullable("string"),
         propertyType: nullable("string"),
         pricePerNight: nullable("integer"),
-        weekendPct: nullable("integer"),
+        weekendValue: nullable("integer"),
         maxGuests: nullable("integer"),
         amenities: nullable("string"),
         contactEmail: nullable("string"),
@@ -32,7 +32,7 @@ const OUTPUT_SCHEMA = {
       },
       required: [
         "name", "tagline", "description", "propertyType", "pricePerNight",
-        "weekendPct", "maxGuests", "amenities", "contactEmail", "contactPhone",
+        "weekendValue", "maxGuests", "amenities", "contactEmail", "contactPhone",
       ],
       additionalProperties: false,
     },
@@ -109,7 +109,8 @@ export async function POST(req: NextRequest) {
               propertyType: site.propertyType,
               pricePerNight: site.pricePerNight,
               pricingMode: site.pricingMode,
-              weekendPct: site.weekendPct,
+              weekendValue: site.weekendValue,
+              weekendUnit: site.weekendUnit,
               maxGuests: site.maxGuests,
               amenities: site.amenities,
               contactEmail: site.contactEmail,
@@ -143,9 +144,13 @@ export async function POST(req: NextRequest) {
     if (["pricePerNight", "maxGuests"].includes(key)) {
       const n = Number(value);
       if (Number.isFinite(n) && n >= 0) data[key] = Math.round(n);
-    } else if (key === "weekendPct") {
+    } else if (key === "weekendValue") {
       const n = Number(value);
-      if (Number.isFinite(n)) data[key] = Math.max(-90, Math.min(500, Math.round(n)));
+      // Asistent umí měnit jen procenta — pevnou částku si majitel nastaví sám.
+      if (Number.isFinite(n)) {
+        data[key] = Math.max(-90, Math.min(500, Math.round(n)));
+        data.weekendUnit = "pct";
+      }
     } else {
       data[key] = String(value);
     }

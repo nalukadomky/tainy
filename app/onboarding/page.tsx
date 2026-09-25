@@ -45,11 +45,11 @@ type Form = {
   tier: "start" | "pro";
 };
 
-// Víkendová cena (Pá–Ne) → přirážka v % oproti ceně Po–Čt (formát modelu).
-function weekendPctOf(form: Form): number {
-  return form.weekendPrice && Number(form.pricePerNight) > 0
-    ? Math.round((Number(form.weekendPrice) / Number(form.pricePerNight) - 1) * 100)
-    : 0;
+// Víkendová cena (Pá–Ne) se ukládá rovnou jako pevná částka — dřív se
+// přepočítávala na procenta a zaokrouhlením se rozcházela se zadanou cenou.
+function weekendAdjust(form: Form): { value: number; unit: "pct" | "czk" } {
+  const cena = Number(form.weekendPrice);
+  return cena > 0 ? { value: Math.round(cena), unit: "czk" } : { value: 0, unit: "pct" };
 }
 
 // Tělo pro POST /api/sites (uloží se jako draft do localStorage).
@@ -65,7 +65,8 @@ function buildDraft(form: Form) {
     contactEmail: form.contactEmail,
     contactPhone: form.contactPhone,
     pricePerNight: Number(form.pricePerNight),
-    weekendPct: weekendPctOf(form),
+    weekendValue: weekendAdjust(form).value,
+    weekendUnit: weekendAdjust(form).unit,
     amenities: form.amenities.join(", "),
   };
 }
@@ -79,7 +80,7 @@ function draftToSiteView(form: Form): SiteViewData {
     propertyType: form.propertyType,
     pricePerNight: Number(form.pricePerNight) || 0,
     pricingMode: form.pricingMode,
-    weekendPct: weekendPctOf(form),
+    weekend: weekendAdjust(form),
     maxGuests: form.maxGuests,
     amenities: form.amenities.join(", "),
     contactEmail: form.contactEmail,

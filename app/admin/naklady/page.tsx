@@ -1,42 +1,73 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAdminData, fmtDate } from "@/lib/admin";
+import { useAdminData, fmtDate, type Cost } from "@/lib/admin";
 import { czk } from "@/lib/pricing";
+import { todayISO } from "@/lib/stay";
+import { Dropdown } from "@/components/Dropdown";
+import { REPEAT_LABEL, isActive, monthlyFixed, spentToDate, type Repeat } from "@/lib/costs";
 
-const CATEGORIES = ["provoz", "energie", "služby", "údržba", "pojištění", "jiné"];
+const CATEGORIES = ["provoz", "energie", "služby", "údržba", "pojištění", "vybavení", "jiné"];
+
+const PER: Record<Repeat, string> = { once: "", monthly: " / měsíc", yearly: " / rok" };
 
 export default function CostsPage() {
-  const { slug, reservations, costs, loading, error, reload } = useAdminData();
+  const { slug, reservations, costs, setCosts, loading, error } = useAdminData();
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("provoz");
+  const [repeat, setRepeat] = useState<Repeat>("once");
+  const [date, setDate] = useState(todayISO());
   const [saving, setSaving] = useState(false);
 
   const totals = useMemo(() => {
-    const revenue = reservations
-      .filter((r) => r.status === "paid")
-      .reduce((s, r) => s + r.totalPrice, 0);
-    const spent = costs.reduce((s, c) => s + c.amount, 0);
-    return { revenue, spent, balance: revenue - spent };
+    const revenue = reservations.filter((r) => r.status === "paid").reduce((s, r) => s + r.totalPrice, 0);
+    const spent = spentToDate(costs);
+    return { revenue, spent, balance: revenue - spent, fixed: monthlyFixed(costs) };
   }, [reservations, costs]);
+
+  const recurring = costs.filter((c) => c.repeat !== "once");
+  const running = recurring.filter((c) => isActive(c));
+  const ended = recurring.filter((c) => !isActive(c));
+  const oneOff = costs.filter((c) => c.repeat === "once");
 
   async function addCost() {
     setSaving(true);
-    await fetch("/api/costs", {
+    const res = await fetch("/api/costs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: slug, label, amount: Number(amount), category }),
+      body: JSON.stringify({ site: slug, label, amount: Number(amount), category, repeat, date }),
     });
-    setLabel("");
-    setAmount("");
-    await reload();
+    if (res.ok) {
+      const created: Cost = await res.json();
+      setCosts((list) => [created, ...list].sort((a, b) => b.date.localeCompare(a.date)));
+      setLabel("");
+      setAmount("");
+    }
     setSaving(false);
   }
 
-  async function remove(id: string) {
-    await fetch(`/api/costs/${id}`, { method: "DELETE" });
-    await reload();
+  async function setEnd(c: Cost, endDate: string | null) {
+    if (endDate && !confirm(`Ukončit „${c.label}"? Od zítřka se přestane započítávat, dosavadní platby zůstanou.`)) return;
+    const res = await fetch(`/api/costs/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endDate }),
+    });
+    if (res.ok) {
+      const updated: Cost = await res.json();
+      setCosts((list) => list.map((x) => (x.id === c.id ? updated : x)));
+    }
+  }
+
+  async function remove(c: Cost) {
+    const warn =
+      c.repeat === "once"
+        ? `Smazat náklad „${c.label}"?`
+        : `Smazat „${c.label}" i s celou historií plateb? Pokud ho jen už neplatíš, použij raději Ukončit.`;
+    if (!confirm(warn)) return;
+    const res = await fetch(`/api/costs/${c.id}`, { method: "DELETE" });
+    if (res.ok) setCosts((list) => list.filter((x) => x.id !== c.id));
   }
 
   if (loading) return <p className="py-16 text-center text-soft">Načítám náklady…</p>;
@@ -67,65 +98,156 @@ export default function CostsPage() {
       {/* Přidání nákladu */}
       <div className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="font-display text-lg font-semibold">Přidat náklad</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[1.5fr_1fr_1fr_auto]">
+
+        <div className="mt-3 inline-flex rounded-xl border border-line bg-bg p-1" role="radiogroup" aria-label="Opakování">
+          {(Object.keys(REPEAT_LABEL) as Repeat[]).map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={repeat === r}
+              onClick={() => setRepeat(r)}
+              className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${
+                repeat === r ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"
+              }`}
+            >
+              {REPEAT_LABEL[r]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1.6fr_1fr_1fr_1fr_auto]">
           <input
-            className="field"
-            placeholder="např. Dřevo do kamen"
+            className="control w-full"
+            placeholder={repeat === "once" ? "např. Oprava kamen" : "např. Elektřina"}
+            aria-label="Položka"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
-          <input
-            className="field"
-            type="number"
-            inputMode="numeric"
-            placeholder="Částka (Kč)"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+          <div className="relative">
+            <input
+              className="control w-full !pr-16"
+              type="number"
+              inputMode="numeric"
+              placeholder="Částka"
+              aria-label="Částka v Kč"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-soft">
+              Kč{PER[repeat]}
+            </span>
+          </div>
+          <Dropdown
+            label="Kategorie"
+            value={category}
+            onChange={setCategory}
+            items={CATEGORIES.map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }))}
           />
-          <select className="field" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <label className="relative block">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-soft">
+              {repeat === "once" ? "Dne" : "Od"}
+            </span>
+            <input
+              className="control w-full !pl-10"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
           <button
-            className="btn-primary !py-3"
-            disabled={saving || !label.trim() || !(Number(amount) > 0)}
+            className="btn-primary h-10 !px-5 !py-0 text-sm"
+            disabled={saving || !label.trim() || !(Number(amount) > 0) || !date}
             onClick={addCost}
           >
             + Přidat
           </button>
         </div>
+        {repeat !== "once" && (
+          <p className="mt-2 text-xs text-soft">
+            Zadáš jednou, započítá se {repeat === "monthly" ? "každý měsíc" : "každý rok"} ve stejný den, dokud ho
+            neukončíš.
+          </p>
+        )}
       </div>
 
-      {/* Seznam */}
-      <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
-        {costs.length === 0 && (
-          <p className="p-6 text-center text-sm text-soft">Zatím žádné náklady.</p>
-        )}
-        {costs.map((c) => (
-          <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-            <div>
-              <p className="font-medium">{c.label}</p>
-              <p className="text-xs text-soft">
-                {fmtDate(c.date)} · <span className="rounded-full bg-line/60 px-2 py-0.5">{c.category}</span>
-              </p>
+      {/* Pravidelné náklady */}
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-lg font-semibold">Pravidelné</h2>
+          {totals.fixed > 0 && <p className="text-sm text-soft">celkem cca {czk(totals.fixed)} měsíčně</p>}
+        </div>
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
+          {running.length === 0 && ended.length === 0 && (
+            <p className="p-5 text-center text-sm text-soft">Žádné pravidelné náklady.</p>
+          )}
+          {[...running, ...ended].map((c) => {
+            const active = isActive(c);
+            return (
+              <div key={c.id} className={`flex items-center justify-between gap-3 px-5 py-3.5 ${active ? "" : "opacity-55"}`}>
+                <div className="min-w-0">
+                  <p className="font-medium">{c.label}</p>
+                  <p className="text-xs text-soft">
+                    {REPEAT_LABEL[c.repeat]} od {fmtDate(c.date)}
+                    {c.endDate && ` · ukončeno ${fmtDate(c.endDate)}`} · {c.category}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <p className="text-right font-semibold text-coral">
+                    − {czk(c.amount)}
+                    <span className="text-xs font-normal text-soft">{PER[c.repeat]}</span>
+                  </p>
+                  {active ? (
+                    <button onClick={() => setEnd(c, todayISO())} className="text-xs font-medium text-soft hover:text-ink">
+                      Ukončit
+                    </button>
+                  ) : (
+                    <button onClick={() => setEnd(c, null)} className="text-xs font-medium text-pine hover:underline">
+                      Obnovit
+                    </button>
+                  )}
+                  <DeleteButton label={c.label} onClick={() => remove(c)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Jednorázové náklady */}
+      <section className="space-y-2">
+        <h2 className="font-display text-lg font-semibold">Jednorázové</h2>
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
+          {oneOff.length === 0 && <p className="p-5 text-center text-sm text-soft">Žádné jednorázové náklady.</p>}
+          {oneOff.map((c) => (
+            <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <div className="min-w-0">
+                <p className="font-medium">{c.label}</p>
+                <p className="text-xs text-soft">
+                  {fmtDate(c.date)} · {c.category}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <p className="font-semibold text-coral">− {czk(c.amount)}</p>
+                <DeleteButton label={c.label} onClick={() => remove(c)} />
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <p className="font-semibold text-coral">− {czk(c.amount)}</p>
-              <button
-                onClick={() => remove(c.id)}
-                className="text-soft transition hover:text-coral"
-                title="Smazat náklad"
-                aria-label={`Smazat náklad ${c.label}`}
-              >
-                🗑
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </section>
     </div>
+  );
+}
+
+function DeleteButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-soft transition hover:text-coral"
+      title="Smazat náklad"
+      aria-label={`Smazat náklad ${label}`}
+    >
+      🗑
+    </button>
   );
 }

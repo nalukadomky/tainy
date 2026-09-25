@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { quoteStay, type PricingMode } from "@/lib/pricing";
+import { pricedCategories, quoteStay, type Adjust, type PricingMode } from "@/lib/pricing";
+import { capacityCount, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
+import { blockedRanges, lockSite } from "@/lib/availability";
+import { fromISO, isRangeFree, newPublicId, nightsOf, toISO, validateStay } from "@/lib/stay";
+import { demoPaymentsEnabled } from "@/lib/demo";
+import { sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
+
+// Jak dlouho držíme nezaplacenou rezervaci, než termín zase uvolní.
+const HOLD_HOURS = { qr: 24, onsite: 72, demo: 0 } as const;
+type PaymentMethod = keyof typeof HOLD_HOURS;
 
 // Seznam rezervací (obsahuje osobní údaje hostů) — jen pro vlastníka webu.
 export async function GET(req: NextRequest) {
@@ -20,66 +29,141 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const site = await prisma.site.findUnique({
     where: { slug: String(body.site ?? "") },
-    include: { priceRules: true },
+    include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
   if (!site) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
 
-  const start = new Date(String(body.startDate));
-  const end = new Date(String(body.endDate));
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+  const startIso = String(body.startDate ?? "").slice(0, 10);
+  const endIso = String(body.endDate ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startIso) || !/^\d{4}-\d{2}-\d{2}$/.test(endIso)) {
     return NextResponse.json({ error: "Neplatný termín pobytu." }, { status: 400 });
   }
-  const guests = Number(body.guests ?? 1);
-  if (guests < 1 || guests > site.maxGuests) {
-    return NextResponse.json({ error: `Počet hostů musí být 1–${site.maxGuests}.` }, { status: 400 });
-  }
-  if (!body.guestName || !body.email) {
-    return NextResponse.json({ error: "Chybí jméno nebo e-mail hosta." }, { status: 400 });
-  }
 
-  // Kontrola kolize s existující (nezrušenou) rezervací
-  const overlap = await prisma.reservation.findFirst({
-    where: {
-      siteId: site.id,
-      status: { not: "cancelled" },
-      startDate: { lt: end },
-      endDate: { gt: start },
-    },
+  // Skladba hostů — bere se jen to, co má web opravdu zapnuté.
+  const categories = pricedCategories({
+    guestMode: site.guestMode,
+    categories: parseCategories(site.guestCategories, site.pricingMode),
   });
-  if (overlap) {
-    return NextResponse.json({ error: "Termín je již obsazený. Zkuste jiné datum." }, { status: 409 });
+  // Starší klient posílá `guests` jako číslo; bereme ho jako počet dospělých.
+  const counts = parseCounts(
+    typeof body.guests === "number" ? { adult: body.guests } : body.guests,
+    categories
+  );
+
+  // Pravidla pobytu (min. noci, nejdřívější příjezd, kapacita) — stejná
+  // kontrola jako ve widgetu, ale tady je autoritativní.
+  const invalid = validateStay(
+    {
+      minNights: site.minNights,
+      leadTimeDays: site.leadTimeDays,
+      maxGuests: site.maxGuests,
+      categories,
+    },
+    startIso,
+    endIso,
+    counts
+  );
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
+
+  const guestName = String(body.guestName ?? "").trim();
+  const email = String(body.email ?? "").trim();
+  if (guestName.length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: "Chybí jméno nebo platný e-mail hosta." }, { status: 400 });
+  }
+  if (body.consent !== true) {
+    return NextResponse.json({ error: "Bez souhlasu se zpracováním údajů nelze rezervaci dokončit." }, { status: 400 });
   }
 
-  // Cena se počítá vždy na serveru — noc po noci podle ceníku webu
-  const { total } = quoteStay(
+  // Ukázkovou platbu smí přijmout jen server, kde je povolená — jinak by
+  // stačilo poslat payment: "demo" a rezervace by byla zaplacená zdarma.
+  // Bez čísla účtu majitele nemá QR platba co nabídnout, pak platí delší lhůta.
+  const demo = body.payment === "demo" && demoPaymentsEnabled();
+  const payment: PaymentMethod = demo ? "demo" : body.payment === "qr" && site.bankAccount ? "qr" : "onsite";
+
+  // Cena se počítá vždy na serveru — noc po noci podle ceníku webu, plus poplatky.
+  const quote = quoteStay(
     {
       pricePerNight: site.pricePerNight,
       pricingMode: site.pricingMode as PricingMode,
-      weekendPct: site.weekendPct,
+      weekend: { value: site.weekendValue, unit: site.weekendUnit === "czk" ? "czk" : "pct" },
+      cleaningFee: site.cleaningFee,
+      touristTax: site.touristTax,
+      guestMode: site.guestMode,
+      categories: parseCategories(site.guestCategories),
       priceRules: site.priceRules.map((r) => ({
         label: r.label,
-        startDate: r.startDate.toISOString(),
-        endDate: r.endDate.toISOString(),
-        pct: r.pct,
+        startDate: toISO(r.startDate),
+        endDate: toISO(r.endDate),
+        adjust: { value: r.value, unit: r.unit === "czk" ? "czk" : "pct" } as Adjust,
       })),
     },
-    String(body.startDate),
-    String(body.endDate),
-    guests
+    startIso,
+    endIso,
+    counts
   );
 
-  const reservation = await prisma.reservation.create({
-    data: {
-      siteId: site.id,
-      guestName: String(body.guestName),
-      email: String(body.email),
-      phone: String(body.phone ?? ""),
-      guests,
-      startDate: start,
-      endDate: end,
-      totalPrice: total,
-      status: body.paid ? "paid" : "pending",
-    },
-  });
-  return NextResponse.json(reservation, { status: 201 });
+  let created;
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      // Zámek na dobu transakce: dvě souběžné rezervace stejného webu
+      // se serializují, takže nemohou obě projít kontrolou obsazenosti.
+      await lockSite(tx, site.id);
+
+      const blocked = await blockedRanges(site.id, startIso, tx);
+      if (!isRangeFree(blocked, startIso, endIso)) {
+        throw new ConflictError("Termín je již obsazený. Zkuste jiné datum.");
+      }
+
+      return tx.reservation.create({
+        data: {
+          publicId: newPublicId(),
+          siteId: site.id,
+          guestName,
+          email,
+          phone: String(body.phone ?? "").trim(),
+          guests: capacityCount(counts, categories),
+          guestBreakdown: JSON.stringify(counts),
+          startDate: fromISO(startIso),
+          endDate: fromISO(endIso),
+          nightsTotal: quote.nightsTotal,
+          feesTotal: quote.feesTotal,
+          totalPrice: quote.total,
+          note: String(body.note ?? "").trim().slice(0, 500),
+          source: demo ? "demo" : "web",
+          status: demo ? "paid" : "pending",
+          expiresAt: demo ? null : new Date(Date.now() + HOLD_HOURS[payment] * 3_600_000),
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof ConflictError) return NextResponse.json({ error: e.message }, { status: 409 });
+    throw e;
+  }
+
+  // E-maily až po commitu — jejich selhání nesmí shodit hotovou rezervaci.
+  const mail: StayMail = {
+    publicId: created.publicId,
+    siteName: site.name,
+    guestName: created.guestName,
+    email: created.email,
+    phone: created.phone,
+    guests: created.guests,
+    guestSummary: describeCounts(counts, categories),
+    startDate: startIso,
+    endDate: endIso,
+    nights: nightsOf(startIso, endIso),
+    total: created.totalPrice,
+    paid: created.status === "paid",
+    demo,
+    checkInTime: site.checkInTime,
+    checkOutTime: site.checkOutTime,
+  };
+  await Promise.all([sendGuestConfirmation(mail), sendOwnerNotification(mail, site.contactEmail)]);
+
+  return NextResponse.json(
+    { publicId: created.publicId, total: created.totalPrice, status: created.status },
+    { status: 201 }
+  );
 }
+
+class ConflictError extends Error {}

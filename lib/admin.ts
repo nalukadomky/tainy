@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { Repeat } from "@/lib/costs";
+import { plural, pricedCategories } from "@/lib/pricing";
+import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
+
+export type Unit = "pct" | "czk";
 
 export type PriceRule = {
   id?: string;
   label: string;
   startDate: string;
   endDate: string;
-  pct: number;
+  value: number;
+  unit: Unit;
 };
 
 export type Site = {
@@ -19,14 +25,26 @@ export type Site = {
   propertyType: string;
   pricePerNight: number;
   pricingMode: "unit" | "person";
-  weekendPct: number;
+  weekendValue: number;
+  weekendUnit: Unit;
   priceRules: PriceRule[];
   maxGuests: number;
   amenities: string;
+  photos: string;
+  guestMode: "total" | "split";
+  guestCategories: string;
   themeColor: string;
   tier: "start" | "pro";
   contactEmail: string;
   contactPhone: string;
+  minNights: number;
+  leadTimeDays: number;
+  checkInTime: string;
+  checkOutTime: string;
+  cleaningFee: number;
+  touristTax: number;
+  bankAccount: string;
+  cancellationPolicy: string;
 };
 
 export type Reservation = {
@@ -35,10 +53,17 @@ export type Reservation = {
   email: string;
   phone: string;
   guests: number;
+  guestBreakdown: string;
   startDate: string;
   endDate: string;
+  nightsTotal: number;
+  feesTotal: number;
   totalPrice: number;
+  note: string;
+  source: string;
   status: "pending" | "paid" | "cancelled";
+  expiresAt: string | null;
+  publicId: string;
   createdAt: string;
 };
 
@@ -48,6 +73,8 @@ export type Cost = {
   amount: number;
   category: string;
   date: string;
+  repeat: Repeat;
+  endDate: string | null;
 };
 
 export function getSiteSlug(): string | null {
@@ -128,7 +155,18 @@ export function useAdminData() {
     reload();
   }, [reload]);
 
-  return { slug, site, setSite, reservations, costs, loading, error, reload };
+  // Změna stavu bez znovunačtení celé stránky: seznam se upraví na místě.
+  const setStatus = useCallback(async (id: string, status: Reservation["status"]) => {
+    const res = await fetch(`/api/reservations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error("Stav se nepodařilo změnit.");
+    setReservations((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
+  }, []);
+
+  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus };
 }
 
 export function fmtDate(iso: string): string {
@@ -146,3 +184,32 @@ export const STATUS_STYLE: Record<Reservation["status"], string> = {
   paid: "bg-pine/10 text-pine",
   cancelled: "bg-line/60 text-soft line-through",
 };
+
+/** Skladba hostů rezervace („2× dospělí · 1× pes"), pokud ji web rozlišuje; jinak počet. */
+export function guestsLabel(r: Reservation, site: Site | null): string {
+  const categories = pricedCategories({
+    guestMode: site?.guestMode,
+    pricingMode: site?.pricingMode,
+    categories: parseCategories(site?.guestCategories ?? "", site?.pricingMode),
+  });
+  try {
+    if (!r.guestBreakdown) throw new Error();
+    const popis = describeCounts(parseCounts(JSON.parse(r.guestBreakdown), categories), categories);
+    if (popis) return popis;
+  } catch {
+    // starší rezervace bez rozpisu
+  }
+  return `${r.guests} ${plural(r.guests, "host", "hosté", "hostů")}`;
+}
+
+export const SOURCE_LABEL: Record<string, string> = {
+  web: "Web",
+  airbnb: "Airbnb",
+  booking: "Booking",
+  manual: "Ručně",
+};
+
+/** Hledání bez ohledu na velikost písmen a diakritiku („kral" najde „Král"). */
+export function norm(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}

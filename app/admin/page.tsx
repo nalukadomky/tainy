@@ -1,9 +1,12 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useAdminData, fmtDate, STATUS_LABEL, STATUS_STYLE } from "@/lib/admin";
+import { useAdminData, fmtDate } from "@/lib/admin";
+import { StatusMenu } from "@/components/StatusMenu";
+import { Dropdown } from "@/components/Dropdown";
+import { spentToDate } from "@/lib/costs";
 import { czk, nightsBetween } from "@/lib/pricing";
 
 function monthKey(d: Date) {
@@ -12,29 +15,31 @@ function monthKey(d: Date) {
 
 const MONTHS_CS = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
 
+type Range = "6" | "12" | "year" | "lastYear" | "next6" | "all";
+const RANGE_LABEL: Record<Range, string> = {
+  "6": "Posledních 6 měsíců",
+  "12": "Posledních 12 měsíců",
+  year: "Tento rok",
+  lastYear: "Minulý rok",
+  next6: "Příštích 6 měsíců",
+  all: "Celá historie",
+};
+
 function Dashboard() {
   const params = useSearchParams();
   const welcome = params.get("vitej") === "1";
-  const { site, reservations, costs, loading, error } = useAdminData();
+  const { site, reservations, costs, loading, error, setStatus } = useAdminData();
+  const [range, setRange] = useState<Range>("6");
 
   const stats = useMemo(() => {
     const now = new Date();
     const paid = reservations.filter((r) => r.status === "paid");
 
-    // Tržby po měsících za posledních 6 měsíců (podle data příjezdu)
-    const months: { label: string; key: string; revenue: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({ label: MONTHS_CS[d.getMonth()], key: monthKey(d), revenue: 0 });
-    }
-    for (const r of paid) {
-      const key = monthKey(new Date(r.startDate));
-      const m = months.find((x) => x.key === key);
-      if (m) m.revenue += r.totalPrice;
-    }
-
+    // Tržby tento měsíc (podle data příjezdu)
     const thisMonthKey = monthKey(now);
-    const revenueThisMonth = months.find((m) => m.key === thisMonthKey)?.revenue ?? 0;
+    const revenueThisMonth = paid
+      .filter((r) => monthKey(new Date(r.startDate)) === thisMonthKey)
+      .reduce((sum, r) => sum + r.totalPrice, 0);
 
     // Obsazenost tento měsíc: rezervované noci / dny v měsíci
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -54,10 +59,55 @@ function Dashboard() {
       .slice(0, 4);
 
     const totalRevenue = paid.reduce((sum, r) => sum + r.totalPrice, 0);
-    const totalCosts = costs.reduce((sum, c) => sum + c.amount, 0);
+    // Opakované náklady se počítají jen za platby, které už nastaly.
+    const totalCosts = spentToDate(costs);
 
-    return { months, revenueThisMonth, occupancy, upcoming, totalRevenue, totalCosts };
+    return { revenueThisMonth, occupancy, upcoming, totalRevenue, totalCosts };
   }, [reservations, costs]);
+
+  // Graf tržeb po měsících (podle data příjezdu) pro zvolené období.
+  const chart = useMemo(() => {
+    const now = new Date();
+    const paid = reservations.filter((r) => r.status === "paid");
+    let from: Date;
+    let to: Date;
+    if (range === "year") {
+      from = new Date(now.getFullYear(), 0, 1);
+      to = new Date(now.getFullYear(), 11, 1);
+    } else if (range === "lastYear") {
+      from = new Date(now.getFullYear() - 1, 0, 1);
+      to = new Date(now.getFullYear() - 1, 11, 1);
+    } else if (range === "next6") {
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+      to = new Date(now.getFullYear(), now.getMonth() + 5, 1);
+    } else if (range === "all") {
+      const first = paid.reduce((min, r) => (r.startDate < min ? r.startDate : min), now.toISOString());
+      from = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), 1);
+      to = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      const n = range === "12" ? 11 : 5;
+      from = new Date(now.getFullYear(), now.getMonth() - n, 1);
+      to = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const months: { key: string; label: string; title: string; revenue: number; current: boolean }[] = [];
+    for (let d = new Date(from); d <= to; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      months.push({
+        key: monthKey(d),
+        // Leden nese rok, ať je v delším období vidět přelom
+        label: d.getMonth() === 0 && months.length > 0 ? `${MONTHS_CS[0]} ’${String(d.getFullYear()).slice(2)}` : MONTHS_CS[d.getMonth()],
+        title: d.toLocaleDateString("cs-CZ", { month: "long", year: "numeric" }),
+        revenue: 0,
+        current: monthKey(d) === monthKey(now),
+      });
+    }
+    for (const r of paid) {
+      const m = months.find((x) => x.key === monthKey(new Date(r.startDate)));
+      if (m) m.revenue += r.totalPrice;
+    }
+    const total = months.reduce((sum, m) => sum + m.revenue, 0);
+    return { months, total, max: Math.max(...months.map((m) => m.revenue), 1) };
+  }, [reservations, range]);
 
   if (loading) return <p className="py-16 text-center text-soft">Načítám přehled…</p>;
   if (error || !site)
@@ -67,8 +117,6 @@ function Dashboard() {
         <Link href="/onboarding" className="btn-primary mt-4">Vytvořit web</Link>
       </div>
     );
-
-  const maxRevenue = Math.max(...stats.months.map((m) => m.revenue), 1);
 
   return (
     <div className="space-y-6">
@@ -126,23 +174,47 @@ function Dashboard() {
 
       {/* Graf tržeb */}
       <div className="rounded-2xl border border-line bg-surface p-5">
-        <h2 className="font-display text-lg font-semibold">Tržby za posledních 6 měsíců</h2>
-        <div className="mt-5 flex h-44 items-end gap-3 border-b border-line pb-0">
-          {stats.months.map((m) => (
-            <div key={m.key} className="group flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${m.label}: ${czk(m.revenue)}`}>
-              <span className="max-w-full truncate text-[11px] font-semibold text-soft opacity-0 transition group-hover:opacity-100">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Tržby</h2>
+            <p className="text-sm text-soft">
+              {RANGE_LABEL[range]}: <strong className="font-semibold text-ink">{czk(chart.total)}</strong>
+            </p>
+          </div>
+          <Dropdown
+            label="Období grafu"
+            value={range}
+            onChange={(v) => setRange(v as Range)}
+            align="right"
+            items={(Object.keys(RANGE_LABEL) as Range[]).map((r) => ({ value: r, label: RANGE_LABEL[r] }))}
+          />
+        </div>
+        <div className={`mt-5 flex h-44 items-end border-b border-line ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
+          {chart.months.map((m) => (
+            <div
+              key={m.key}
+              className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+              title={`${m.title}: ${czk(m.revenue)}`}
+            >
+              <span className="pointer-events-none absolute -top-1 whitespace-nowrap rounded-md bg-ink px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
                 {czk(m.revenue)}
               </span>
               <div
-                className="w-full max-w-12 rounded-t-[4px] bg-pine transition group-hover:bg-pine-dark"
-                style={{ height: `${Math.max(2, (m.revenue / maxRevenue) * 130)}px` }}
+                className={`w-full max-w-12 rounded-t-[4px] transition group-hover:bg-pine-dark ${m.current ? "bg-pine" : "bg-pine/75"}`}
+                style={{ height: `${Math.max(2, (m.revenue / chart.max) * 150)}px` }}
               />
             </div>
           ))}
         </div>
-        <div className="mt-2 flex gap-3">
-          {stats.months.map((m) => (
-            <span key={m.key} className="flex-1 text-center text-xs text-soft">
+        <div className={`mt-2 flex ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
+          {chart.months.map((m, i) => (
+            <span
+              key={m.key}
+              className={`min-w-0 flex-1 truncate text-center text-xs ${m.current ? "font-semibold text-ink" : "text-soft"} ${
+                // U dlouhého období popisek jen u každého druhého měsíce
+                chart.months.length > 12 && i % 2 === 1 ? "invisible" : ""
+              }`}
+            >
               {m.label}
             </span>
           ))}
@@ -172,9 +244,7 @@ function Dashboard() {
               </div>
               <div className="text-right">
                 <p className="font-semibold">{czk(r.totalPrice)}</p>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
-                  {STATUS_LABEL[r.status]}
-                </span>
+                <StatusMenu status={r.status} guestName={r.guestName} onChange={(s) => setStatus(r.id, s)} />
               </div>
             </div>
           ))}
