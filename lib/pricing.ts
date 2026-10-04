@@ -65,6 +65,8 @@ export type QuoteLine = {
 };
 
 export type QuoteFee = {
+  /** cleaning = úklid, tax = poplatek z pobytu (odvádí se obci, sleva se ho netýká). */
+  key: "cleaning" | "tax";
   label: string;
   detail: string;
   amount: number;
@@ -225,11 +227,12 @@ export function quoteStay(cfg: PricingConfig, startIso: string, endIso: string, 
 
   const fees: QuoteFee[] = [];
   if (nights > 0 && cfg.cleaningFee) {
-    fees.push({ label: "Úklid", detail: "jednorázově", amount: cfg.cleaningFee });
+    fees.push({ key: "cleaning", label: "Úklid", detail: "jednorázově", amount: cfg.cleaningFee });
   }
   const taxable = taxableCount(counts, pricedCategories(cfg));
   if (nights > 0 && cfg.touristTax && taxable > 0) {
     fees.push({
+      key: "tax",
       label: "Poplatek z pobytu",
       detail: `${cfg.touristTax} Kč × ${taxable} ${plural(taxable, "osoba", "osoby", "osob")} × ${nights} ${plural(nights, "noc", "noci", "nocí")}`,
       amount: cfg.touristTax * taxable * nights,

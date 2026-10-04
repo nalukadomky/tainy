@@ -82,8 +82,11 @@ function Dashboard() {
       to = new Date(now.getFullYear(), now.getMonth() + 5, 1);
     } else if (range === "all") {
       const first = paid.reduce((min, r) => (r.startDate < min ? r.startDate : min), now.toISOString());
+      // Konec až u poslední zaplacené rezervace, ať součet sedí s „Tržby celkem"
+      // (zaplacené rezervace s budoucím příjezdem).
+      const last = paid.reduce((max, r) => (r.startDate > max ? r.startDate : max), now.toISOString());
       from = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth(), 1);
+      to = new Date(new Date(last).getFullYear(), new Date(last).getMonth(), 1);
     } else {
       const n = range === "12" ? 11 : 5;
       from = new Date(now.getFullYear(), now.getMonth() - n, 1);
@@ -121,11 +124,10 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       {welcome && (
-        <div className="rise ai-chip rounded-2xl p-5">
+        <div className="rise rounded-2xl border border-pine/20 bg-pine/5 p-5">
           <h2 className="font-display text-xl font-semibold">🎉 Tvůj web je na světě!</h2>
           <p className="mt-1 text-sm text-soft">
-            Podívej se, jak vypadá pro hosty, a pošli jim odkaz. Všechno tady můžeš kdykoli upravit
-            {site.tier === "pro" ? " — klidně hlasem přes AI asistenta." : "."}
+            Podívej se, jak vypadá pro hosty, a pošli jim odkaz. Všechno tady můžeš kdykoli upravit.
           </p>
           <Link
             href={`/w/${site.slug}`}
@@ -147,11 +149,6 @@ function Dashboard() {
             </Link>
           </p>
         </div>
-        {site.tier === "pro" && (
-          <span className="ai-chip hidden rounded-full px-3 py-1.5 text-xs font-bold sm:block">
-            t<span className="ai-mark">ai</span>ny Pro
-          </span>
-        )}
       </div>
 
       {/* KPI dlaždice */}
@@ -225,9 +222,14 @@ function Dashboard() {
       <div className="rounded-2xl border border-line bg-surface p-5">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">Nadcházející pobyty</h2>
-          <Link href="/admin/rezervace" className="text-sm font-medium text-pine hover:underline">
-            Všechny →
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/admin/kalendar" className="text-sm font-medium text-pine hover:underline">
+              Kalendář →
+            </Link>
+            <Link href="/admin/rezervace" className="text-sm font-medium text-pine hover:underline">
+              Všechny →
+            </Link>
+          </div>
         </div>
         <div className="mt-3 divide-y divide-line">
           {stats.upcoming.length === 0 && (

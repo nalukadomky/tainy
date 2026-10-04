@@ -5,15 +5,23 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { DEV_LOGIN_COOKIE, devLoginEnabled } from "@/lib/dev-login";
 
+// Vývojový účet se načte z databáze jednou za proces — jinak by každý
+// požadavek administrace (a jedna stránka jich pouští několik) bral spojení navíc.
+const devUsers = new Map<string, User | null>();
+
 // Aktuálně přihlášený uživatel ze Supabase session (nebo null).
 export async function getUser(): Promise<User | null> {
   if (devLoginEnabled()) {
     const devId = (await cookies()).get(DEV_LOGIN_COOKIE)?.value;
     if (devId && /^[0-9a-f-]{36}$/i.test(devId)) {
-      // Aplikaci z uživatele stačí id a e-mail.
-      const rows = await prisma.$queryRaw<{ id: string; email: string }[]>`
-        SELECT id::text, email FROM auth.users WHERE id = ${devId}::uuid LIMIT 1`;
-      if (rows.length) return { id: rows[0].id, email: rows[0].email } as User;
+      if (!devUsers.has(devId)) {
+        // Aplikaci z uživatele stačí id a e-mail.
+        const rows = await prisma.$queryRaw<{ id: string; email: string }[]>`
+          SELECT id::text, email FROM auth.users WHERE id = ${devId}::uuid LIMIT 1`;
+        devUsers.set(devId, rows.length ? ({ id: rows[0].id, email: rows[0].email } as User) : null);
+      }
+      const user = devUsers.get(devId);
+      if (user) return user;
     }
   }
 
@@ -66,6 +74,32 @@ export async function requireOwnerByCostId(id: string) {
   if (!cost) return { ok: false as const, status: 404 as const };
   if (cost.site.ownerId !== user.id) return { ok: false as const, status: 403 as const };
   return { ok: true as const, user, cost };
+}
+
+// Ověří vlastnictví přes ID blokace termínu (přes navázaný web).
+export async function requireOwnerByBlackoutId(id: string) {
+  const user = await getUser();
+  if (!user) return { ok: false as const, status: 401 as const };
+  const blackout = await prisma.blackout.findUnique({
+    where: { id },
+    include: { site: { select: { ownerId: true } } },
+  });
+  if (!blackout) return { ok: false as const, status: 404 as const };
+  if (blackout.site.ownerId !== user.id) return { ok: false as const, status: 403 as const };
+  return { ok: true as const, user, blackout };
+}
+
+// Ověří vlastnictví přes ID voucheru (přes navázaný web).
+export async function requireOwnerByVoucherId(id: string) {
+  const user = await getUser();
+  if (!user) return { ok: false as const, status: 401 as const };
+  const voucher = await prisma.voucher.findUnique({
+    where: { id },
+    include: { site: { select: { ownerId: true } } },
+  });
+  if (!voucher) return { ok: false as const, status: 404 as const };
+  if (voucher.site.ownerId !== user.id) return { ok: false as const, status: 403 as const };
+  return { ok: true as const, user, voucher };
 }
 
 // Jednotná chybová odpověď.

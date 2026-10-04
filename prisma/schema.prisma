@@ -28,6 +28,9 @@ model Site {
   guestCategories String     @default("") // JSON katalogu, prázdné = výchozí
   // Galerie: jedna fotka na řádek ve tvaru `adresa|popisek`
   photos       String        @default("")
+  // Úvod webu: text = jen nadpis, photo = nadpis přes velkou úvodní fotku
+  heroStyle    String        @default("text")
+  heroPhoto    String        @default("")
   themeColor   String        @default("pine")
   tier         String        @default("start")
   contactEmail String        @default("")
@@ -53,6 +56,7 @@ model Site {
   costs        Cost[]
   priceRules   PriceRule[]
   blackouts    Blackout[]
+  vouchers     Voucher[]
 
   @@index([ownerId])
 }
@@ -85,7 +89,13 @@ model Reservation {
 
   nightsTotal Int     @default(0) // cena za noci
   feesTotal   Int     @default(0) // úklid + poplatek z pobytu
-  totalPrice  Int                 // nightsTotal + feesTotal
+  totalPrice  Int                 // nightsTotal + feesTotal − discount
+
+  // Uplatněný voucher — snímek v době rezervace, pozdější úprava voucheru ho nemění
+  voucherCode  String  @default("")
+  voucherKind  String  @default("")   // pct | czk
+  voucherValue Int     @default(0)
+  discount     Int     @default(0)    // sleva v Kč
 
   note       String   @default("")
   source     String   @default("web") // web | manual | airbnb | booking
@@ -122,4 +132,22 @@ model Cost {
   endDate   DateTime? // poslední den, kdy se opakovaný náklad ještě počítá
   date      DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+// Slevový kód webu. Použití = nezrušené rezervace se stejným kódem.
+model Voucher {
+  id        String    @id @default(cuid())
+  siteId    String
+  site      Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  code      String                         // velkými písmeny
+  kind      String    @default("pct")      // pct = procenta, czk = pevná částka
+  value     Int
+  validFrom DateTime? @db.Date
+  validTo   DateTime? @db.Date
+  maxUses   Int?                           // null = bez omezení
+  note      String    @default("")         // interní poznámka majitele
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@unique([siteId, code])
 }

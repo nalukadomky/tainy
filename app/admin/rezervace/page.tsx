@@ -14,6 +14,8 @@ import {
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
+import { RescheduleDialog } from "@/components/RescheduleDialog";
+import { VoucherBadge } from "@/components/VoucherBadge";
 
 type Filter = "all" | Reservation["status"];
 /** all | upcoming | past | měsíc příjezdu ve tvaru YYYY-MM */
@@ -26,7 +28,8 @@ function monthLabel(key: string): string {
 }
 
 export default function ReservationsPage() {
-  const { site, reservations, loading, error, setStatus: saveStatus } = useAdminData();
+  const { site, reservations, loading, error, setStatus: saveStatus, replaceReservation } = useAdminData();
+  const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -215,6 +218,7 @@ export default function ReservationsPage() {
                       {SOURCE_LABEL[r.source] ?? r.source}
                     </span>
                   )}
+                  <VoucherBadge code={r.voucherCode} discount={r.discount} />
                 </p>
                 <p className="mt-0.5 text-sm text-soft">
                   {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {guestsLabel(r, site)}
@@ -241,6 +245,11 @@ export default function ReservationsPage() {
                   ✓ Označit zaplaceno
                 </button>
               )}
+              {r.status !== "cancelled" && (
+                <button className="btn-ghost !px-4 !py-1.5 text-xs" onClick={() => setRescheduling(r)}>
+                  Změnit termín
+                </button>
+              )}
               {r.status !== "cancelled" ? (
                 <button
                   className="btn-ghost !px-4 !py-1.5 text-xs !text-coral"
@@ -262,6 +271,17 @@ export default function ReservationsPage() {
           </div>
         ))}
       </div>
+
+      {rescheduling && (
+        <RescheduleDialog
+          reservation={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onSaved={(updated) => {
+            replaceReservation(updated);
+            setRescheduling(null);
+          }}
+        />
+      )}
     </div>
   );
 }

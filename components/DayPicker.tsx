@@ -22,6 +22,8 @@ type Props = {
   earliest?: string;
   /** Cena jedné noci začínající daným dnem; null = cenu nezobrazovat. */
   priceOf?: (iso: string) => number | null;
+  /** Měsíc, který se ukáže jako první (ISO datum v něm); výchozí je nejbližší volný den. */
+  initialMonth?: string;
 };
 
 const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
@@ -47,11 +49,11 @@ function shortPrice(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1).replace(".", ",")}k` : String(n);
 }
 
-export function DayPicker({ booked, start, end, onChange, minNights = 1, earliest, priceOf }: Props) {
+export function DayPicker({ booked, start, end, onChange, minNights = 1, earliest, priceOf, initialMonth }: Props) {
   const today = useMemo(() => todayISO(), []);
   const firstBookable = earliest && earliest > today ? earliest : today;
   const [view, setView] = useState(() => {
-    const [y, m] = firstBookable.split("-").map(Number);
+    const [y, m] = (initialMonth && initialMonth > firstBookable ? initialMonth : firstBookable).split("-").map(Number);
     return { y, m: m - 1 };
   });
   const [hint, setHint] = useState("");
@@ -153,7 +155,8 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
             <span key={w} className="py-1">{w}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-1">
+        {/* Den zabírá nejvýš 88 % sloupce — mezera mezi čtverečky zůstane při jakékoli šířce */}
+        <div className="grid grid-cols-7 gap-y-1.5">
           {cells.map((day, i) => {
             if (!day) return <span key={`x${i}`} />;
             const h = halves(day);
@@ -172,7 +175,7 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
                 disabled={disabled}
                 onClick={() => clickDay(day)}
                 aria-label={day}
-                className={`relative mx-auto flex h-12 w-full max-w-12 flex-col items-center justify-center rounded-xl leading-none transition ${
+                className={`relative mx-auto flex aspect-square w-[88%] max-w-10 flex-col items-center justify-center rounded-lg leading-none transition sm:max-w-[43px] sm:rounded-xl ${
                   past ? "text-line" : fullyBooked ? "text-soft/50" : "text-ink hover:ring-2 hover:ring-pine/25"
                 } ${isEdgeSelected ? "font-semibold" : ""} ${
                   day === today ? "ring-1 ring-line" : ""

@@ -15,7 +15,9 @@ export function Gallery({ photos, siteName }: { photos: Photo[]; siteName: strin
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {/* Na velkých obrazovkách 4 sloupce, ať hlavní fotka nepřeroste výšku okna:
+          hlavní 2×2 + čtyři menší vedle, šestá fotka se tam skryje. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
         {photos.slice(0, 6).map((photo, i) => {
           const isHero = i === 0;
           return (
@@ -25,6 +27,8 @@ export function Gallery({ photos, siteName }: { photos: Photo[]; siteName: strin
               onClick={() => setOpen(i)}
               aria-label={`Zvětšit fotku: ${photo.alt}`}
               className={`group relative overflow-hidden rounded-2xl border border-line bg-line/30 transition ${
+                i === 5 ? "lg:hidden" : ""
+              } ${
                 // Hlavní dlaždice je široká 2 sloupce + mezeru, což se přesně rovná výšce
                 // dvou čtvercových dlaždic nad sebou — proto čtverec, jinak vznikne mezera.
                 isHero ? "col-span-2 row-span-2 aspect-square" : "aspect-square"
@@ -38,10 +42,15 @@ export function Gallery({ photos, siteName }: { photos: Photo[]; siteName: strin
                 priority={isHero}
                 className="object-cover transition duration-500 group-hover:scale-105"
               />
-              {/* Poslední dlaždice napoví, že fotek je víc */}
+              {/* Poslední viditelná dlaždice napoví, že fotek je víc (na velké obrazovce je to pátá) */}
               {i === 5 && photos.length > 6 && (
                 <span className="absolute inset-0 flex items-center justify-center bg-ink/55 font-display text-xl font-semibold text-white">
                   +{photos.length - 6}
+                </span>
+              )}
+              {i === 4 && photos.length > 5 && (
+                <span className="absolute inset-0 hidden items-center justify-center bg-ink/55 font-display text-xl font-semibold text-white lg:flex">
+                  +{photos.length - 5}
                 </span>
               )}
             </button>

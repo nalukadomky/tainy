@@ -1,34 +1,12 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AmenityPicker } from "@/components/AmenityPicker";
 import { SiteView, type SiteViewData } from "@/components/SiteView";
-
-const PROPERTY_TYPES = ["chata", "tiny house", "apartmán", "penzion", "glamping", "roubenka"];
-
-const AMENITY_SUGGESTIONS = [
-  "Wi-Fi",
-  "Parkování",
-  "Kuchyň",
-  "Sauna",
-  "Vířivka",
-  "Kamna na dřevo",
-  "Krb",
-  "Terasa",
-  "Gril",
-  "Bazén",
-  "Klimatizace",
-  "Myčka",
-  "Pračka",
-  "TV",
-  "Zahrada",
-  "Snídaně",
-  "Domácí mazlíčci vítáni",
-  "Bezbariérový přístup",
-];
+import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
 
 type Form = {
   name: string;
@@ -42,7 +20,6 @@ type Form = {
   amenities: string[];
   contactEmail: string;
   contactPhone: string;
-  tier: "start" | "pro";
 };
 
 // Víkendová cena (Pá–Ne) se ukládá rovnou jako pevná částka — dřív se
@@ -61,7 +38,6 @@ function buildDraft(form: Form) {
     description: form.description,
     maxGuests: form.maxGuests,
     pricingMode: form.pricingMode,
-    tier: form.tier,
     contactEmail: form.contactEmail,
     contactPhone: form.contactPhone,
     pricePerNight: Number(form.pricePerNight),
@@ -91,7 +67,6 @@ function draftToSiteView(form: Form): SiteViewData {
 
 function Wizard() {
   const router = useRouter();
-  const params = useSearchParams();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -107,7 +82,6 @@ function Wizard() {
     amenities: [],
     contactEmail: "",
     contactPhone: "",
-    tier: params.get("tier") === "pro" ? "pro" : "start",
   });
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
@@ -118,7 +92,6 @@ function Wizard() {
     { title: "Řekni hostům, proč přijet", valid: true },
     { title: "Kapacita a ceny", valid: Number(form.pricePerNight) > 0 },
     { title: "Vybavení a kontakt", valid: true },
-    { title: "Vyber si tarif", valid: true },
     { title: "Náhled tvého webu", valid: true },
   ];
   const PREVIEW_STEP = steps.length - 1;
@@ -241,9 +214,8 @@ function Wizard() {
                 onChange={(e) => set("description", e.target.value)}
               />
             </label>
-            <p className="ai-chip rounded-xl px-4 py-3 text-sm text-soft">
-              💡 Netrap se formulacemi — v tarifu <strong className="text-ink">Pro</strong> texty
-              kdykoli přepíše AI asistent podle tvého hlasového pokynu.
+            <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+              💡 Netrap se formulacemi — texty můžeš kdykoli upravit v administraci.
             </p>
           </>
         )}
@@ -366,55 +338,6 @@ function Wizard() {
               />
             </label>
           </>
-        )}
-
-        {step === 4 && (
-          <div className="space-y-3">
-            {(
-              [
-                {
-                  id: "start",
-                  name: "Start",
-                  price: "0 Kč / měsíc",
-                  desc: "Web, rezervace, platby a administrace.",
-                },
-                {
-                  id: "pro",
-                  name: "tainy Pro",
-                  price: "490 Kč / měsíc",
-                  desc: "Navíc hlasový AI asistent, který web upravuje za tebe.",
-                },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => set("tier", t.id)}
-                className={`w-full rounded-2xl border p-5 text-left transition ${
-                  form.tier === t.id
-                    ? "border-pine bg-surface ring-2 ring-pine/20"
-                    : "border-line bg-surface hover:border-pine/40"
-                } ${t.id === "pro" ? "ai-chip" : ""}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-lg font-semibold">
-                    {t.id === "pro" ? (
-                      <>
-                        t<span className="ai-mark">ai</span>ny Pro
-                      </>
-                    ) : (
-                      t.name
-                    )}
-                  </span>
-                  <span className="text-sm font-semibold text-soft">{t.price}</span>
-                </div>
-                <p className="mt-1 text-sm text-soft">{t.desc}</p>
-              </button>
-            ))}
-            <p className="pt-1 text-xs text-soft">
-              V demu nic neplatíš — tarif si jen vyzkoušíš.
-            </p>
-          </div>
         )}
 
         {error && (

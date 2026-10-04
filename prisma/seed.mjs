@@ -156,6 +156,24 @@ function demoPrice(site, r) {
   return { nightsTotal, feesTotal };
 }
 
+/** Pár proběhlých zaplacených pobytů označí uplatněným voucherem (sleva z nocí + úklidu). */
+async function applyDemoVoucher(siteId, code, kind, value, count) {
+  const site = await prisma.site.findUnique({ where: { id: siteId } });
+  const stays = await prisma.reservation.findMany({
+    where: { siteId, status: "paid", endDate: { lt: new Date() } },
+    orderBy: { startDate: "desc" },
+    take: count,
+  });
+  for (const r of stays) {
+    const base = r.nightsTotal + site.cleaningFee;
+    const discount = kind === "czk" ? value : Math.round((base * value) / 100);
+    await prisma.reservation.update({
+      where: { id: r.id },
+      data: { voucherCode: code, voucherKind: kind, voucherValue: value, discount, totalPrice: r.nightsTotal + r.feesTotal - discount },
+    });
+  }
+}
+
 async function main() {
   await prisma.site.deleteMany({ where: { slug: "demo" } });
   const ownerId = await ownerIdFromEnv();
@@ -194,8 +212,9 @@ async function main() {
         "/demo/07-jidelni-kout.jpg|Jídelní kout z masivního dřeva",
         "/demo/08-houpaci-sit.jpg|Houpací síť mezi stromy",
       ].join("\n"),
+      heroStyle: "photo",
+      heroPhoto: "/demo/01-chata-v-lese.jpg",
       themeColor: "pine",
-      tier: "pro",
       contactEmail: "ahoj@chata-medunka.cz",
       contactPhone: "+420 777 123 456",
       // Pravidla pobytu a poplatky
@@ -237,6 +256,16 @@ async function main() {
       },
     });
   }
+
+  // Vouchery: letní akce, dárkový poukaz na jedno použití a jeden vypršelý
+  await prisma.voucher.createMany({
+    data: [
+      { siteId: site.id, code: "MEDUNKA10", kind: "pct", value: 10, note: "Sleva pro vracející se hosty" },
+      { siteId: site.id, code: "DARKY-2000", kind: "czk", value: 2000, maxUses: 1, validTo: monthsAgo(-10, 1), note: "Dárkový poukaz" },
+      { siteId: site.id, code: "LETO25", kind: "pct", value: 15, validFrom: monthsAgo(4, 1), validTo: monthsAgo(2, 1), note: "Letní akce" },
+    ],
+  });
+  await applyDemoVoucher(site.id, "MEDUNKA10", "pct", 10, 2);
 
   // Blokace majitele: příští týden servis sauny
   const nextWeek = addDays(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())), 7);

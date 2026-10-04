@@ -13,10 +13,11 @@ import {
   type PriceRuleInput,
 } from "@/lib/pricing";
 import { describeCounts, type GuestCategory, type GuestCounts } from "@/lib/guests";
-import { earliestArrival, validateStay } from "@/lib/stay";
+import { earliestArrival, isRangeFree, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { GuestPicker } from "@/components/GuestPicker";
+import { useToast } from "@/components/Toast";
 
 export type BookingSite = {
   slug: string;
@@ -69,6 +70,13 @@ export function BookingWidget({
   const [payment, setPayment] = useState<Payment>(site.paymentMode === "onsite" ? "onsite" : "qr");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  // Voucher: ověřený na serveru pro aktuální termín a hosty
+  const [voucher, setVoucher] = useState<{ code: string; label: string; discount: number } | null>(null);
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [voucherInput, setVoucherInput] = useState("");
+  const [voucherError, setVoucherError] = useState("");
+  const [voucherChecking, setVoucherChecking] = useState(false);
+  const { show: showToast, node: toastNode } = useToast();
 
   const categories = useMemo(
     () => pricedCategories({ guestMode: site.guestMode, categories: site.categories }),
@@ -81,19 +89,61 @@ export function BookingWidget({
 
   const demoDostupna = demoPaymentsEnabled();
 
-  // Obsazenost přišla ze serveru; obnovíme ji jen když jsme ji nedostali
-  // (náhled v administraci) nebo po neúspěšném pokusu o rezervaci.
-  const refreshBooked = useCallback(() => {
-    if (preview) return;
-    fetch(`/api/availability?site=${site.slug}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setBooked)
-      .catch(() => {});
+  // Obsazenost přišla ze serveru při načtení stránky. Mezitím ji ale může
+  // změnit jiný host nebo majitel (blokace, rezervace v administraci), takže
+  // ji průběžně obnovujeme — host nesmí vidět volný termín, který už volný není.
+  // Vrací čerstvou obsazenost, nebo null když se načtení nepovedlo.
+  const refreshBooked = useCallback(async (): Promise<BookedRange[] | null> => {
+    if (preview) return null;
+    try {
+      const res = await fetch(`/api/availability?site=${site.slug}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const fresh: BookedRange[] = await res.json();
+      setBooked(fresh);
+      return fresh;
+    } catch {
+      return null;
+    }
   }, [site.slug, preview]);
 
   useEffect(() => {
-    if (initialBooked.length === 0) refreshBooked();
-  }, [initialBooked.length, refreshBooked]);
+    if (preview) return;
+    refreshBooked();
+    // Každých 15 s, dokud je stránka vidět, a hned po návratu do záložky.
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshBooked();
+    }, 15_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshBooked();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [preview, refreshBooked]);
+
+  // Vybraný termín se mezitím obsadil — upozornit, zrušit výběr a vrátit hosta do kalendáře.
+  const dateTaken = useCallback(() => {
+    setStartDate(null);
+    setEndDate(null);
+    setStep("termin");
+    setError("Vybraný termín si mezitím někdo zarezervoval. Vyber prosím jiné datum.");
+    showToast("Tento termín se mezitím zabookoval. Vyber prosím jiný.");
+  }, [showToast]);
+
+  useEffect(() => {
+    if (startDate && endDate && !isRangeFree(booked, startDate, endDate)) dateTaken();
+  }, [booked, startDate, endDate, dateTaken]);
+
+  // Před přechodem k údajům ověřit termín proti čerstvé obsazenosti.
+  async function continueToDetails() {
+    const fresh = await refreshBooked();
+    if (fresh && startDate && endDate && !isRangeFree(fresh, startDate, endDate)) return;
+    setStep("udaje");
+  }
 
   const pricingCfg = useMemo(
     () => ({
@@ -149,9 +199,43 @@ export function BookingWidget({
     );
   }, [startDate, endDate, counts, categories, site.minNights, site.leadTimeDays, site.maxGuests]);
 
+  // Změna termínu nebo hostů mění cenu — ověřený voucher se musí uplatnit znovu.
+  useEffect(() => {
+    setVoucher(null);
+  }, [startDate, endDate, counts]);
+
+  async function applyVoucher() {
+    if (!voucherInput.trim()) return;
+    setVoucherChecking(true);
+    setVoucherError("");
+    try {
+      const res = await fetch("/api/vouchers/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: site.slug, code: voucherInput, startDate, endDate, guests: counts }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Voucher se nepodařilo ověřit.");
+      setVoucher({ code: data.code, label: data.label, discount: data.discount });
+      setVoucherOpen(false);
+    } catch (e) {
+      setVoucherError(e instanceof Error ? e.message : "Voucher se nepodařilo ověřit.");
+    } finally {
+      setVoucherChecking(false);
+    }
+  }
+
+  const total = price ? price.total - (voucher?.discount ?? 0) : 0;
+
   async function submit() {
     setSending(true);
     setError("");
+    // Poslední kontrola těsně před odesláním — obsazení řeší efekt výše (notifikace + návrat do kalendáře).
+    const fresh = await refreshBooked();
+    if (fresh && startDate && endDate && !isRangeFree(fresh, startDate, endDate)) {
+      setSending(false);
+      return;
+    }
     try {
       const res = await fetch("/api/reservations", {
         method: "POST",
@@ -167,9 +251,25 @@ export function BookingWidget({
           note,
           consent,
           payment,
+          voucherCode: voucher?.code ?? "",
         }),
       });
       const data = await res.json();
+      // Voucher mezitím přestal platit — odebrat ho a nechat hosta v potvrzení.
+      if (!res.ok && data.field === "voucher") {
+        setVoucher(null);
+        setVoucherOpen(true);
+        setVoucherError(data.error);
+        setSending(false);
+        return;
+      }
+      // Server je autoritativní: termín obsadil někdo v posledním okamžiku.
+      if (res.status === 409) {
+        setSending(false);
+        dateTaken();
+        refreshBooked();
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Rezervaci se nepodařilo dokončit.");
       window.location.href = `/r/${data.publicId}`;
     } catch (e) {
@@ -198,7 +298,7 @@ export function BookingWidget({
         {price.lines.map((l) => (
           <div key={`${l.price}|${l.note}`} className="flex justify-between text-soft">
             <span>
-              {l.count}× noc à {czk(l.price)}
+              {l.count} {plural(l.count, "noc", "noci", "nocí")} po {czk(l.price)}
               {l.note && <span className="text-soft/80"> ({l.note})</span>}
             </span>
             <span>{czk(l.count * l.price)}</span>
@@ -213,9 +313,17 @@ export function BookingWidget({
           </div>
         ))}
       </div>
+      {voucher && (
+        <div className="mt-0.5 flex justify-between font-medium text-pine">
+          <span>
+            Voucher {voucher.code} <span className="font-normal">({voucher.label})</span>
+          </span>
+          <span>−{czk(voucher.discount)}</span>
+        </div>
+      )}
       <div className="mt-2 flex justify-between border-t border-line pt-2 font-display text-base font-semibold">
         <span>Celkem</span>
-        <span>{czk(price.total)}</span>
+        <span>{czk(total)}</span>
       </div>
     </div>
   );
@@ -223,227 +331,282 @@ export function BookingWidget({
   const earliest = earliestArrival(site);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-      {/* Krokovací lišta */}
-      <div className="flex border-b border-line text-center text-xs font-semibold uppercase tracking-wider">
-        {(
-          [
-            ["termin", "1 · Termín"],
-            ["udaje", "2 · Údaje"],
-            ["potvrzeni", "3 · Potvrzení"],
-          ] as const
-        ).map(([id, label]) => (
-          <div key={id} className={`flex-1 py-3 ${step === id ? "bg-pine text-white" : "text-soft"}`}>
-            {label}
-          </div>
-        ))}
-      </div>
+    <>
+      {toastNode}
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+        {/* Krokovací lišta */}
+        <div className="flex border-b border-line text-center text-xs font-semibold uppercase tracking-wider">
+          {(
+            [
+              ["termin", "1 · Termín"],
+              ["udaje", "2 · Údaje"],
+              ["potvrzeni", "3 · Potvrzení"],
+            ] as const
+          ).map(([id, label]) => (
+            <div key={id} className={`flex-1 py-3 ${step === id ? "bg-pine text-white" : "text-soft"}`}>
+              {label}
+            </div>
+          ))}
+        </div>
 
-      <div className="p-5 sm:p-7">
-        {step === "termin" && (
-          <div className="space-y-5">
-            <DayPicker
-              booked={booked}
-              start={startDate}
-              end={endDate}
-              minNights={site.minNights}
-              earliest={earliest}
-              priceOf={priceOf}
-              onChange={({ start, end }) => {
-                setStartDate(start);
-                setEndDate(end);
-                setError("");
-              }}
-            />
+        <div className="p-5 sm:p-7">
+          {step === "termin" && (
+            <div className="space-y-5">
+              <DayPicker
+                booked={booked}
+                start={startDate}
+                end={endDate}
+                minNights={site.minNights}
+                earliest={earliest}
+                priceOf={priceOf}
+                onChange={({ start, end }) => {
+                  setStartDate(start);
+                  setEndDate(end);
+                  setError("");
+                }}
+              />
 
-            <p className="text-xs text-soft">
-              Krajní dny se počítají jako půldny — dopoledne odjíždí předchozí host, odpoledne přijíždíš ty.
-              Příjezd od {site.checkInTime}, odjezd do {site.checkOutTime}. Klikem na den příjezdu
-              nebo odjezdu výběr zrušíš.
-              {site.minNights > 1 &&
-                ` Nejkratší pobyt je ${site.minNights} ${plural(site.minNights, "noc", "noci", "nocí")}.`}
-            </p>
-
-            <GuestPicker
-              categories={categories}
-              counts={counts}
-              onChange={setCounts}
-              maxGuests={site.maxGuests}
-              priceHint={priceHint}
-            />
-
-            {summary}
-            {(error || stayError) && (
-              <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">
-                {error || stayError}
+              <p className="text-xs text-soft">
+                Krajní dny se počítají jako půldny — dopoledne odjíždí předchozí host, odpoledne přijíždíš ty.
+                Příjezd od {site.checkInTime}, odjezd do {site.checkOutTime}. Klikem na den příjezdu
+                nebo odjezdu výběr zrušíš.
+                {site.minNights > 1 &&
+                  ` Nejkratší pobyt je ${site.minNights} ${plural(site.minNights, "noc", "noci", "nocí")}.`}
               </p>
-            )}
-            {preview ? (
-              <p className="rounded-xl bg-bg px-4 py-3 text-center text-sm text-soft">
-                👀 Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou dokončit.
-              </p>
-            ) : (
+
+              <GuestPicker
+                categories={categories}
+                counts={counts}
+                onChange={setCounts}
+                maxGuests={site.maxGuests}
+                priceHint={priceHint}
+              />
+
+              {summary}
+              {(error || stayError) && (
+                <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">
+                  {error || stayError}
+                </p>
+              )}
+              {preview ? (
+                <p className="rounded-xl bg-bg px-4 py-3 text-center text-sm text-soft">
+                  👀 Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou dokončit.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  disabled={!price || !!stayError}
+                  onClick={continueToDetails}
+                >
+                  {price ? "Pokračovat →" : "Vyber termín v kalendáři"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {step === "udaje" && (
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Jméno a příjmení</span>
+                <input
+                  className="field"
+                  autoFocus
+                  placeholder="Jana Veselá"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">E-mail</span>
+                <input
+                  className="field"
+                  type="email"
+                  inputMode="email"
+                  placeholder="jana@email.cz"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <span className="mt-1 block text-xs text-soft">Pošleme sem potvrzení rezervace.</span>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">
+                  Telefon <span className="text-soft">(nepovinné)</span>
+                </span>
+                <input
+                  className="field"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+420 …"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">
+                  Poznámka pro majitele <span className="text-soft">(nepovinné)</span>
+                </span>
+                <textarea
+                  className="field min-h-20 resize-y"
+                  placeholder="Přijedeme až po deváté večer, vezmeme psa…"
+                  maxLength={500}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </label>
+              {summary}
+              <div className="flex gap-3">
+                <button type="button" className="btn-ghost" onClick={() => setStep("termin")}>
+                  ← Zpět
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary flex-1"
+                  disabled={guestName.trim().length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)}
+                  onClick={() => setStep("potvrzeni")}
+                >
+                  Pokračovat →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === "potvrzeni" && (
+            <div className="space-y-4">
+              {summary}
+
+              {voucher ? (
+                <p className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-pine">✓ Voucher {voucher.code} je uplatněný.</span>
+                  <button
+                    type="button"
+                    className="font-medium text-soft hover:text-coral"
+                    onClick={() => {
+                      setVoucher(null);
+                      setVoucherInput("");
+                    }}
+                  >
+                    Odebrat
+                  </button>
+                </p>
+              ) : voucherOpen ? (
+                <div>
+                  <div className="flex gap-2">
+                    <input
+                      className="control min-w-0 flex-1 uppercase"
+                      placeholder="Kód voucheru"
+                      aria-label="Kód voucheru"
+                      autoFocus
+                      value={voucherInput}
+                      onChange={(e) => {
+                        setVoucherInput(e.target.value);
+                        setVoucherError("");
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && applyVoucher()}
+                    />
+                    <button
+                      type="button"
+                      className="btn-ghost h-10 !px-4 !py-0 text-sm"
+                      disabled={voucherChecking || !voucherInput.trim()}
+                      onClick={applyVoucher}
+                    >
+                      {voucherChecking ? "Ověřuji…" : "Uplatnit"}
+                    </button>
+                  </div>
+                  {voucherError && <p className="mt-1.5 text-sm font-medium text-coral">{voucherError}</p>}
+                </div>
+              ) : (
+                !preview && (
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-pine hover:underline"
+                    onClick={() => setVoucherOpen(true)}
+                  >
+                    Mám voucher nebo slevový kód
+                  </button>
+                )
+              )}
+
+              <div>
+                <span className="mb-2 block text-sm font-medium">Jak zaplatíš</span>
+                <div className="space-y-2">
+                  {PAYMENT_OPTIONS.filter(
+                    (o) =>
+                      (o[0] === "qr" && site.paymentMode === "qr") ||
+                      o[0] === "onsite" ||
+                      (o[0] === "demo" && demoDostupna)
+                  ).map(([id, label, hint]) => (
+                    <label
+                      key={id}
+                      className={`flex cursor-pointer gap-3 rounded-xl border p-3.5 transition ${
+                        payment === id ? "border-pine bg-pine/5" : "border-line hover:border-ink/25"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        className="mt-1 accent-[var(--pine)]"
+                        checked={payment === id}
+                        onChange={() => setPayment(id)}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {label}
+                          {id === "demo" && (
+                            <span className="ml-2 rounded-full bg-amber/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#92600a]">
+                              demo
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-soft">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {site.cancellationPolicy && (
+                <div className="rounded-xl bg-bg px-4 py-3 text-xs text-soft">
+                  <strong className="text-ink">Storno podmínky:</strong> {site.cancellationPolicy}
+                </div>
+              )}
+
+              <label className="flex cursor-pointer gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-[var(--pine)]"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                />
+                <span className="text-soft">
+                  Souhlasím se zpracováním osobních údajů pro vyřízení rezervace a s uvedenými podmínkami pobytu.
+                </span>
+              </label>
+
+              {error && (
+                <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error}</p>
+              )}
+
               <button
                 type="button"
                 className="btn-primary w-full"
-                disabled={!price || !!stayError}
-                onClick={() => setStep("udaje")}
+                disabled={sending || !consent}
+                onClick={submit}
               >
-                {price ? "Pokračovat →" : "Vyber termín v kalendáři"}
-              </button>
-            )}
-          </div>
-        )}
-
-        {step === "udaje" && (
-          <div className="space-y-4">
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Jméno a příjmení</span>
-              <input
-                className="field"
-                autoFocus
-                placeholder="Jana Veselá"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">E-mail</span>
-              <input
-                className="field"
-                type="email"
-                inputMode="email"
-                placeholder="jana@email.cz"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <span className="mt-1 block text-xs text-soft">Pošleme sem potvrzení rezervace.</span>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">
-                Telefon <span className="text-soft">(nepovinné)</span>
-              </span>
-              <input
-                className="field"
-                type="tel"
-                inputMode="tel"
-                placeholder="+420 …"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">
-                Poznámka pro majitele <span className="text-soft">(nepovinné)</span>
-              </span>
-              <textarea
-                className="field min-h-20 resize-y"
-                placeholder="Přijedeme až po deváté večer, vezmeme psa…"
-                maxLength={500}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </label>
-            {summary}
-            <div className="flex gap-3">
-              <button type="button" className="btn-ghost" onClick={() => setStep("termin")}>
-                ← Zpět
+                {sending ? "Odesílám…" : `Závazně rezervovat · ${price ? czk(total) : ""}`}
               </button>
               <button
                 type="button"
-                className="btn-primary flex-1"
-                disabled={guestName.trim().length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)}
-                onClick={() => setStep("potvrzeni")}
+                className="btn-ghost w-full"
+                onClick={() => setStep("udaje")}
+                disabled={sending}
               >
-                Pokračovat →
+                ← Zpět na údaje
               </button>
             </div>
-          </div>
-        )}
-
-        {step === "potvrzeni" && (
-          <div className="space-y-4">
-            {summary}
-
-            <div>
-              <span className="mb-2 block text-sm font-medium">Jak zaplatíš</span>
-              <div className="space-y-2">
-                {PAYMENT_OPTIONS.filter(
-                  (o) =>
-                    (o[0] === "qr" && site.paymentMode === "qr") ||
-                    o[0] === "onsite" ||
-                    (o[0] === "demo" && demoDostupna)
-                ).map(([id, label, hint]) => (
-                  <label
-                    key={id}
-                    className={`flex cursor-pointer gap-3 rounded-xl border p-3.5 transition ${
-                      payment === id ? "border-pine bg-pine/5" : "border-line hover:border-ink/25"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment"
-                      className="mt-1 accent-[var(--pine)]"
-                      checked={payment === id}
-                      onChange={() => setPayment(id)}
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">
-                        {label}
-                        {id === "demo" && (
-                          <span className="ml-2 rounded-full bg-amber/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#92600a]">
-                            demo
-                          </span>
-                        )}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-soft">{hint}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {site.cancellationPolicy && (
-              <div className="rounded-xl bg-bg px-4 py-3 text-xs text-soft">
-                <strong className="text-ink">Storno podmínky:</strong> {site.cancellationPolicy}
-              </div>
-            )}
-
-            <label className="flex cursor-pointer gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 accent-[var(--pine)]"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-              />
-              <span className="text-soft">
-                Souhlasím se zpracováním osobních údajů pro vyřízení rezervace a s uvedenými podmínkami pobytu.
-              </span>
-            </label>
-
-            {error && (
-              <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error}</p>
-            )}
-
-            <button
-              type="button"
-              className="btn-primary w-full"
-              disabled={sending || !consent}
-              onClick={submit}
-            >
-              {sending ? "Odesílám…" : `Závazně rezervovat · ${price ? czk(price.total) : ""}`}
-            </button>
-            <button
-              type="button"
-              className="btn-ghost w-full"
-              onClick={() => setStep("udaje")}
-              disabled={sending}
-            >
-              ← Zpět na údaje
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

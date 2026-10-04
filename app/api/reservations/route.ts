@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { pricedCategories, quoteStay, type Adjust, type PricingMode } from "@/lib/pricing";
+import { pricedCategories } from "@/lib/pricing";
+import { quoteForSite } from "@/lib/quote";
+import { applyVoucher } from "@/lib/voucher";
+import { findVoucher } from "@/lib/voucher-server";
 import { capacityCount, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
-import { fromISO, isRangeFree, newPublicId, nightsOf, toISO, validateStay } from "@/lib/stay";
+import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
 
@@ -81,26 +84,7 @@ export async function POST(req: NextRequest) {
   const payment: PaymentMethod = demo ? "demo" : body.payment === "qr" && site.bankAccount ? "qr" : "onsite";
 
   // Cena se počítá vždy na serveru — noc po noci podle ceníku webu, plus poplatky.
-  const quote = quoteStay(
-    {
-      pricePerNight: site.pricePerNight,
-      pricingMode: site.pricingMode as PricingMode,
-      weekend: { value: site.weekendValue, unit: site.weekendUnit === "czk" ? "czk" : "pct" },
-      cleaningFee: site.cleaningFee,
-      touristTax: site.touristTax,
-      guestMode: site.guestMode,
-      categories: parseCategories(site.guestCategories),
-      priceRules: site.priceRules.map((r) => ({
-        label: r.label,
-        startDate: toISO(r.startDate),
-        endDate: toISO(r.endDate),
-        adjust: { value: r.value, unit: r.unit === "czk" ? "czk" : "pct" } as Adjust,
-      })),
-    },
-    startIso,
-    endIso,
-    counts
-  );
+  const quote = quoteForSite(site, startIso, endIso, counts);
 
   let created;
   try {
@@ -112,6 +96,21 @@ export async function POST(req: NextRequest) {
       const blocked = await blockedRanges(site.id, startIso, tx);
       if (!isRangeFree(blocked, startIso, endIso)) {
         throw new ConflictError("Termín je již obsazený. Zkuste jiné datum.");
+      }
+
+      // Voucher se ověřuje pod stejným zámkem — poslední použití nezíská víc hostů najednou.
+      let voucher = { voucherCode: "", voucherKind: "", voucherValue: 0, discount: 0 };
+      if (typeof body.voucherCode === "string" && body.voucherCode.trim()) {
+        const found = await findVoucher(site.id, body.voucherCode, tx);
+        if (!found) throw new VoucherError("Tenhle kód voucheru neznáme.");
+        const applied = applyVoucher(found.rule, found.uses, quote, todayISO());
+        if ("error" in applied) throw new VoucherError(applied.error);
+        voucher = {
+          voucherCode: found.rule.code,
+          voucherKind: found.rule.kind,
+          voucherValue: found.rule.value,
+          discount: applied.discount,
+        };
       }
 
       return tx.reservation.create({
@@ -127,7 +126,8 @@ export async function POST(req: NextRequest) {
           endDate: fromISO(endIso),
           nightsTotal: quote.nightsTotal,
           feesTotal: quote.feesTotal,
-          totalPrice: quote.total,
+          totalPrice: quote.total - voucher.discount,
+          ...voucher,
           note: String(body.note ?? "").trim().slice(0, 500),
           source: demo ? "demo" : "web",
           status: demo ? "paid" : "pending",
@@ -137,6 +137,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     if (e instanceof ConflictError) return NextResponse.json({ error: e.message }, { status: 409 });
+    if (e instanceof VoucherError) {
+      return NextResponse.json({ error: e.message, field: "voucher" }, { status: 400 });
+    }
     throw e;
   }
 
@@ -153,6 +156,8 @@ export async function POST(req: NextRequest) {
     endDate: endIso,
     nights: nightsOf(startIso, endIso),
     total: created.totalPrice,
+    discount: created.discount,
+    voucherCode: created.voucherCode,
     paid: created.status === "paid",
     demo,
     checkInTime: site.checkInTime,
@@ -167,3 +172,4 @@ export async function POST(req: NextRequest) {
 }
 
 class ConflictError extends Error {}
+class VoucherError extends Error {}

@@ -43,20 +43,6 @@ body {
   font-family: var(--font-fraunces), Georgia, serif;
 }
 
-/* „ai" v názvu tainy — jádro brandu */
-.ai-mark {
-  background: linear-gradient(120deg, var(--amber) 10%, var(--coral) 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-style: italic;
-}
-
-.ai-chip {
-  background: linear-gradient(120deg, #fef3c7, #ffe4d6);
-  border: 1px solid #f8caa4;
-}
-
 /* Jemná papírová textura pozadí */
 .paper {
   background-image: radial-gradient(var(--line) 0.8px, transparent 0.8px);
@@ -71,6 +57,15 @@ body {
 /* Kompaktní ovládací prvek do lišty filtrů (hledání, výběry). */
 .control {
   @apply h-10 appearance-none rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition placeholder:text-soft/70 focus:border-pine focus:ring-2 focus:ring-pine/15;
+}
+/* Číselná pole bez šipek — překrývaly jednotku (Kč, %) vpravo v poli */
+.control[type="number"] {
+  -moz-appearance: textfield;
+}
+.control[type="number"]::-webkit-outer-spin-button,
+.control[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .control::-webkit-search-decoration {
   -webkit-appearance: none;
@@ -109,3 +104,34 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(239, 91, 60, 0); }
 }
 .recording { animation: pulse-ring 1.4s ease-out infinite; }
+
+/* Živý náhled v administraci: obsah editoru uhne panelu náhledu (jen na počítači).
+   Navigace zůstává přes celou šířku, panel začíná pod ní. */
+.admin-shell > main { transition: padding-right 0.35s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@media (min-width: 1024px) {
+  html[data-preview-open] .admin-shell > main {
+    max-width: calc(56rem + var(--preview-w));
+    padding-right: calc(var(--preview-w) + 1.25rem);
+  }
+}
+
+/* Krátké zvýraznění sekce webu, kterou majitel právě upravuje */
+@keyframes preview-flash {
+  0% { outline-color: rgba(44, 94, 63, 0); }
+  20% { outline-color: rgba(44, 94, 63, 0.6); }
+  100% { outline-color: rgba(44, 94, 63, 0); }
+}
+.preview-flash {
+  outline: 3px solid rgba(44, 94, 63, 0);
+  outline-offset: 8px;
+  border-radius: 16px;
+  animation: preview-flash 1.4s ease-out;
+}
+#uvod.preview-flash { outline-offset: -6px; border-radius: 0; }
+
+/* Příjezd panelu náhledu */
+@keyframes preview-in {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.preview-in { animation: preview-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both; }

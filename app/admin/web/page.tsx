@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
 import { applyAdjust, czk } from "@/lib/pricing";
 import { toIBAN, formatIBAN } from "@/lib/payment";
 import { PhotoManager } from "@/components/PhotoManager";
-import { Dropdown } from "@/components/Dropdown";
+import { HeroPicker } from "@/components/HeroPicker";
+import { parsePhotoLines } from "@/lib/photos";
 import { AdjustField } from "@/components/AdjustField";
 import { parseCategories, serializeCategories, type GuestCategory } from "@/lib/guests";
+import { LivePreview, type PreviewSection } from "@/components/LivePreview";
+import { SITES_CHANGED } from "@/components/AdminNav";
+import { useToast } from "@/components/Toast";
 
 // Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
 function ibanPreview(account: string): string {
@@ -16,10 +20,15 @@ function ibanPreview(account: string): string {
   return iban ? `Uloží se jako ${formatIBAN(iban)}` : "Tohle číslo účtu neumím přečíst — zkontroluj ho.";
 }
 
+type Tab = "vzhled" | "cenik";
+const TABS: Record<Tab, { label: string; hint: string }> = {
+  vzhled: { label: "Vzhled a obsah", hint: "Úvod, fotky, texty a kontakt" },
+  cenik: { label: "Ceník a pobyt", hint: "Ceny, hosté, pravidla a poplatky" },
+};
+
 export default function SiteEditPage() {
   const { slug, site, loading, error, reload } = useAdminData();
   const [form, setForm] = useState<Site | null>(null);
-  const [sites, setSites] = useState<{ slug: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -27,23 +36,44 @@ export default function SiteEditPage() {
     if (site) setForm(site);
   }, [site]);
 
+  // Záložka se drží v adrese (?sekce=cenik), ať ji jde poslat odkazem a přežije obnovení.
+  const [tab, setTab] = useState<Tab>("vzhled");
   useEffect(() => {
-    fetch("/api/sites")
-      .then((r) => r.json())
-      .then(setSites)
-      .catch(() => {});
+    if (new URLSearchParams(window.location.search).get("sekce") === "cenik") setTab("cenik");
   }, []);
+  // Sekce, kterou majitel právě upravuje — živý náhled na ni odscrolluje.
+  const [focus, setFocus] = useState<{ section: PreviewSection; at: number } | null>(null);
+  const lastFocus = useRef({ section: "", at: 0 });
+  const point = useCallback((section: PreviewSection) => {
+    const now = Date.now();
+    // Klik do pole vyvolá pointerdown i focus — stačí jedno zvýraznění.
+    if (lastFocus.current.section === section && now - lastFocus.current.at < 600) return;
+    lastFocus.current = { section, at: now };
+    setFocus({ section, at: now });
+  }, []);
+  const watch = (section: PreviewSection) => ({
+    onPointerDownCapture: () => point(section),
+    onFocusCapture: () => point(section),
+  });
 
-  const set = <K extends keyof Site>(key: K, value: Site[K]) =>
-    setForm((f) => (f ? { ...f, [key]: value } : f));
+  function switchTab(t: Tab) {
+    setTab(t);
+    point(t === "cenik" ? "rezervace" : "uvod");
+    const url = new URL(window.location.href);
+    if (t === "cenik") url.searchParams.set("sekce", "cenik");
+    else url.searchParams.delete("sekce");
+    window.history.replaceState(null, "", url);
+  }
+
+  const set = <K extends keyof Site>(key: K, value: Site[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
   const setPhotos = useCallback((photos: string) => set("photos", photos), []);
+  const setHero = useCallback(
+    (patch: { heroStyle: Site["heroStyle"]; heroPhoto: string }) => setForm((f) => (f ? { ...f, ...patch } : f)),
+    [],
+  );
 
   const setRule = (index: number, patch: Partial<PriceRule>) =>
-    setForm((f) =>
-      f
-        ? { ...f, priceRules: f.priceRules.map((r, i) => (i === index ? { ...r, ...patch } : r)) }
-        : f
-    );
+    setForm((f) => (f ? { ...f, priceRules: f.priceRules.map((r, i) => (i === index ? { ...r, ...patch } : r)) } : f));
 
   async function save() {
     if (!form) return;
@@ -55,14 +85,10 @@ export default function SiteEditPage() {
       body: JSON.stringify(form),
     });
     await reload();
+    window.dispatchEvent(new Event(SITES_CHANGED));
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-  }
-
-  function switchSite(newSlug: string) {
-    localStorage.setItem("tainy.site", newSlug);
-    reload(newSlug);
   }
 
   const categories = parseCategories(form?.guestCategories ?? "", form?.pricingMode);
@@ -76,11 +102,43 @@ export default function SiteEditPage() {
     set("guestCategories", serializeCategories(next));
   }
 
+  // Neuložené změny formuláře. Fotky a úvod se ukládají hned samy, ty nepočítáme.
+  const dirty = useMemo(() => {
+    if (!form || !site) return false;
+    const pick = ({ photos, heroStyle, heroPhoto, ...rest }: Site) => JSON.stringify(rest);
+    return pick(form) !== pick(site);
+  }, [form, site]);
+
+  // Potvrzení po návratu z builderu („Změny webu jsou uložené.")
+  const toast = useToast();
+
+  // Odchod s neuloženými změnami: zavření/obnovení záložky i odkaz v administraci se zeptá.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest("a");
+      if (!a || a.target === "_blank" || a.origin !== window.location.origin) return;
+      if (a.pathname === window.location.pathname && a.search === window.location.search) return;
+      if (confirm("Máš neuložené změny. Odejít bez uložení?")) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [dirty]);
+
   if (loading || !form) return <p className="py-16 text-center text-soft">Načítám web…</p>;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
     <div className="space-y-5">
+      {toast.node}
+      <LivePreview site={form} dirty={dirty} focus={focus} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Můj web</h1>
@@ -94,489 +152,497 @@ export default function SiteEditPage() {
               /w/{form.slug} ↗
             </Link>
           </p>
+          <Link href="/admin/web/builder" className="btn-ghost mt-3 !px-4 !py-2 text-sm">
+            ✨ Upravit přímo ve webu <span className="rounded-full bg-amber/20 px-1.5 text-[10px] font-bold uppercase">beta</span>
+          </Link>
         </div>
-        {sites.length > 1 && (
-          <Dropdown
-            label="Nemovitost"
-            align="right"
-            value={slug ?? "demo"}
-            onChange={switchSite}
-            items={sites.map((s) => ({ value: s.slug, label: s.name }))}
-          />
-        )}
       </div>
 
-      {/* Tarif */}
-      <div className={`rounded-2xl border p-5 ${form.tier === "pro" ? "ai-chip" : "border-line bg-surface"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-display text-lg font-semibold">
-              Tarif:{" "}
-              {form.tier === "pro" ? (
-                <>
-                  t<span className="ai-mark">ai</span>ny Pro
-                </>
-              ) : (
-                "Start"
-              )}
-            </p>
-            <p className="text-sm text-soft">
-              {form.tier === "pro"
-                ? "Hlasový AI asistent je aktivní — najdeš ho v záložce Asistent."
-                : "Přejdi na Pro a upravuj web hlasem přes AI asistenta."}
-            </p>
-          </div>
+      <div className="flex rounded-2xl border border-line bg-bg p-1" role="tablist" aria-label="Části nastavení webu">
+        {(Object.keys(TABS) as Tab[]).map((t) => (
           <button
-            className={form.tier === "pro" ? "btn-ghost !py-2 text-sm" : "btn-primary !py-2 text-sm"}
-            onClick={async () => {
-              const tier = form.tier === "pro" ? "start" : "pro";
-              await fetch(`/api/sites/${slug}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tier }),
-              });
-              reload();
-            }}
-          >
-            {form.tier === "pro" ? "Zpět na Start" : "✨ Aktivovat Pro (demo)"}
-          </button>
-        </div>
-      </div>
-
-      {/* Fotky */}
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-        <div>
-          <h2 className="font-display text-lg font-semibold">Fotky</h2>
-          <p className="text-sm text-soft">Takhle je hosté uvidí na webu. Změny se ukládají hned.</p>
-        </div>
-        <PhotoManager slug={form.slug} value={form.photos} onChange={setPhotos} />
-      </div>
-
-      {/* Ceník */}
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-        <div>
-          <h2 className="font-display text-lg font-semibold">Ceník</h2>
-          <p className="text-sm text-soft">
-            Cena se počítá noc po noci — procenta víkendu a sezón se sčítají.
-          </p>
-        </div>
-
-        <div>
-          <span className="mb-1.5 block text-sm font-medium">Jak účtuješ cenu?</span>
-          <div className="flex gap-2">
-            {(
-              [
-                ["unit", "Za celou nemovitost / noc"],
-                ["person", "Za osobu / noc"],
-              ] as const
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => set("pricingMode", mode)}
-                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
-                  form.pricingMode === mode
-                    ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
-                    : "border-line text-soft hover:border-pine/40"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">
-              Základní cena / noc {form.pricingMode === "person" && <span className="text-soft">(za osobu)</span>}
-            </span>
-            <input
-              className="field"
-              type="number"
-              value={form.pricePerNight}
-              onChange={(e) => set("pricePerNight", Number(e.target.value))}
-            />
-          </label>
-          <AdjustField
-            label="Víkend (pá–ne)"
-            value={{ value: form.weekendValue, unit: form.weekendUnit }}
-            onChange={(a) => {
-              set("weekendValue", a.value);
-              set("weekendUnit", a.unit);
-            }}
-          />
-        </div>
-
-        <p className="rounded-xl bg-bg px-4 py-2.5 text-sm text-soft">
-          Všední noc: <strong className="text-ink">{czk(form.pricePerNight)}</strong> · Víkendová
-          noc: <strong className="text-ink">{czk(vikendovaCena)}</strong>
-          {form.pricingMode === "person" && " (za osobu)"}
-        </p>
-
-        {/* Sezónní období */}
-        <div>
-          <span className="mb-1.5 block text-sm font-medium">Sezónní období</span>
-          <div className="space-y-2">
-            {form.priceRules.map((r, i) => (
-              <div key={r.id ?? i} className="space-y-2 rounded-xl border border-line p-3">
-                <div className="flex items-end gap-2">
-                  <label className="block min-w-0 flex-1">
-                    <span className="mb-1 block text-xs text-soft">Název</span>
-                    <input
-                      className="field !py-2 text-sm"
-                      placeholder="např. Hlavní sezóna"
-                      value={r.label}
-                      onChange={(e) => setRule(i, { label: e.target.value })}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="mb-2 shrink-0 text-soft transition hover:text-coral"
-                    title="Smazat období"
-                    aria-label={`Smazat období ${r.label}`}
-                    onClick={() =>
-                      setForm((f) =>
-                        f ? { ...f, priceRules: f.priceRules.filter((_, j) => j !== i) } : f
-                      )
-                    }
-                  >
-                    🗑
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-xs text-soft">Od</span>
-                    <input
-                      className="field !px-2.5 !py-2 text-sm"
-                      type="date"
-                      value={r.startDate.slice(0, 10)}
-                      onChange={(e) => setRule(i, { startDate: e.target.value })}
-                    />
-                  </label>
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-xs text-soft">Do (včetně)</span>
-                    <input
-                      className="field !px-2.5 !py-2 text-sm"
-                      type="date"
-                      value={r.endDate.slice(0, 10)}
-                      onChange={(e) => setRule(i, { endDate: e.target.value })}
-                    />
-                  </label>
-                </div>
-                <div className="max-w-56">
-                  <AdjustField
-                    compact
-                    label="Úprava ceny"
-                    value={{ value: r.value, unit: r.unit }}
-                    onChange={(a) => setRule(i, { value: a.value, unit: a.unit })}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <button
+            key={t}
             type="button"
-            className="btn-ghost mt-2 !px-4 !py-2 text-sm"
-            onClick={() =>
-              setForm((f) => {
-                if (!f) return f;
-                const today = new Date();
-                const iso = (d: Date) => d.toISOString().slice(0, 10);
-                const in30 = new Date(today.getTime() + 30 * 86_400_000);
-                return {
-                  ...f,
-                  priceRules: [
-                    ...f.priceRules,
-                    { label: "Nové období", startDate: iso(today), endDate: iso(in30), value: 10, unit: "pct" as const },
-                  ],
-                };
-              })
-            }
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => switchTab(t)}
+            className={`flex-1 rounded-xl px-3 py-2.5 text-left transition sm:px-4 ${
+              tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
+            }`}
           >
-            + Přidat období
+            <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
+              {TABS[t].label}
+            </span>
+            <span className="hidden text-xs text-soft sm:block">{TABS[t].hint}</span>
           </button>
-          <p className="mt-2 text-xs text-soft">
-            Procenta cenu upravují (kladná zvyšují, záporná fungují jako sleva), koruny nastaví pevnou cenu noci. Pevná cena přebíjí procenta i víkend.
-          </p>
-        </div>
+        ))}
       </div>
 
-      {/* Skladba hostů */}
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-        <div>
-          <h2 className="font-display text-lg font-semibold">Skladba hostů</h2>
-          <p className="text-sm text-soft">
-            Buď se hosté nedělí a host zadá jen počet osob, nebo si vybere po kategoriích a každá
-            může mít vlastní cenu.
-          </p>
-        </div>
+      {tab === "vzhled" ? (
+        <>
+          {/* Úvod webu */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("uvod")}>
+            <div>
+              <h2 className="font-display text-lg font-semibold">Úvod webu</h2>
+              <p className="text-sm text-soft">První, co hosté uvidí. Změny se ukládají hned.</p>
+            </div>
+            <HeroPicker
+              slug={form.slug}
+              siteName={form.name}
+              tagline={form.tagline}
+              propertyType={form.propertyType}
+              heroStyle={form.heroStyle === "photo" ? "photo" : "text"}
+              heroPhoto={form.heroPhoto ?? ""}
+              gallery={parsePhotoLines(form.photos)}
+              onChange={setHero}
+            />
+          </div>
 
-        <div className="flex gap-2">
-          {(
-            [
-              ["total", "Jen počet osob"],
-              ["split", "Rozdělit kategorie"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => set("guestMode", mode)}
-              className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
-                form.guestMode === mode
-                  ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
-                  : "border-line text-soft hover:border-pine/40"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+          {/* Fotky */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("galerie")}>
+            <div>
+              <h2 className="font-display text-lg font-semibold">Fotky</h2>
+              <p className="text-sm text-soft">Takhle je hosté uvidí na webu. Změny se ukládají hned.</p>
+            </div>
+            <PhotoManager slug={form.slug} value={form.photos} onChange={setPhotos} />
+          </div>
 
-        {form.guestMode === "split" && (
-          <div className="space-y-2">
-            {categories.map((c) => (
-              <div
-                key={c.key}
-                className={`space-y-3 rounded-xl border p-3.5 transition ${
-                  c.enabled ? "border-line" : "border-line/60 bg-bg/50"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    className="accent-[var(--pine)]"
-                    checked={c.enabled}
-                    aria-label={`Nabízet kategorii ${c.label}`}
-                    onChange={(e) => setCategory(c.key, { enabled: e.target.checked })}
-                  />
-                  <input
-                    className="field min-w-0 flex-1 !py-2 text-sm"
-                    aria-label={`Název kategorie ${c.label}`}
-                    value={c.label}
-                    onChange={(e) => setCategory(c.key, { label: e.target.value })}
-                  />
-                </div>
+          {/* Texty a kontakt */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+            <div>
+              <h2 className="font-display text-lg font-semibold">Texty a kontakt</h2>
+              <p className="text-sm text-soft">Co si hosté na webu přečtou a jak se ti ozvou.</p>
+            </div>
+            <label className="block" {...watch("uvod")}>
+              <span className="mb-1.5 block text-sm font-medium">Název</span>
+              <input className="field" value={form.name} onChange={(e) => set("name", e.target.value)} />
+            </label>
+            <label className="block" {...watch("uvod")}>
+              <span className="mb-1.5 block text-sm font-medium">Slogan</span>
+              <input className="field" value={form.tagline} onChange={(e) => set("tagline", e.target.value)} />
+            </label>
+            <label className="block" {...watch("o-miste")}>
+              <span className="mb-1.5 block text-sm font-medium">Popis</span>
+              <textarea
+                className="field min-h-36"
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+              />
+            </label>
+            <label className="block" {...watch("vybaveni")}>
+              <span className="mb-1.5 block text-sm font-medium">Vybavení (oddělené čárkou)</span>
+              <textarea
+                className="field min-h-20"
+                value={form.amenities}
+                onChange={(e) => set("amenities", e.target.value)}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2" {...watch("o-miste")}>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Kontaktní e-mail</span>
+                <input
+                  className="field"
+                  type="email"
+                  value={form.contactEmail}
+                  onChange={(e) => set("contactEmail", e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Telefon</span>
+                <input
+                  className="field"
+                  type="tel"
+                  value={form.contactPhone}
+                  onChange={(e) => set("contactPhone", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button className="btn-primary" disabled={saving} onClick={save}>
+                {saving ? "Ukládám…" : "Uložit změny"}
+              </button>
+              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Ceník */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+            <div>
+              <h2 className="font-display text-lg font-semibold">Ceník</h2>
+              <p className="text-sm text-soft">Cena se počítá noc po noci — procenta víkendu a sezón se sčítají.</p>
+            </div>
 
-                {c.enabled && (
-                  <>
+            <div>
+              <span className="mb-1.5 block text-sm font-medium">Jak účtuješ cenu?</span>
+              <div className="flex gap-2">
+                {(
+                  [
+                    ["unit", "Za celou nemovitost / noc"],
+                    ["person", "Za osobu / noc"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => set("pricingMode", mode)}
+                    className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                      form.pricingMode === mode
+                        ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
+                        : "border-line text-soft hover:border-pine/40"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">
+                  Základní cena / noc {form.pricingMode === "person" && <span className="text-soft">(za osobu)</span>}
+                </span>
+                <input
+                  className="field"
+                  type="number"
+                  value={form.pricePerNight}
+                  onChange={(e) => set("pricePerNight", Number(e.target.value))}
+                />
+              </label>
+              <AdjustField
+                label="Víkend (pá–ne)"
+                value={{ value: form.weekendValue, unit: form.weekendUnit }}
+                onChange={(a) => {
+                  set("weekendValue", a.value);
+                  set("weekendUnit", a.unit);
+                }}
+              />
+            </div>
+
+            <p className="rounded-xl bg-bg px-4 py-2.5 text-sm text-soft">
+              Všední noc: <strong className="text-ink">{czk(form.pricePerNight)}</strong> · Víkendová noc:{" "}
+              <strong className="text-ink">{czk(vikendovaCena)}</strong>
+              {form.pricingMode === "person" && " (za osobu)"}
+            </p>
+
+            {/* Sezónní období */}
+            <div>
+              <span className="mb-1.5 block text-sm font-medium">Sezónní období</span>
+              <div className="space-y-2">
+                {form.priceRules.map((r, i) => (
+                  <div key={r.id ?? i} className="space-y-2 rounded-xl border border-line p-3">
+                    <div className="flex items-end gap-2">
+                      <label className="block min-w-0 flex-1">
+                        <span className="mb-1 block text-xs text-soft">Název</span>
+                        <input
+                          className="field !py-2 text-sm"
+                          placeholder="např. Hlavní sezóna"
+                          value={r.label}
+                          onChange={(e) => setRule(i, { label: e.target.value })}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="mb-2 shrink-0 text-soft transition hover:text-coral"
+                        title="Smazat období"
+                        aria-label={`Smazat období ${r.label}`}
+                        onClick={() =>
+                          setForm((f) => (f ? { ...f, priceRules: f.priceRules.filter((_, j) => j !== i) } : f))
+                        }
+                      >
+                        🗑
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block min-w-0">
+                        <span className="mb-1 block text-xs text-soft">Od</span>
+                        <input
+                          className="field !px-2.5 !py-2 text-sm"
+                          type="date"
+                          value={r.startDate.slice(0, 10)}
+                          onChange={(e) => setRule(i, { startDate: e.target.value })}
+                        />
+                      </label>
+                      <label className="block min-w-0">
+                        <span className="mb-1 block text-xs text-soft">Do (včetně)</span>
+                        <input
+                          className="field !px-2.5 !py-2 text-sm"
+                          type="date"
+                          value={r.endDate.slice(0, 10)}
+                          onChange={(e) => setRule(i, { endDate: e.target.value })}
+                        />
+                      </label>
+                    </div>
                     <div className="max-w-56">
                       <AdjustField
                         compact
-                        label={form.pricingMode === "person" ? "Cena za noc" : "Příplatek za noc"}
-                        value={c.adjust}
-                        onChange={(adjust) => setCategory(c.key, { adjust })}
+                        label="Úprava ceny"
+                        value={{ value: r.value, unit: r.unit }}
+                        onChange={(a) => setRule(i, { value: a.value, unit: a.unit })}
                       />
                     </div>
-                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-soft">
-                      <label className="flex cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="accent-[var(--pine)]"
-                          checked={c.capacity}
-                          onChange={(e) => setCategory(c.key, { capacity: e.target.checked })}
-                        />
-                        počítá se do kapacity
-                      </label>
-                      <label className="flex cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="accent-[var(--pine)]"
-                          checked={c.tax}
-                          onChange={(e) => setCategory(c.key, { tax: e.target.checked })}
-                        />
-                        platí poplatek z pobytu
-                      </label>
-                    </div>
-                  </>
-                )}
+                  </div>
+                ))}
               </div>
-            ))}
-            <p className="text-xs text-soft">
-              {form.pricingMode === "person"
-                ? "Procenta se počítají z ceny za dospělou osobu (−50 % = poloviční cena), koruny nastaví pevnou cenu za osobu a noc."
-                : "Procenta se počítají z ceny za nemovitost, koruny jsou pevný příplatek za osobu a noc. Nula = v ceně."}{" "}
-              Poplatek z pobytu ze zákona neplatí osoby do 18 let.
-            </p>
+              <button
+                type="button"
+                className="btn-ghost mt-2 !px-4 !py-2 text-sm"
+                onClick={() =>
+                  setForm((f) => {
+                    if (!f) return f;
+                    const today = new Date();
+                    const iso = (d: Date) => d.toISOString().slice(0, 10);
+                    const in30 = new Date(today.getTime() + 30 * 86_400_000);
+                    return {
+                      ...f,
+                      priceRules: [
+                        ...f.priceRules,
+                        {
+                          label: "Nové období",
+                          startDate: iso(today),
+                          endDate: iso(in30),
+                          value: 10,
+                          unit: "pct" as const,
+                        },
+                      ],
+                    };
+                  })
+                }
+              >
+                + Přidat období
+              </button>
+              <p className="mt-2 text-xs text-soft">
+                Procenta cenu upravují (kladná zvyšují, záporná fungují jako sleva), koruny nastaví pevnou cenu noci.
+                Pevná cena přebíjí procenta i víkend.
+              </p>
+            </div>
           </div>
-        )}
 
-        <div className="flex items-center gap-3 pt-1">
-          <button className="btn-primary" disabled={saving} onClick={save}>
-            {saving ? "Ukládám…" : "Uložit změny"}
-          </button>
-          {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-        </div>
-      </div>
+          {/* Skladba hostů */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+            <div>
+              <h2 className="font-display text-lg font-semibold">Skladba hostů</h2>
+              <p className="text-sm text-soft">
+                Buď se hosté nedělí a host zadá jen počet osob, nebo si vybere po kategoriích a každá může mít vlastní
+                cenu.
+              </p>
+            </div>
 
-      {/* Pravidla pobytu a poplatky */}
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-        <div>
-          <h2 className="font-display text-lg font-semibold">Pravidla pobytu a poplatky</h2>
-          <p className="text-sm text-soft">
-            Podle tohohle nastavení hosté vidí konečnou cenu a nemůžou rezervovat termín, který ti nevyhovuje.
-          </p>
-        </div>
+            <label className="block sm:max-w-48">
+              <span className="mb-1.5 block text-sm font-medium">Maximální počet hostů</span>
+              <input
+                className="field"
+                type="number"
+                value={form.maxGuests}
+                onChange={(e) => set("maxGuests", Number(e.target.value))}
+              />
+            </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Nejkratší pobyt (nocí)</span>
-            <input
-              className="field"
-              type="number"
-              min={1}
-              value={form.minNights}
-              onChange={(e) => set("minNights", Number(e.target.value))}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Rezervovat nejdříve (dní předem)</span>
-            <input
-              className="field"
-              type="number"
-              min={0}
-              value={form.leadTimeDays}
-              onChange={(e) => set("leadTimeDays", Number(e.target.value))}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Příjezd od</span>
-            <input
-              className="field"
-              type="time"
-              value={form.checkInTime}
-              onChange={(e) => set("checkInTime", e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Odjezd do</span>
-            <input
-              className="field"
-              type="time"
-              value={form.checkOutTime}
-              onChange={(e) => set("checkOutTime", e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Úklidový poplatek (Kč za pobyt)</span>
-            <input
-              className="field"
-              type="number"
-              min={0}
-              value={form.cleaningFee}
-              onChange={(e) => set("cleaningFee", Number(e.target.value))}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Poplatek z pobytu (Kč / osoba / noc)</span>
-            <input
-              className="field"
-              type="number"
-              min={0}
-              value={form.touristTax}
-              onChange={(e) => set("touristTax", Number(e.target.value))}
-            />
-            <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
-          </label>
-        </div>
+            <div className="flex gap-2">
+              {(
+                [
+                  ["total", "Jen počet osob"],
+                  ["split", "Rozdělit kategorie"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => set("guestMode", mode)}
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                    form.guestMode === mode
+                      ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
+                      : "border-line text-soft hover:border-pine/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Číslo účtu pro QR platbu</span>
-          <input
-            className="field"
-            placeholder="19-2000145399/0800"
-            value={form.bankAccount}
-            onChange={(e) => set("bankAccount", e.target.value)}
-          />
-          <span className="mt-1 block text-xs text-soft">
-            {form.bankAccount
-              ? ibanPreview(form.bankAccount)
-              : "Bez čísla účtu se hostům nabídne jen domluva s tebou."}
-          </span>
-        </label>
+            {form.guestMode === "split" && (
+              <div className="space-y-2">
+                {categories.map((c) => (
+                  <div
+                    key={c.key}
+                    className={`space-y-3 rounded-xl border p-3.5 transition ${
+                      c.enabled ? "border-line" : "border-line/60 bg-bg/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--pine)]"
+                        checked={c.enabled}
+                        aria-label={`Nabízet kategorii ${c.label}`}
+                        onChange={(e) => setCategory(c.key, { enabled: e.target.checked })}
+                      />
+                      <input
+                        className="field min-w-0 flex-1 !py-2 text-sm"
+                        aria-label={`Název kategorie ${c.label}`}
+                        value={c.label}
+                        onChange={(e) => setCategory(c.key, { label: e.target.value })}
+                      />
+                    </div>
 
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Storno podmínky</span>
-          <textarea
-            className="field min-h-20"
-            placeholder="Zrušení do 14 dní před příjezdem zdarma, poté se záloha nevrací."
-            value={form.cancellationPolicy}
-            onChange={(e) => set("cancellationPolicy", e.target.value)}
-          />
-        </label>
+                    {c.enabled && (
+                      <>
+                        <div className="max-w-56">
+                          <AdjustField
+                            compact
+                            label={form.pricingMode === "person" ? "Cena za noc" : "Příplatek za noc"}
+                            value={c.adjust}
+                            onChange={(adjust) => setCategory(c.key, { adjust })}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-soft">
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="accent-[var(--pine)]"
+                              checked={c.capacity}
+                              onChange={(e) => setCategory(c.key, { capacity: e.target.checked })}
+                            />
+                            počítá se do kapacity
+                          </label>
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="accent-[var(--pine)]"
+                              checked={c.tax}
+                              onChange={(e) => setCategory(c.key, { tax: e.target.checked })}
+                            />
+                            platí poplatek z pobytu
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                <p className="text-xs text-soft">
+                  {form.pricingMode === "person"
+                    ? "Procenta se počítají z ceny za dospělou osobu (−50 % = poloviční cena), koruny nastaví pevnou cenu za osobu a noc."
+                    : "Procenta se počítají z ceny za nemovitost, koruny jsou pevný příplatek za osobu a noc. Nula = v ceně."}{" "}
+                  Poplatek z pobytu ze zákona neplatí osoby do 18 let.
+                </p>
+              </div>
+            )}
 
-        <div className="flex items-center gap-3 pt-1">
-          <button className="btn-primary" disabled={saving} onClick={save}>
-            {saving ? "Ukládám…" : "Uložit změny"}
-          </button>
-          {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-        </div>
-      </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button className="btn-primary" disabled={saving} onClick={save}>
+                {saving ? "Ukládám…" : "Uložit změny"}
+              </button>
+              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
+            </div>
+          </div>
 
-      {/* Obsah webu */}
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-        <h2 className="font-display text-lg font-semibold">Obsah webu</h2>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Název</span>
-          <input className="field" value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Slogan</span>
-          <input className="field" value={form.tagline} onChange={(e) => set("tagline", e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Popis</span>
-          <textarea
-            className="field min-h-36"
-            value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Vybavení (oddělené čárkou)</span>
-          <textarea
-            className="field min-h-20"
-            value={form.amenities}
-            onChange={(e) => set("amenities", e.target.value)}
-          />
-        </label>
-        <label className="block sm:max-w-48">
-          <span className="mb-1.5 block text-sm font-medium">Max. hostů</span>
-          <input
-            className="field"
-            type="number"
-            value={form.maxGuests}
-            onChange={(e) => set("maxGuests", Number(e.target.value))}
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Kontaktní e-mail</span>
-            <input
-              className="field"
-              type="email"
-              value={form.contactEmail}
-              onChange={(e) => set("contactEmail", e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Telefon</span>
-            <input
-              className="field"
-              type="tel"
-              value={form.contactPhone}
-              onChange={(e) => set("contactPhone", e.target.value)}
-            />
-          </label>
-        </div>
-        <div className="flex items-center gap-3 pt-1">
-          <button className="btn-primary" disabled={saving} onClick={save}>
-            {saving ? "Ukládám…" : "Uložit změny"}
-          </button>
-          {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-        </div>
-      </div>
+          {/* Pravidla pobytu a poplatky */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+            <div>
+              <h2 className="font-display text-lg font-semibold">Pravidla pobytu a poplatky</h2>
+              <p className="text-sm text-soft">
+                Podle tohohle nastavení hosté vidí konečnou cenu a nemůžou rezervovat termín, který ti nevyhovuje.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Nejkratší pobyt (nocí)</span>
+                <input
+                  className="field"
+                  type="number"
+                  min={1}
+                  value={form.minNights}
+                  onChange={(e) => set("minNights", Number(e.target.value))}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Rezervovat nejdříve (dní předem)</span>
+                <input
+                  className="field"
+                  type="number"
+                  min={0}
+                  value={form.leadTimeDays}
+                  onChange={(e) => set("leadTimeDays", Number(e.target.value))}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Příjezd od</span>
+                <input
+                  className="field"
+                  type="time"
+                  value={form.checkInTime}
+                  onChange={(e) => set("checkInTime", e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Odjezd do</span>
+                <input
+                  className="field"
+                  type="time"
+                  value={form.checkOutTime}
+                  onChange={(e) => set("checkOutTime", e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Úklidový poplatek (Kč za pobyt)</span>
+                <input
+                  className="field"
+                  type="number"
+                  min={0}
+                  value={form.cleaningFee}
+                  onChange={(e) => set("cleaningFee", Number(e.target.value))}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium">Poplatek z pobytu (Kč / osoba / noc)</span>
+                <input
+                  className="field"
+                  type="number"
+                  min={0}
+                  value={form.touristTax}
+                  onChange={(e) => set("touristTax", Number(e.target.value))}
+                />
+                <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium">Číslo účtu pro QR platbu</span>
+              <input
+                className="field"
+                placeholder="19-2000145399/0800"
+                value={form.bankAccount}
+                onChange={(e) => set("bankAccount", e.target.value)}
+              />
+              <span className="mt-1 block text-xs text-soft">
+                {form.bankAccount
+                  ? ibanPreview(form.bankAccount)
+                  : "Bez čísla účtu se hostům nabídne jen domluva s tebou."}
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium">Storno podmínky</span>
+              <textarea
+                className="field min-h-20"
+                placeholder="Zrušení do 14 dní před příjezdem zdarma, poté se záloha nevrací."
+                value={form.cancellationPolicy}
+                onChange={(e) => set("cancellationPolicy", e.target.value)}
+              />
+            </label>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button className="btn-primary" disabled={saving} onClick={save}>
+                {saving ? "Ukládám…" : "Uložit změny"}
+              </button>
+              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

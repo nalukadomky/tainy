@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { czk, type PriceRuleInput, type PricingMode } from "@/lib/pricing";
 import { BookingWidget } from "@/components/BookingWidget";
 import type { BookedRange } from "@/components/DayPicker";
@@ -8,6 +9,7 @@ import { Gallery } from "@/components/Gallery";
 import { parsePhotos } from "@/lib/photos";
 import { defaultCategories, type GuestCategory } from "@/lib/guests";
 import { Wordmark } from "@/components/Logo";
+import { EditableText, EditSection, EditStyles, type SiteEditing } from "@/components/EditableText";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
 // jednak jako živý náhled v průvodci (data z draftu, preview=true).
@@ -27,6 +29,9 @@ export type SiteViewData = {
   contactPhone: string;
   priceRules: PriceRuleInput[];
   photos?: string;
+  /** Úvod webu: "photo" = nadpis přes úvodní fotku, jinak jen text. */
+  heroStyle?: "text" | "photo";
+  heroPhoto?: string;
   guestMode?: string;
   categories?: GuestCategory[];
   // Pravidla pobytu a poplatky — v náhledu průvodce nemusí být vyplněné.
@@ -40,6 +45,9 @@ export type SiteViewData = {
   cancellationPolicy?: string;
 };
 
+// Odsazení od okrajů okna pro hlavičku a úvod s fotkou přes celou šířku
+const EDGE = "px-5 sm:px-8 lg:px-12 xl:px-16";
+
 // Nálada místo fotek — dokud si majitel v průvodci žádné nenahrál
 const PLACEHOLDERS = ["🌲", "🛁", "🔥", "🌄", "☕️", "🌙"];
 
@@ -47,11 +55,14 @@ export function SiteView({
   site,
   preview = false,
   booked = [],
+  editing,
 }: {
   site: SiteViewData;
   preview?: boolean;
   /** Obsazenost ze serveru, aby byl kalendář vyplněný v prvním renderu. */
   booked?: BookedRange[];
+  /** Režim úprav přímo ve webu (builder) — texty jdou přepsat, sekce mají „Upravit". */
+  editing?: SiteEditing;
 }) {
   const perPerson = site.pricingMode === "person";
   const priceSuffix = perPerson ? "/ os. / noc" : "/ noc";
@@ -61,39 +72,111 @@ export function SiteView({
     .map((a) => a.trim())
     .filter(Boolean);
 
+  const edge = site.heroStyle === "photo" && !!site.heroPhoto;
+
   return (
     <div className="min-h-dvh bg-cream pb-24 sm:pb-0">
+      {editing && <EditStyles />}
       <header className="sticky top-0 z-40 border-b border-line/70 bg-cream/85 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-3.5">
+        {/* S úvodní fotkou přes celou šířku jde hlavička od okraje k okraji, ať lícuje s fotkou */}
+        <div className={`mx-auto flex items-center justify-between py-3.5 ${edge ? EDGE : "max-w-4xl px-5 lg:max-w-6xl lg:px-8 2xl:max-w-7xl"}`}>
           <span className="font-display text-xl font-semibold tracking-tight">
             {site.name || "Tvůj web"}
           </span>
-          <a href="#rezervace" className="btn-primary hidden !px-5 !py-2 text-sm sm:inline-flex">
+          <a href="#rezervace" className="btn-primary !px-5 !py-2 text-sm max-sm:!hidden">
             Rezervovat
           </a>
         </div>
       </header>
 
-      <section className="paper relative overflow-hidden border-b border-line">
-        <div className="mx-auto max-w-4xl px-5 pb-12 pt-12 sm:pt-16">
-          <p className="rise text-xs font-semibold uppercase tracking-widest text-soft">
-            {site.propertyType} · až {site.maxGuests} hostů
-          </p>
-          <h1 className="rise rise-1 mt-3 font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            {site.name || "Tvůj web"}
-          </h1>
-          {site.tagline && (
-            <p className="rise rise-2 mt-3 max-w-xl font-display text-xl italic text-soft">
-              {site.tagline}
+      <EditSection editing={editing} section="uvod">
+      {site.heroStyle === "photo" && site.heroPhoto ? (
+        <section id="uvod" className="relative isolate flex min-h-[calc(100svh-4rem)] items-end overflow-hidden bg-ink">
+          {/* Fotka vyplní celou výšku okna pod hlavičkou; galerie začíná až po posunu */}
+          <Image
+            src={site.heroPhoto}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="-z-10 object-cover"
+          />
+          {/* Přechod zdola, aby byl bílý text čitelný na jakékoli fotce */}
+          <div
+            aria-hidden
+            className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/80 via-ink/25 to-ink/5"
+          />
+          <div className={`w-full pb-28 pt-24 text-white sm:pb-16 lg:pb-20 ${EDGE}`}>
+            <p className="rise text-xs font-semibold uppercase tracking-widest text-white/80">
+              {site.propertyType} · až {site.maxGuests} hostů
             </p>
-          )}
-          <p className="rise rise-3 mt-5 text-lg font-semibold">
-            od {czk(site.pricePerNight)} <span className="font-normal text-soft">{priceSuffix}</span>
-          </p>
-        </div>
-      </section>
+            <EditableText
+              as="h1"
+              editing={editing}
+              field="name"
+              value={site.name}
+              placeholder="Tvůj web"
+              className="rise rise-1 mt-3 max-w-4xl font-display text-5xl font-semibold leading-[1.05] tracking-tight sm:text-7xl xl:text-8xl"
+            />
+            {(site.tagline || editing) && (
+              <EditableText
+                as="p"
+                editing={editing}
+                field="tagline"
+                value={site.tagline}
+                placeholder="Napiš krátký slogan…"
+                className="rise rise-2 mt-4 max-w-xl font-display text-xl italic text-white/90 sm:text-2xl"
+              />
+            )}
+            <div className="rise rise-3 mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <a href="#rezervace" className="btn-primary !px-6">
+                Rezervovat termín
+              </a>
+              <span className="text-[15px] text-white/85">
+                od <strong className="font-semibold text-white">{czk(site.pricePerNight)}</strong> {priceSuffix}
+              </span>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section id="uvod" className="paper relative overflow-hidden border-b border-line">
+          <div className="mx-auto max-w-4xl lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 pb-12 pt-12 sm:pt-16">
+            <p className="rise text-xs font-semibold uppercase tracking-widest text-soft">
+              {site.propertyType} · až {site.maxGuests} hostů
+            </p>
+            <EditableText
+              as="h1"
+              editing={editing}
+              field="name"
+              value={site.name}
+              placeholder="Tvůj web"
+              className="rise rise-1 mt-3 font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl"
+            />
+            {(site.tagline || editing) && (
+              <EditableText
+                as="p"
+                editing={editing}
+                field="tagline"
+                value={site.tagline}
+                placeholder="Napiš krátký slogan…"
+                className="rise rise-2 mt-3 max-w-xl font-display text-xl italic text-soft"
+              />
+            )}
+            <div className="rise rise-3 mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <a href="#rezervace" className="btn-primary !px-6">
+                Rezervovat termín
+              </a>
+              <span className="text-lg font-semibold">
+                od {czk(site.pricePerNight)} <span className="font-normal text-soft">{priceSuffix}</span>
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
+      </EditSection>
 
-      <section className="mx-auto max-w-4xl px-5 pt-8">
+      <EditSection editing={editing} section="galerie">
+      <section id="galerie" className="mx-auto max-w-4xl scroll-mt-20 lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 pt-8">
         {photos.length > 0 ? (
           <Gallery photos={photos} siteName={site.name} />
         ) : (
@@ -120,34 +203,59 @@ export function SiteView({
           </>
         )}
       </section>
+      </EditSection>
 
-      <section className="mx-auto grid max-w-4xl gap-10 px-5 py-10 sm:grid-cols-[1.4fr_1fr]">
-        <div>
+      <section className="mx-auto grid max-w-4xl lg:max-w-6xl 2xl:max-w-7xl gap-10 px-5 lg:px-8 py-10 sm:grid-cols-[1.4fr_1fr]">
+        <EditSection editing={editing} section="o-miste">
+        <div id="o-miste" className="scroll-mt-20">
           <h2 className="font-display text-2xl font-semibold">O místě</h2>
-          <p className="mt-3 whitespace-pre-line leading-relaxed text-soft">
-            {site.description || "Popis místa zatím čeká na svá slova."}
-          </p>
-          {(site.contactEmail || site.contactPhone) && (
+          <EditableText
+            as="p"
+            editing={editing}
+            field="description"
+            value={site.description}
+            placeholder="Popis místa zatím čeká na svá slova."
+            multiline
+            className="mt-3 whitespace-pre-line leading-relaxed text-soft"
+          />
+          {(site.contactEmail || site.contactPhone || editing) && (
             <div className="mt-6 rounded-2xl border border-line bg-surface p-5">
               <h3 className="font-display text-lg font-semibold">Kontakt</h3>
               <div className="mt-2 space-y-1 text-[15px] text-soft">
-                {site.contactEmail && (
-                  <p>
-                    ✉️{" "}
-                    <a
-                      className="underline decoration-line underline-offset-4 hover:text-ink"
-                      href={`mailto:${site.contactEmail}`}
-                    >
-                      {site.contactEmail}
-                    </a>
-                  </p>
+                {editing ? (
+                  <>
+                    <p>
+                      ✉️{" "}
+                      <EditableText editing={editing} field="contactEmail" value={site.contactEmail} placeholder="tvuj@email.cz" />
+                    </p>
+                    <p>
+                      📞{" "}
+                      <EditableText editing={editing} field="contactPhone" value={site.contactPhone} placeholder="+420 777 123 456" />
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {site.contactEmail && (
+                      <p>
+                        ✉️{" "}
+                        <a
+                          className="underline decoration-line underline-offset-4 hover:text-ink"
+                          href={`mailto:${site.contactEmail}`}
+                        >
+                          {site.contactEmail}
+                        </a>
+                      </p>
+                    )}
+                    {site.contactPhone && <p>📞 {site.contactPhone}</p>}
+                  </>
                 )}
-                {site.contactPhone && <p>📞 {site.contactPhone}</p>}
               </div>
             </div>
           )}
         </div>
-        <div>
+        </EditSection>
+        <EditSection editing={editing} section="vybaveni">
+        <div id="vybaveni" className="scroll-mt-20">
           <h2 className="font-display text-2xl font-semibold">Vybavení</h2>
           <ul className="mt-3 space-y-2">
             {amenities.length ? (
@@ -164,10 +272,12 @@ export function SiteView({
             )}
           </ul>
         </div>
+        </EditSection>
       </section>
 
+      <EditSection editing={editing} section="rezervace">
       <section id="rezervace" className="scroll-mt-16 border-t border-line bg-bg">
-        <div className="mx-auto max-w-4xl px-5 py-10 sm:py-14">
+        <div className="mx-auto max-w-4xl lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 py-10 sm:py-14">
           <h2 className="font-display text-3xl font-semibold tracking-tight">Rezervace</h2>
           <p className="mt-2 text-soft">
             Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.
@@ -199,9 +309,10 @@ export function SiteView({
           </div>
         </div>
       </section>
+      </EditSection>
 
       <footer className="border-t border-line bg-cream">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-6 text-sm text-soft">
+        <div className="mx-auto flex max-w-4xl lg:max-w-6xl 2xl:max-w-7xl items-center justify-between px-5 lg:px-8 py-6 text-sm text-soft">
           <span>© {new Date().getFullYear()} {site.name || "Tvůj web"}</span>
           <Link href="/" className="inline-flex items-center gap-1.5 hover:text-ink">
             vytvořeno s <Wordmark className="text-base" />

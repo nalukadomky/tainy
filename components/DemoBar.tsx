@@ -7,7 +7,7 @@ import { Wordmark } from "@/components/Logo";
 export function DemoBar() {
   return (
     <div className="bg-pine-dark text-cream">
-      <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-5 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3 px-5 py-2 text-sm sm:px-8 lg:px-12 xl:px-16">
         <Link href="/" className="inline-flex items-center gap-2 opacity-90 hover:opacity-100">
           <span aria-hidden>←</span>
           <span>

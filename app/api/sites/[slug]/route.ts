@@ -11,7 +11,6 @@ const TEXT_FIELDS = [
   "amenities",
   "photos",
   "themeColor",
-  "tier",
   "contactEmail",
   "contactPhone",
   "bankAccount",
@@ -91,6 +90,12 @@ export async function PATCH(
   for (const key of TIME_FIELDS) {
     if (typeof body[key] !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body[key])) continue;
     data[key] = body[key];
+  }
+  if (body.heroStyle !== undefined) {
+    data.heroStyle = body.heroStyle === "photo" ? "photo" : "text";
+  }
+  if (typeof body.heroPhoto === "string") {
+    data.heroPhoto = body.heroPhoto.trim().slice(0, 600);
   }
   if (body.pricingMode !== undefined) {
     data.pricingMode = body.pricingMode === "person" ? "person" : "unit";

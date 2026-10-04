@@ -19,17 +19,27 @@ export function holdsDates(): Prisma.ReservationWhereInput {
   };
 }
 
-/** Obsazené rozsahy webu. `fromIso` omezí výsledek na termíny končící po tomto dni. */
+/**
+ * Obsazené rozsahy webu. `fromIso` omezí výsledek na termíny končící po tomto dni.
+ * `excludeReservationId` vynechá jednu rezervaci — při změně jejího termínu
+ * nesmí kolidovat sama se sebou.
+ */
 export async function blockedRanges(
   siteId: string,
   fromIso?: string,
-  db: Db = prisma
+  db: Db = prisma,
+  { excludeReservationId }: { excludeReservationId?: string } = {}
 ): Promise<Range[]> {
   const after = fromIso ? new Date(`${fromIso}T00:00:00.000Z`) : undefined;
 
   const [reservations, blackouts] = await Promise.all([
     db.reservation.findMany({
-      where: { siteId, ...holdsDates(), ...(after && { endDate: { gte: after } }) },
+      where: {
+        siteId,
+        ...holdsDates(),
+        ...(after && { endDate: { gte: after } }),
+        ...(excludeReservationId && { id: { not: excludeReservationId } }),
+      },
       select: { startDate: true, endDate: true },
     }),
     db.blackout.findMany({

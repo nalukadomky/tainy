@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { czk, plural } from "@/lib/pricing";
 import { nightsOf, toISO } from "@/lib/stay";
+import { greetingName } from "@/lib/vocative";
 import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { pricedCategories } from "@/lib/pricing";
 import { buildPayment, formatIBAN } from "@/lib/payment";
@@ -101,7 +102,7 @@ export default async function ReservationPage({
               ? "Rezervace byla zrušena"
               : expired
                 ? "Rezervace vypršela"
-                : `Díky, ${reservation.guestName.split(" ")[0]}!`}
+                : `Díky, ${greetingName(reservation.guestName)}!`}
           </h1>
           <p className="mt-1.5 text-soft">
             {reservation.status === "cancelled" || expired ? (
@@ -155,6 +156,12 @@ export default async function ReservationPage({
               <div className="flex justify-between gap-4 text-soft">
                 <dt>Poplatky (úklid, poplatek z pobytu)</dt>
                 <dd>{czk(reservation.feesTotal)}</dd>
+              </div>
+            )}
+            {reservation.discount > 0 && (
+              <div className="flex justify-between gap-4 text-pine">
+                <dt>Sleva (voucher {reservation.voucherCode})</dt>
+                <dd>−{czk(reservation.discount)}</dd>
               </div>
             )}
             <div className="flex justify-between gap-4 border-t border-line pt-2 font-display text-lg font-semibold">

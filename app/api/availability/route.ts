@@ -11,5 +11,8 @@ export async function GET(req: NextRequest) {
   if (!site) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
 
   // Minulost kalendář stejně nenabízí — stačí okno od minulého měsíce dál.
-  return NextResponse.json(await blockedRanges(site.id, addDays(todayISO(), -40)));
+  // Bez cache — widget se ptá průběžně a musí dostat aktuální stav.
+  return NextResponse.json(await blockedRanges(site.id, addDays(todayISO(), -40)), {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

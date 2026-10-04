@@ -18,10 +18,9 @@ const FEATURES = [
     text: "Dashboard výdělků, správa rezervací, ubytovaní hosté a evidence nákladů v jednoduché administraci.",
   },
   {
-    icon: "🎙️",
-    title: "Hlasový AI asistent",
-    text: "Řekni „zvyš cenu na 3 200 a přepiš uvítací text víc podzimně“ — a web se upraví sám.",
-    pro: true,
+    icon: "🏡",
+    title: "Moderní web za pár minut",
+    text: "Fotky, popis, ceník a kalendář. Web vypadá skvěle na mobilu i počítači a každou změnu hned vidíš v živém náhledu.",
   },
 ];
 
@@ -72,14 +71,14 @@ export default function Home() {
               Pro majitele chat, apartmánů a tiny housů
             </p>
             <h1 className="rise rise-1 mt-6 font-display text-[42px] font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-              Web pro tvoje ubytování.
+              Moderní web. Rezervace bez starostí.
               <br />
-              <em className="font-normal">Hotový, než dopiješ kafe.</em>
+              <em className="font-normal">Pronajímej ještě dnes.</em>
             </h1>
             <p className="rise rise-2 mt-6 max-w-xl text-[17px] leading-relaxed text-soft">
-              <Wordmark /> ti postaví prezentační web s rezervacemi, platbami a přehledem
-              výdělků. A když budeš chtít něco změnit, stačí to <strong className="text-ink">říct nahlas</strong> —
-              o zbytek se postará AI.
+              <Wordmark /> ti postaví moderní prezentační web s rezervacemi a dá ti
+              <strong className="text-ink"> jednoduchou správu pronájmu</strong> — termíny, hosty, platby
+              i přehled výdělků na jednom místě.
             </p>
             <div className="rise rise-3 mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/w/demo" className="btn-primary">
@@ -117,18 +116,9 @@ export default function Home() {
           {FEATURES.map((f) => (
             <div
               key={f.title}
-              className={`rounded-2xl border p-6 transition hover:-translate-y-0.5 hover:shadow-sm ${
-                f.pro ? "ai-chip" : "border-line bg-surface"
-              }`}
+              className="rounded-2xl border border-line bg-surface p-6 transition hover:-translate-y-0.5 hover:shadow-sm"
             >
-              <div className="flex items-start justify-between">
-                <span className="text-2xl">{f.icon}</span>
-                {f.pro && (
-                  <span className="rounded-full bg-ink px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
-                    t<span className="ai-mark not-italic">ai</span>ny Pro
-                  </span>
-                )}
-              </div>
+              <span className="text-2xl">{f.icon}</span>
               <h3 className="mt-3 font-display text-xl font-semibold">{f.title}</h3>
               <p className="mt-2 text-[15px] leading-relaxed text-soft">{f.text}</p>
             </div>
@@ -157,46 +147,25 @@ export default function Home() {
       {/* Ceník */}
       <section id="cenik" className="mx-auto max-w-5xl px-5 py-14 sm:py-20">
         <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Ceník</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-surface p-7">
-            <h3 className="font-display text-2xl font-semibold">Start</h3>
-            <p className="mt-1 text-sm text-soft">Na rozjezd i pro jedno ubytování</p>
+        <div className="mt-8 rounded-2xl border border-line bg-surface p-7 sm:flex sm:items-center sm:justify-between sm:gap-10">
+          <div>
+            <h3 className="font-display text-2xl font-semibold">Všechno v ceně</h3>
+            <p className="mt-1 text-sm text-soft">Pro jedno ubytování i víc nemovitostí</p>
             <p className="mt-5 font-display text-4xl font-semibold">
               0 Kč <span className="text-base font-normal text-soft">/ měsíc</span>
             </p>
-            <ul className="mt-5 space-y-2.5 text-[15px] text-soft">
-              <li>✓ Vlastní prezentační web</li>
-              <li>✓ Rezervace s půldny</li>
-              <li>✓ Platby přes Stripe</li>
-              <li>✓ Administrace a přehled výdělků</li>
-            </ul>
-            <Link href="/onboarding" className="btn-ghost mt-7 w-full">
+            <Link href="/onboarding" className="btn-primary mt-6 w-full sm:w-auto">
               Začít zdarma
             </Link>
           </div>
-          <div className="ai-chip relative rounded-2xl p-7">
-            <span className="absolute -top-3 right-6 rounded-full bg-ink px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
-              Doporučujeme
-            </span>
-            <h3 className="font-display text-2xl font-semibold">
-              t<span className="ai-mark">ai</span>ny Pro
-            </h3>
-            <p className="mt-1 text-sm text-soft">Když chceš, aby web pracoval za tebe</p>
-            <p className="mt-5 font-display text-4xl font-semibold">
-              490 Kč <span className="text-base font-normal text-soft">/ měsíc</span>
-            </p>
-            <ul className="mt-5 space-y-2.5 text-[15px] text-soft">
-              <li>✓ Všechno ze Startu</li>
-              <li>
-                ✓ <strong className="text-ink">Hlasový AI asistent</strong> — úpravy webu mluvením
-              </li>
-              <li>✓ AI přepisy textů v tónu tvé značky</li>
-              <li>✓ Přednostní podpora</li>
-            </ul>
-            <Link href="/onboarding?tier=pro" className="btn-primary mt-7 w-full">
-              Vyzkoušet Pro
-            </Link>
-          </div>
+          <ul className="mt-6 grid gap-2.5 text-[15px] text-soft sm:mt-0 sm:grid-cols-2 sm:gap-x-8">
+            <li>✓ Vlastní prezentační web</li>
+            <li>✓ Rezervace s půldny</li>
+            <li>✓ Platby přes Stripe</li>
+            <li>✓ Kalendář a blokace termínů</li>
+            <li>✓ Hosté a vouchery</li>
+            <li>✓ Přehled výdělků a nákladů</li>
+          </ul>
         </div>
       </section>
 
@@ -205,7 +174,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl flex-col items-start justify-between gap-4 px-5 py-8 sm:flex-row sm:items-center">
           <Logo className="text-xl" />
           <p className="text-sm text-soft">
-            © {new Date().getFullYear()} tainy · web s rezervacemi, který si upravíš hlasem
+            © {new Date().getFullYear()} tainy · moderní web a jednoduchá správa pronájmu
           </p>
         </div>
       </footer>

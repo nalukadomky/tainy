@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
       maxGuests: Number(body.maxGuests ?? 4),
       amenities: String(body.amenities ?? ""),
       themeColor: String(body.themeColor ?? "pine"),
-      tier: body.tier === "pro" ? "pro" : "start",
       contactEmail: String(body.contactEmail ?? ""),
       contactPhone: String(body.contactPhone ?? ""),
     },

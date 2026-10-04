@@ -15,7 +15,7 @@ const instrument = Instrument_Sans({
 export const metadata: Metadata = {
   title: "tainy — vlastní web s rezervacemi za pár minut",
   description:
-    "tainy je nejrychlejší cesta k vlastnímu prezentačnímu webu s rezervacemi pro tvoje ubytování. S AI asistentem, který web upraví za tebe.",
+    "tainy je nejrychlejší cesta k modernímu prezentačnímu webu s rezervacemi a jednoduché správě pronájmu tvého ubytování.",
 };
 
 export const viewport: Viewport = {

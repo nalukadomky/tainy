@@ -3,31 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { parsePhotoLines, serializePhotos, type Photo } from "@/lib/photos";
+import { uploadSitePhoto } from "@/lib/image";
 
 // Správa galerie v administraci: mozaika jako na webu, nahrávání přetažením,
 // přeuspořádání, hlavní fotka a popisky. Každá změna se hned uloží.
 
-const MAX_SIDE = 2400;
 const ACCEPT = "image/jpeg,image/png,image/webp";
 
 type Upload = { id: string; name: string; error?: string };
-
-/** Zmenší fotku v prohlížeči — z mobilu se pak nahrává zlomek dat. */
-async function shrink(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return file;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.85));
-    return blob ?? file;
-  } catch {
-    return file;
-  }
-}
 
 export function PhotoManager({
   slug,
@@ -76,12 +59,8 @@ export function PhotoManager({
       const id = Math.random().toString(36).slice(2);
       setUploads((u) => [...u, { id, name: file.name }]);
       try {
-        const body = new FormData();
-        body.append("file", await shrink(file), file.name.replace(/\.\w+$/, ".jpg"));
-        const res = await fetch(`/api/sites/${slug}/photos`, { method: "POST", body });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Nahrání selhalo.");
-        await save([...latest.current, { src: data.src, alt: "" }]);
+        const src = await uploadSitePhoto(slug, file);
+        await save([...latest.current, { src, alt: "" }]);
         setUploads((u) => u.filter((x) => x.id !== id));
       } catch (e) {
         const error = e instanceof Error ? e.message : "Nahrání selhalo.";

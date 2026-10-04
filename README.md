@@ -1,7 +1,7 @@
 # tainy
 
-Nejrychlejší cesta k vlastnímu prezentačnímu webu s **rezervacemi ubytování** — s AI asistentem,
-který web upraví za tebe. Mobile-first, česky.
+Moderní prezentační web s **rezervacemi ubytování** a jednoduchá správa pronájmu.
+Mobile-first, česky.
 
 - **Prezentační web + onboarding** – marketingová landing page a krokový průvodce vytvořením webu
 - **Veřejný web nemovitosti** (`/w/[slug]`) – prezentace + rezervační kalendář (den příjezdu/odjezdu
@@ -10,13 +10,13 @@ který web upraví za tebe. Mobile-first, česky.
   s přepínáním šipkami, klávesnicí i svípnutím prstem
 - **Stránka rezervace pro hosta** (`/r/[kód]`) – termín, konečná cena, QR platba, kontakt na majitele
 - **Administrace** (`/admin`) – dashboard výdělků, správa rezervací a hostů, evidence nákladů,
-  editace webu a ceníku, **hlasový AI asistent** (tarif Pro)
+  kalendář s blokacemi, vouchery, editace webu a ceníku s živým náhledem
 
 Podrobná specifikace produktu je v [PROMPT.md](PROMPT.md).
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL (Supabase) · Anthropic Claude API
+Next.js (App Router) · TypeScript · Tailwind CSS 4 · Prisma + PostgreSQL (Supabase)
 
 ## Lokální spuštění
 
@@ -37,7 +37,6 @@ Zkopíruj `.env.example` do `.env` (je gitignorovaný) a doplň:
 - `DATABASE_URL` – Supabase Transaction pooler (port 6543, `?pgbouncer=true`) – běh aplikace
 - `DIRECT_URL` – Supabase Session/Direct (port 5432) – migrace `prisma db push`
 - `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` – **povinné** pro přihlášení (Supabase Auth)
-- `ANTHROPIC_API_KEY` – volitelné; bez klíče běží AI asistent v ukázkovém režimu
 - `RESEND_API_KEY` + `RESEND_FROM` – volitelné; bez klíče se e-maily jen vypíšou do konzole
 - `NEXT_PUBLIC_APP_URL` – veřejná adresa pro odkazy v e-mailech (na Vercelu volitelné)
 
@@ -83,5 +82,5 @@ a používá je jak widget, tak API — hlášky jsou proto na obou stranách st
 
 Databáze běží na **Supabase (PostgreSQL)**, takže aplikace funguje i v serverless prostředí.
 Ve Vercelu nastav proměnné `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` a (volitelně) `ANTHROPIC_API_KEY`. Build spouští
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Build spouští
 `prisma generate` automaticky (`postinstall`).

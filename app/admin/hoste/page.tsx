@@ -14,6 +14,7 @@ import {
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
+import { VoucherBadge } from "@/components/VoucherBadge";
 
 type Show = "all" | "returning" | "upcoming" | "once";
 type Sort = "spent" | "last" | "stays" | "name";
@@ -162,9 +163,13 @@ export default function GuestsPage() {
           type="button"
           onClick={exportXlsx}
           disabled={exporting || shown.length === 0}
-          className="btn-ghost h-10 !px-4 !py-0 text-sm"
+          title="Stáhnout zobrazené hosty a jejich pobyty jako tabulku .xlsx"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-soft transition hover:bg-line/40 hover:text-ink disabled:opacity-40"
         >
-          {exporting ? "Připravuji…" : "↓ Stáhnout do Excelu"}
+          <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {exporting ? "Připravuji…" : "Excel"}
         </button>
       </div>
 
@@ -248,14 +253,15 @@ export default function GuestsPage() {
                 type="button"
                 onClick={() => setOpen(expanded ? null : g.key)}
                 aria-expanded={expanded}
-                className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-bg/60"
+                className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-bg/60 sm:gap-4"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pine/10 font-display text-lg font-semibold text-pine">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pine/10 font-display text-base font-semibold text-pine sm:h-11 sm:w-11 sm:text-lg">
                   {g.name.charAt(0).toUpperCase()}
                 </div>
+                {/* Na mobilu má jméno přednost: počet pobytů jde pod kontakt a telefon do detailu */}
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 truncate font-medium">
-                    {g.name}
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium leading-snug">
+                    <span className="break-words">{g.name}</span>
                     {g.next && (
                       <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-semibold text-pine">
                         přijede {fmtDate(g.next)}
@@ -264,12 +270,15 @@ export default function GuestsPage() {
                   </p>
                   <p className="truncate text-sm text-soft">
                     {g.email}
-                    {g.phone && ` · ${g.phone}`}
+                    {g.phone && <span className="hidden sm:inline"> · {g.phone}</span>}
+                  </p>
+                  <p className="mt-0.5 text-xs text-soft sm:hidden">
+                    {g.count}× pobyt · <span className="whitespace-nowrap">naposledy {fmtDate(g.last)}</span>
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-semibold">{czk(g.spent)}</p>
-                  <p className="text-xs text-soft">
+                  <p className="hidden text-xs text-soft sm:block">
                     {g.count}× pobyt · naposledy {fmtDate(g.last)}
                   </p>
                 </div>
@@ -323,6 +332,11 @@ export default function GuestsPage() {
                           <p className="text-xs text-soft">
                             {guestsLabel(r, site)} · {SOURCE_LABEL[r.source] ?? r.source} · kód {r.publicId}
                           </p>
+                          {r.voucherCode && (
+                            <p className="mt-1">
+                              <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-semibold">{czk(r.totalPrice)}</span>

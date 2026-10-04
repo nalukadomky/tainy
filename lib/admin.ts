@@ -31,10 +31,11 @@ export type Site = {
   maxGuests: number;
   amenities: string;
   photos: string;
+  heroStyle: "text" | "photo";
+  heroPhoto: string;
   guestMode: "total" | "split";
   guestCategories: string;
   themeColor: string;
-  tier: "start" | "pro";
   contactEmail: string;
   contactPhone: string;
   minNights: number;
@@ -59,6 +60,11 @@ export type Reservation = {
   nightsTotal: number;
   feesTotal: number;
   totalPrice: number;
+  /** Uplatněný voucher (prázdný kód = bez voucheru) a sleva v Kč. */
+  voucherCode: string;
+  voucherKind: string;
+  voucherValue: number;
+  discount: number;
   note: string;
   source: string;
   status: "pending" | "paid" | "cancelled";
@@ -166,7 +172,12 @@ export function useAdminData() {
     setReservations((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
   }, []);
 
-  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus };
+  /** Nahradí rezervaci v seznamu její novou verzí ze serveru (např. po změně termínu). */
+  const replaceReservation = useCallback((updated: Reservation) => {
+    setReservations((list) => list.map((r) => (r.id === updated.id ? updated : r)));
+  }, []);
+
+  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus, replaceReservation };
 }
 
 export function fmtDate(iso: string): string {
