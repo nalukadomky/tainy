@@ -7,7 +7,7 @@ import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
 import { REPEAT_LABEL, isActive, monthlyFixed, spentToDate, type Repeat } from "@/lib/costs";
 
-const CATEGORIES = ["provoz", "energie", "služby", "údržba", "pojištění", "vybavení", "jiné"];
+const CATEGORIES = ["provoz", "energie", "služby", "úklid", "údržba", "pojištění", "vybavení", "jiné"];
 
 const PER: Record<Repeat, string> = { once: "", monthly: " / měsíc", yearly: " / rok" };
 

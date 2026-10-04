@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
 import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
+import { stayTimes } from "@/lib/stay";
 
 export type Unit = "pct" | "czk";
 
@@ -46,6 +47,9 @@ export type Site = {
   touristTax: number;
   bankAccount: string;
   cancellationPolicy: string;
+  /** Úklid: výchozí úkoly (jeden na řádek) a co uklízečky uvidí (čárkou). */
+  cleaningChecklist: string;
+  cleanerFields: string;
 };
 
 export type Reservation = {
@@ -57,6 +61,9 @@ export type Reservation = {
   guestBreakdown: string;
   startDate: string;
   endDate: string;
+  /** Check-in / check-out pobytu (HH:MM), zkopírované z webu při vytvoření rezervace. */
+  checkInTime: string;
+  checkOutTime: string;
   nightsTotal: number;
   feesTotal: number;
   totalPrice: number;
@@ -172,16 +179,48 @@ export function useAdminData() {
     setReservations((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
   }, []);
 
+  /** Změní check-in / check-out jedné rezervace — hned v seznamu, při chybě vrátí původní. */
+  const setTimes = useCallback(
+    async (id: string, patch: Partial<Pick<Reservation, "checkInTime" | "checkOutTime">>) => {
+      let before: Reservation | undefined;
+      setReservations((list) =>
+        list.map((r) => {
+          if (r.id !== id) return r;
+          before = r;
+          return { ...r, ...patch };
+        })
+      );
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      }).catch(() => null);
+      if (!res?.ok) {
+        if (before) setReservations((list) => list.map((r) => (r.id === id ? before! : r)));
+        throw new Error("Čas se nepodařilo uložit.");
+      }
+    },
+    []
+  );
+
   /** Nahradí rezervaci v seznamu její novou verzí ze serveru (např. po změně termínu). */
   const replaceReservation = useCallback((updated: Reservation) => {
     setReservations((list) => list.map((r) => (r.id === updated.id ? updated : r)));
   }, []);
 
-  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus, replaceReservation };
+  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus, setTimes, replaceReservation };
 }
 
 export function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
+}
+
+/** Termín pobytu i s časy: „8. 10. 2026 od 15:00 – 12. 10. 2026 do 10:00". */
+export function fmtStay(r: Reservation, site: Pick<Site, "checkInTime" | "checkOutTime"> | null): string {
+  const t = site ? stayTimes(r, site) : r;
+  const from = t.checkInTime ? ` od ${t.checkInTime}` : "";
+  const to = t.checkOutTime ? ` do ${t.checkOutTime}` : "";
+  return `${fmtDate(r.startDate)}${from} – ${fmtDate(r.endDate)}${to}`;
 }
 
 export const STATUS_LABEL: Record<Reservation["status"], string> = {

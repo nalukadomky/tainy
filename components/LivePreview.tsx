@@ -134,7 +134,7 @@ export function LivePreview({
       <button
         type="button"
         onClick={() => toggle(true)}
-        className="rise fixed bottom-24 right-5 z-40 inline-flex items-center gap-2.5 rounded-full bg-ink py-3 pl-4 pr-5 text-sm font-semibold text-white shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl lg:bottom-8 lg:right-8"
+        className="rise fixed bottom-28 right-5 z-40 inline-flex items-center gap-2.5 rounded-full bg-ink py-3 pl-4 pr-5 text-sm font-semibold text-white shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl sm:bottom-8 sm:right-8"
       >
         <span className="relative flex h-2.5 w-2.5">
           {dirty && <span className="absolute inset-0 animate-ping rounded-full bg-amber opacity-75" />}

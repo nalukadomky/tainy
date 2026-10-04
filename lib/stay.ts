@@ -104,3 +104,21 @@ export function newPublicId(): string {
   for (const b of bytes) out += alphabet[b % alphabet.length];
   return out;
 }
+
+/** Čas ve tvaru HH:MM (check-in / check-out). */
+export function isTime(value: unknown): value is string {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+type Times = { checkInTime: string; checkOutTime: string };
+
+/**
+ * Check-in / check-out pobytu: časy uložené u rezervace, a když chybí
+ * (rezervace z doby před ukládáním časů), časy webu.
+ */
+export function stayTimes(reservation: Partial<Times>, site: Times): Times {
+  return {
+    checkInTime: isTime(reservation.checkInTime) ? reservation.checkInTime : site.checkInTime,
+    checkOutTime: isTime(reservation.checkOutTime) ? reservation.checkOutTime : site.checkOutTime,
+  };
+}

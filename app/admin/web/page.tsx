@@ -10,6 +10,7 @@ import { HeroPicker } from "@/components/HeroPicker";
 import { parsePhotoLines } from "@/lib/photos";
 import { AdjustField } from "@/components/AdjustField";
 import { parseCategories, serializeCategories, type GuestCategory } from "@/lib/guests";
+import { isTime } from "@/lib/stay";
 import { LivePreview, type PreviewSection } from "@/components/LivePreview";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { useToast } from "@/components/Toast";
@@ -77,6 +78,12 @@ export default function SiteEditPage() {
 
   async function save() {
     if (!form) return;
+    // Check-in a check-out musí být vždy vyplněné — kopírují se do každé nové rezervace.
+    if (!isTime(form.checkInTime) || !isTime(form.checkOutTime)) {
+      switchTab("cenik");
+      toast.show("Vyplň čas check-inu i check-outu (Ceník a pobyt).");
+      return;
+    }
     setSaving(true);
     setSaved(false);
     await fetch(`/api/sites/${slug}`, {
@@ -569,23 +576,28 @@ export default function SiteEditPage() {
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Příjezd od</span>
+                <span className="mb-1.5 block text-sm font-medium">Check-in (příjezd od)</span>
                 <input
-                  className="field"
+                  className={`field ${isTime(form.checkInTime) ? "" : "!border-coral"}`}
                   type="time"
+                  required
                   value={form.checkInTime}
                   onChange={(e) => set("checkInTime", e.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Odjezd do</span>
+                <span className="mb-1.5 block text-sm font-medium">Check-out (odjezd do)</span>
                 <input
-                  className="field"
+                  className={`field ${isTime(form.checkOutTime) ? "" : "!border-coral"}`}
                   type="time"
+                  required
                   value={form.checkOutTime}
                   onChange={(e) => set("checkOutTime", e.target.value)}
                 />
               </label>
+              <p className="-mt-1 text-xs text-soft sm:col-span-2">
+                Platí pro nové rezervace. U jednotlivé rezervace čas změníš v jejím detailu v kalendáři.
+              </p>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Úklidový poplatek (Kč za pobyt)</span>
                 <input

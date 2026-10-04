@@ -38,7 +38,7 @@ export function useToast() {
     <div
       key={message.id}
       role={message.tone === "error" ? "alert" : "status"}
-      className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 lg:bottom-8"
+      className="fixed inset-x-0 bottom-28 z-[60] flex justify-center px-4 sm:bottom-8"
     >
       <div
         className={`rise flex max-w-md items-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-medium shadow-xl ${

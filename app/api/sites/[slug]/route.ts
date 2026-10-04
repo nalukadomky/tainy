@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
 import { parseCategories, serializeCategories } from "@/lib/guests";
+import { isTime } from "@/lib/stay";
+import { parseCleanerFields } from "@/lib/cleaning";
 
 const TEXT_FIELDS = [
   "name",
@@ -15,6 +17,7 @@ const TEXT_FIELDS = [
   "contactPhone",
   "bankAccount",
   "cancellationPolicy",
+  "cleaningChecklist",
 ] as const;
 
 // Celá čísla s rozsahem, ve kterém dávají smysl.
@@ -88,11 +91,15 @@ export async function PATCH(
     data[key] = Math.max(range.min, Math.min(range.max, Math.round(n)));
   }
   for (const key of TIME_FIELDS) {
-    if (typeof body[key] !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body[key])) continue;
+    if (!isTime(body[key])) continue;
     data[key] = body[key];
   }
   if (body.heroStyle !== undefined) {
     data.heroStyle = body.heroStyle === "photo" ? "photo" : "text";
+  }
+  // Co uklízečky uvidí o hostech — jen známé údaje (cena mezi nimi nikdy není).
+  if (typeof body.cleanerFields === "string") {
+    data.cleanerFields = parseCleanerFields(body.cleanerFields).join(",");
   }
   if (typeof body.heroPhoto === "string") {
     data.heroPhoto = body.heroPhoto.trim().slice(0, 600);

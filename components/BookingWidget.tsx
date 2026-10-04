@@ -293,6 +293,11 @@ export function BookingWidget({
           {price.nights} {plural(price.nights, "noc", "noci", "nocí")}
         </span>
       </div>
+      <p className="mt-0.5 text-soft">
+        Check-in {new Date(startDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric" })} od{" "}
+        {site.checkInTime} · check-out {new Date(endDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric" })} do{" "}
+        {site.checkOutTime}
+      </p>
       {skladba && <p className="mt-0.5 text-soft">{skladba}</p>}
       <div className="mt-2 space-y-0.5 border-t border-line pt-2">
         {price.lines.map((l) => (

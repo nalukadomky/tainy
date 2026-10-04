@@ -102,6 +102,19 @@ export async function requireOwnerByVoucherId(id: string) {
   return { ok: true as const, user, voucher };
 }
 
+// Ověří vlastnictví přes ID uklízečky (přes navázaný web).
+export async function requireOwnerByCleanerId(id: string) {
+  const user = await getUser();
+  if (!user) return { ok: false as const, status: 401 as const };
+  const cleaner = await prisma.cleaner.findUnique({
+    where: { id },
+    include: { site: { select: { ownerId: true } } },
+  });
+  if (!cleaner) return { ok: false as const, status: 404 as const };
+  if (cleaner.site.ownerId !== user.id) return { ok: false as const, status: 403 as const };
+  return { ok: true as const, user, cleaner };
+}
+
 // Jednotná chybová odpověď.
 export function deny(status: 401 | 403 | 404) {
   const msg = {

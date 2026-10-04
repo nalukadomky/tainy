@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   useAdminData,
-  fmtDate,
+  fmtStay,
   guestsLabel,
   norm,
   SOURCE_LABEL,
@@ -221,7 +221,7 @@ export default function ReservationsPage() {
                   <VoucherBadge code={r.voucherCode} discount={r.discount} />
                 </p>
                 <p className="mt-0.5 text-sm text-soft">
-                  {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {guestsLabel(r, site)}
+                  {fmtStay(r, site)} · {guestsLabel(r, site)}
                 </p>
                 <p className="mt-0.5 text-sm text-soft">
                   {r.email}

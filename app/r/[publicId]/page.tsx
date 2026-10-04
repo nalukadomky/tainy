@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { czk, plural } from "@/lib/pricing";
-import { nightsOf, toISO } from "@/lib/stay";
+import { nightsOf, stayTimes, toISO } from "@/lib/stay";
 import { greetingName } from "@/lib/vocative";
 import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { pricedCategories } from "@/lib/pricing";
@@ -36,6 +36,7 @@ export default async function ReservationPage({
   if (!reservation) notFound();
 
   const { site } = reservation;
+  const times = stayTimes(reservation, site);
   const startIso = toISO(reservation.startDate);
   const endIso = toISO(reservation.endDate);
   const nights = nightsOf(startIso, endIso);
@@ -140,7 +141,7 @@ export default async function ReservationPage({
             <div className="flex justify-between gap-4">
               <dt className="text-soft">Příjezd / odjezd</dt>
               <dd className="text-right">
-                od {site.checkInTime} / do {site.checkOutTime}
+                od {times.checkInTime} / do {times.checkOutTime}
               </dd>
             </div>
           </dl>

@@ -50,6 +50,10 @@ model Site {
   paymentMode        String  @default("qr") // qr | stripe | both
   bankAccount        String  @default("")   // IBAN pro QR platbu
   cancellationPolicy String  @default("")
+  // Úklid: výchozí úkoly (jeden na řádek) a co uklízečky uvidí o hostech
+  // (čárkou: guests,name,note,phone). Cenu pobytu uklízečky nevidí nikdy.
+  cleaningChecklist  String  @default("")
+  cleanerFields      String  @default("guests")
 
   createdAt    DateTime      @default(now())
   reservations Reservation[]
@@ -57,6 +61,8 @@ model Site {
   priceRules   PriceRule[]
   blackouts    Blackout[]
   vouchers     Voucher[]
+  cleaners     Cleaner[]
+  cleanings    Cleaning[]
 
   @@index([ownerId])
 }
@@ -86,6 +92,10 @@ model Reservation {
   guestBreakdown String @default("")       // JSON skladby, např. {"adult":2,"child":1}
   startDate  DateTime @db.Date
   endDate    DateTime @db.Date
+  // Check-in / check-out pobytu (HH:MM) — při vytvoření se zkopírují z webu,
+  // pozdější změna v ceníku je nemění; jde je upravit u jednotlivé rezervace.
+  checkInTime  String @default("")
+  checkOutTime String @default("")
 
   nightsTotal Int     @default(0) // cena za noci
   feesTotal   Int     @default(0) // úklid + poplatek z pobytu
@@ -102,6 +112,7 @@ model Reservation {
   status     String   @default("pending")
   expiresAt  DateTime?                // nezaplacená rezervace po expiraci uvolní termín
   createdAt  DateTime @default(now())
+  cleaning   Cleaning?
 
   @@index([siteId, startDate, endDate])
 }
@@ -150,4 +161,45 @@ model Voucher {
   createdAt DateTime  @default(now())
 
   @@unique([siteId, code])
+}
+
+// Uklízečka webu. Přistupuje přes tajný odkaz /uklid/[token] (bez přihlášení).
+model Cleaner {
+  id        String     @id @default(cuid())
+  siteId    String
+  site      Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name      String
+  token     String     @unique
+  payMode   String     @default("hourly") // hourly = Kč/h, flat = Kč za úklid
+  rate      Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  cleanings Cleaning[]
+}
+
+// Úklid: buď po odjezdu hostů z jedné rezervace (vzniká při přiřazení uklízečky),
+// nebo ruční — bez rezervace, s vlastním datem, časem a popisem (vytvoří ho
+// majitel, nebo si ho zapíše uklízečka).
+model Cleaning {
+  id            String       @id @default(cuid())
+  siteId        String
+  site          Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  reservationId String?      @unique
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  date          DateTime?    @db.Date // jen ruční úklid
+  time          String       @default("")
+  title         String       @default("")
+  createdBy     String       @default("owner") // owner | cleaner
+  cleanerId     String?
+  cleaner       Cleaner?    @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+  checklist     String      @default("[]") // JSON [{id,label,done,extra}]
+  minutes       Int?
+  status        String      @default("todo") // todo | done
+  finishedAt    DateTime?
+  note          String      @default("")
+  paid          Boolean     @default(false)
+  paidAt        DateTime?
+  amount        Int?        // částka v době zaplacení
+  costId        String?     // záznam v Nákladech vytvořený při zaplacení
+  createdAt     DateTime    @default(now())
 }

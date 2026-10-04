@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useAdminData, fmtDate } from "@/lib/admin";
+import { useAdminData, fmtStay } from "@/lib/admin";
 import { StatusMenu } from "@/components/StatusMenu";
 import { Dropdown } from "@/components/Dropdown";
 import { spentToDate } from "@/lib/costs";
@@ -240,7 +240,7 @@ function Dashboard() {
               <div>
                 <p className="font-medium">{r.guestName}</p>
                 <p className="text-sm text-soft">
-                  {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {r.guests}{" "}
+                  {fmtStay(r, site)} · {r.guests}{" "}
                   {r.guests === 1 ? "host" : r.guests < 5 ? "hosté" : "hostů"}
                 </p>
               </div>

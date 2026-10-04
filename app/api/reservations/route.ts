@@ -132,6 +132,9 @@ export async function POST(req: NextRequest) {
           source: demo ? "demo" : "web",
           status: demo ? "paid" : "pending",
           expiresAt: demo ? null : new Date(Date.now() + HOLD_HOURS[payment] * 3_600_000),
+          // Časy pobytu platné v době rezervace — pozdější změna v ceníku je nezmění.
+          checkInTime: site.checkInTime,
+          checkOutTime: site.checkOutTime,
         },
       });
     });
@@ -160,8 +163,8 @@ export async function POST(req: NextRequest) {
     voucherCode: created.voucherCode,
     paid: created.status === "paid",
     demo,
-    checkInTime: site.checkInTime,
-    checkOutTime: site.checkOutTime,
+    checkInTime: created.checkInTime,
+    checkOutTime: created.checkOutTime,
   };
   await Promise.all([sendGuestConfirmation(mail), sendOwnerNotification(mail, site.contactEmail)]);
 

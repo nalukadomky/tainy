@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   useAdminData,
@@ -10,7 +10,7 @@ import {
   type Reservation,
 } from "@/lib/admin";
 import { czk, plural } from "@/lib/pricing";
-import { addDays, nightsOf, todayISO } from "@/lib/stay";
+import { addDays, isTime, nightsOf, stayTimes, todayISO } from "@/lib/stay";
 import { StatusMenu } from "@/components/StatusMenu";
 import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
@@ -55,7 +55,7 @@ const HATCH = {
 };
 
 export default function CalendarPage() {
-  const { slug, site, reservations, loading, error, setStatus, replaceReservation } = useAdminData();
+  const { slug, site, reservations, loading, error, setStatus, setTimes, replaceReservation } = useAdminData();
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const today = todayISO();
   const [cursor, setCursor] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
@@ -165,13 +165,18 @@ export default function CalendarPage() {
             {summary.revenue > 0 && ` · ${czk(summary.revenue)}`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPick(pick ? null : { start: "", last: null })}
-          className={pick ? "btn-ghost h-10 !px-4 !py-0 text-sm" : "btn-primary h-10 !px-4 !py-0 text-sm"}
-        >
-          {pick ? "Zrušit výběr" : "Zablokovat termín"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/kalendar/uklid" className="btn-ghost h-10 !px-4 !py-0 text-sm">
+            🧹 Úklid
+          </Link>
+          <button
+            type="button"
+            onClick={() => setPick(pick ? null : { start: "", last: null })}
+            className={pick ? "btn-ghost h-10 !px-4 !py-0 text-sm" : "btn-primary h-10 !px-4 !py-0 text-sm"}
+          >
+            {pick ? "Zrušit výběr" : "Zablokovat termín"}
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-line bg-surface p-3 sm:p-5">
@@ -368,6 +373,8 @@ export default function CalendarPage() {
               r={reservations.find((x) => x.id === detail.id) ?? detail.r}
               guests={guestsLabel(detail.r, site)}
               onStatus={(s) => setStatus(detail.id, s)}
+              times={site ? stayTimes(reservations.find((x) => x.id === detail.id) ?? detail.r, site) : null}
+              onTimes={(patch) => setTimes(detail.id, patch)}
               onReschedule={(r) => {
                 setDetail(null);
                 setRescheduling(r);
@@ -522,11 +529,15 @@ function StayDetail({
   r,
   guests,
   onStatus,
+  times,
+  onTimes,
   onReschedule,
 }: {
   r: Reservation;
   guests: string;
   onStatus: (s: Reservation["status"]) => Promise<void>;
+  times: { checkInTime: string; checkOutTime: string } | null;
+  onTimes: (patch: Partial<Pick<Reservation, "checkInTime" | "checkOutTime">>) => Promise<void>;
   onReschedule: (r: Reservation) => void;
 }) {
   const nights = nightsOf(iso(r.startDate), iso(r.endDate));
@@ -541,6 +552,15 @@ function StayDetail({
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-soft">Hosté</dt>
         <dd>{guests}</dd>
+        {times && (
+          <>
+            <dt className="pt-2 text-soft">Časy pobytu</dt>
+            <dd>
+              {/* key: při přepnutí na jinou rezervaci začnou pole znovu s jejími časy */}
+              <StayTimes key={r.id} times={times} onSave={onTimes} />
+            </dd>
+          </>
+        )}
         <dt className="text-soft">Zdroj</dt>
         <dd>{SOURCE_LABEL[r.source] ?? r.source}</dd>
         <dt className="text-soft">Cena</dt>
@@ -571,10 +591,80 @@ function StayDetail({
         <button type="button" className="btn-ghost !px-4 !py-2 text-sm" onClick={() => onReschedule(r)}>
           Změnit termín
         </button>
-        <Link href={`/r/${r.publicId}`} target="_blank" className="text-sm font-medium text-pine hover:underline">
-          Stránka pro hosta ↗
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/admin/kalendar/uklid" className="text-sm font-medium text-pine hover:underline">
+            🧹 Úklid po odjezdu
+          </Link>
+          <Link href={`/r/${r.publicId}`} target="_blank" className="text-sm font-medium text-pine hover:underline">
+            Stránka pro hosta ↗
+          </Link>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/** Check-in / check-out jedné rezervace — změna se uloží hned po výběru času. */
+function StayTimes({
+  times,
+  onSave,
+}: {
+  times: { checkInTime: string; checkOutTime: string };
+  onSave: (patch: Partial<Pick<Reservation, "checkInTime" | "checkOutTime">>) => Promise<void>;
+}) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+
+  async function save(key: "checkInTime" | "checkOutTime", value: string) {
+    if (timer.current) window.clearTimeout(timer.current);
+    if (!isTime(value) || value === times[key]) return;
+    setState("saving");
+    try {
+      await onSave({ [key]: value });
+      setState("saved");
+    } catch {
+      setState("error");
+    }
+  }
+
+  const field = (key: "checkInTime" | "checkOutTime", label: string) => (
+    <label className="flex items-center gap-1.5">
+      <span className="text-xs text-soft">{label}</span>
+      <input
+        type="time"
+        required
+        className="control w-[6.75rem]"
+        defaultValue={times[key]}
+        aria-label={key === "checkInTime" ? "Check-in (příjezd od)" : "Check-out (odjezd do)"}
+        // Uloží se chvíli po změně, nebo hned po opuštění pole.
+        onChange={(e) => {
+          const value = e.target.value;
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => save(key, value), 700);
+        }}
+        onBlur={(e) => save(key, e.target.value)}
+      />
+    </label>
+  );
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {field("checkInTime", "check-in od")}
+        {field("checkOutTime", "check-out do")}
+      </div>
+      <p className={`text-xs ${state === "error" ? "text-coral" : state === "saved" ? "text-pine" : "text-soft"}`} aria-live="polite">
+        {state === "saving"
+          ? "Ukládám…"
+          : state === "saved"
+            ? "✓ Časy pobytu uloženy"
+            : state === "error"
+              ? "Čas se nepodařilo uložit, zkus to znovu."
+              : "Jen pro tuhle rezervaci — výchozí časy jsou v Ceník a pobyt."}
+      </p>
     </div>
   );
 }

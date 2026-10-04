@@ -218,6 +218,16 @@ export function SiteView({
             multiline
             className="mt-3 whitespace-pre-line leading-relaxed text-soft"
           />
+          {site.checkInTime && site.checkOutTime && (
+            <div className="mt-5 flex flex-wrap gap-2 text-sm">
+              <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
+                Check-in <strong className="font-semibold">od {site.checkInTime}</strong>
+              </span>
+              <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
+                Check-out <strong className="font-semibold">do {site.checkOutTime}</strong>
+              </span>
+            </div>
+          )}
           {(site.contactEmail || site.contactPhone || editing) && (
             <div className="mt-6 rounded-2xl border border-line bg-surface p-5">
               <h3 className="font-display text-lg font-semibold">Kontakt</h3>

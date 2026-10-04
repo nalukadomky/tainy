@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (count === 0) redirect("/onboarding");
 
   return (
-    <div className="admin-shell min-h-dvh bg-bg pb-24 lg:pb-10">
+    <div className="admin-shell min-h-dvh bg-bg pb-28 sm:pb-10">
       <AdminNav />
       <main className="mx-auto max-w-4xl px-5 pt-6">{children}</main>
     </div>

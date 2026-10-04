@@ -5,7 +5,7 @@ import { blockedRanges, lockSite } from "@/lib/availability";
 import { pricedCategories } from "@/lib/pricing";
 import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { quoteForSite } from "@/lib/quote";
-import { fromISO, isRangeFree, nightsOf, toISO, todayISO } from "@/lib/stay";
+import { fromISO, isRangeFree, nightsOf, stayTimes, toISO, todayISO } from "@/lib/stay";
 import { sendGuestDateChange } from "@/lib/email";
 import { discountBase, discountFor } from "@/lib/voucher";
 
@@ -163,8 +163,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         voucherCode: updated.voucherCode,
         paid,
         demo: updated.source === "demo",
-        checkInTime: site.checkInTime,
-        checkOutTime: site.checkOutTime,
+        ...stayTimes(updated, site),
       },
       old,
       paid ? Math.max(0, updated.totalPrice - reservation.totalPrice) : 0
