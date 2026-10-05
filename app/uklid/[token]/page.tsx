@@ -457,7 +457,7 @@ function Detail({
             inputMode="numeric"
             min={0}
             max={24}
-            className="control w-20 text-center text-lg"
+            className="control w-20 text-center !text-lg"
             value={hours}
             disabled={locked}
             aria-label="Hodiny"
@@ -473,7 +473,7 @@ function Detail({
             min={0}
             max={59}
             step={5}
-            className="control w-20 text-center text-lg"
+            className="control w-20 text-center !text-lg"
             value={mins}
             disabled={locked}
             aria-label="Minuty"
