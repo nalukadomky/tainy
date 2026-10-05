@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ke
           if (body.cleanerId) {
             const cleaner = await tx.cleaner.findFirst({ where: { id: String(body.cleanerId), siteId } });
             // Uklízečka mezitím mohla být smazaná (stránka v jiném okně ji ještě nabízí)
-            if (!cleaner) throw new HttpError(404, "Tahle uklízečka už neexistuje — seznam jsem obnovil.");
+            if (!cleaner) throw new HttpError(404, "Tenhle člen personálu už neexistuje — seznam jsem obnovil.");
             cleanerId = cleaner.id;
           }
           if (cleaning.paid) throw new HttpError(409, "Zaplacený úklid už nejde přeřadit.");
@@ -94,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ke
 
         // Zaplaceno ↔ záznam v Nákladech
         if (body.paid === true && !cleaning.paid) {
-          if (!cleaning.cleaner) throw new HttpError(400, "Nejdřív přiřaď uklízečku.");
+          if (!cleaning.cleaner) throw new HttpError(400, "Nejdřív vyber, kdo bude uklízet.");
           const amount = cleaningAmount(cleaning.cleaner, cleaning.minutes);
           const when = day ? day.toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", timeZone: "UTC" }) : "";
           const cost =

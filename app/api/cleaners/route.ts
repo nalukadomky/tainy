@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const guard = await requireSiteOwnerBySlug(String(body.site ?? ""));
   if (!guard.ok) return deny(guard.status);
   const name = String(body.name ?? "").trim().slice(0, 60);
-  if (!name) return NextResponse.json({ error: "Napiš jméno uklízečky." }, { status: 400 });
+  if (!name) return NextResponse.json({ error: "Napiš jméno." }, { status: 400 });
   const cleaner = await prisma.cleaner.create({
     data: { siteId: guard.site.id, name, token: newCleanerToken(), ...readPay(body) },
     include: { _count: { select: { cleanings: true } } },

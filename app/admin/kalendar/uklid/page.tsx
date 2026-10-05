@@ -201,7 +201,7 @@ export default function CleaningPage() {
           </Link>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Úklid</h1>
           <p className="mt-1 text-sm text-soft">
-            Úklidy po odjezdu hostů. Každá uklízečka má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.
+            Úklidy po odjezdu hostů. Každý člen personálu má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.
           </p>
         </div>
       </div>
@@ -210,8 +210,8 @@ export default function CleaningPage() {
         {(
           [
             ["uklidy", "Úklidy", toPay ? `${toPay} k zaplacení` : "Přiřazení a průběh"],
-            ["uklizecky", "Uklízečky", cleaners ? `${cleaners.filter((c) => c.active).length} aktivní` : ""],
-            ["nastaveni", "Nastavení", "Úkoly a co uklízečky uvidí"],
+            ["uklizecky", "Personál", cleaners ? `${cleaners.filter((c) => c.active).length} aktivní` : ""],
+            ["nastaveni", "Nastavení", "Úkoly a co personál uvidí"],
           ] as const
         ).map(([t, label, hint]) => (
           <button
@@ -347,7 +347,7 @@ function Cleanings({
         <div className="flex items-center gap-3">
           {active.length === 0 && (
             <button type="button" onClick={onNoCleaners} className="text-sm font-medium text-pine hover:underline">
-              Nejdřív přidej uklízečku →
+              Nejdřív přidej personál →
             </button>
           )}
           <button
@@ -481,7 +481,7 @@ function CleaningCard({
                   item.createdBy === "cleaner" ? "bg-pine/10 text-pine" : "bg-bg text-soft"
                 }`}
               >
-                {item.createdBy === "cleaner" ? "Zapsala uklízečka" : "Ruční úklid"}
+                {item.createdBy === "cleaner" ? "Zapsal personál" : "Ruční úklid"}
               </span>
             </p>
           )}
@@ -519,9 +519,9 @@ function CleaningCard({
           {c?.status === "done" && !c.paid && (
             <button
               type="button"
-              onClick={() => run({ reopen: true }, "Uklízečka teď může úklid upravit a znovu ukončit.")}
+              onClick={() => run({ reopen: true }, "Personál teď může úklid upravit a znovu ukončit.")}
               className="text-xs font-medium text-pine hover:underline"
-              title="Ukončený úklid uklízečka sama měnit nemůže"
+              title="Ukončený úklid už personál sám měnit nemůže"
             >
               Povolit úpravu
             </button>
@@ -531,7 +531,7 @@ function CleaningCard({
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-3">
         <Dropdown
-          label="Uklízečka"
+          label="Kdo uklízí"
           size="sm"
           value={c?.cleanerId ?? ""}
           onChange={(v) => run({ cleanerId: v || null })}
@@ -592,7 +592,7 @@ function CleaningCard({
             >
               <p>
                 „{item.title}" {day(item.window.date)} zmizí z kalendáře
-                {c?.cleaner ? ` i uklízečce ${c.cleaner.name}` : ""}.
+                {c?.cleaner ? ` — ${c.cleaner.name} ho už neuvidí` : ""}.
               </p>
             </ConfirmDialog>
           )}
@@ -654,7 +654,7 @@ function CleaningCard({
           )}
           {c?.note && (
             <p className="rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-sm">
-              <span className="font-semibold">💬 {c.cleaner?.name ?? "Uklízečka"} píše:</span> {c.note}
+              <span className="font-semibold">💬 {c.cleaner?.name ?? "Personál"} píše:</span> {c.note}
             </p>
           )}
         </div>
@@ -694,7 +694,7 @@ function AddCleaning({
         <input type="date" className="control" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Datum úklidu" />
         <input type="time" className="control w-[6.75rem]" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Čas úklidu" />
         <Dropdown
-          label="Uklízečka"
+          label="Kdo uklízí"
           size="sm"
           value={cleanerId}
           onChange={setCleanerId}
@@ -740,11 +740,11 @@ function Cleaners({
     });
     const data = await res.json().catch(() => ({}));
     setSaving(false);
-    if (!res.ok) return toast(data.error || "Uklízečku se nepodařilo přidat.");
+    if (!res.ok) return toast(data.error || "Člena personálu se nepodařilo přidat.");
     setCleaners((list) => [...(list ?? []), data]);
     setName("");
     setRate("");
-    toast(`${data.name} přidána — pošli jí odkaz.`, "success");
+    toast(`${data.name} je v personálu — pošli odkaz.`, "success");
   }
 
   // Jméno, platba, sazba a aktivita se ukážou hned, uloží se na pozadí.
@@ -766,7 +766,7 @@ function Cleaners({
     const data = await res?.json().catch(() => ({}));
     if (!res?.ok) {
       reload();
-      return toast(res?.status === 404 ? "Tahle uklízečka už neexistuje — seznam jsem obnovil." : data?.error || "Změnu se nepodařilo uložit.");
+      return toast(res?.status === 404 ? "Tenhle člen personálu už neexistuje — seznam jsem obnovil." : data?.error || "Změnu se nepodařilo uložit.");
     }
     if (body.newLink) {
       setCleaners((list) => list?.map((x) => (x.id === c.id ? { ...x, token: data.token } : x)) ?? list);
@@ -779,10 +779,10 @@ function Cleaners({
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       reload();
-      return toast(res.status === 404 ? "Tahle uklízečka už neexistuje — seznam jsem obnovil." : data.error || "Uklízečku se nepodařilo smazat.");
+      return toast(res.status === 404 ? "Tenhle člen personálu už neexistuje — seznam jsem obnovil." : data.error || "Člena personálu se nepodařilo smazat.");
     }
     setCleaners((list) => list?.filter((x) => x.id !== c.id) ?? list);
-    toast("Uklízečka smazána.", "success");
+    toast("Odebráno z personálu.", "success");
   }
 
   async function copy(c: Cleaner) {
@@ -805,7 +805,7 @@ function Cleaners({
     copy(c);
   }
 
-  if (!cleaners) return <p className="py-10 text-center text-soft">Načítám uklízečky…</p>;
+  if (!cleaners) return <p className="py-10 text-center text-soft">Načítám personál…</p>;
 
   return (
     <div className="space-y-4">
@@ -815,7 +815,7 @@ function Cleaners({
             <input
               className="control max-w-xs font-semibold"
               defaultValue={c.name}
-              aria-label="Jméno uklízečky"
+              aria-label="Jméno"
               onBlur={(e) => e.target.value.trim() !== c.name && update(c, { name: e.target.value }, "Jméno uloženo.")}
             />
             <label className="flex cursor-pointer items-center gap-2 text-sm" title={c.active ? "Deaktivovat" : "Aktivovat"}>
@@ -877,7 +877,7 @@ function Cleaners({
       ))}
 
       <form onSubmit={add} className="space-y-3 rounded-2xl border border-dashed border-line bg-surface p-4">
-        <p className="font-display text-lg font-semibold">Přidat uklízečku</p>
+        <p className="font-display text-lg font-semibold">Přidat do personálu</p>
         <div className="flex flex-wrap gap-2">
           <input className="control min-w-0 flex-1" placeholder="Jméno, např. Jana" value={name} onChange={(e) => setName(e.target.value)} />
           <Dropdown
@@ -899,7 +899,7 @@ function Cleaners({
             {saving ? "Přidávám…" : "Přidat"}
           </button>
         </div>
-        <p className="text-xs text-soft">Každá uklízečka dostane vlastní odkaz. Přihlašovat se nemusí.</p>
+        <p className="text-xs text-soft">Každý dostane vlastní odkaz. Přihlašovat se nemusí.</p>
       </form>
 
       {confirmLink && (
@@ -913,7 +913,7 @@ function Cleaners({
           onCancel={() => setConfirmLink(null)}
         >
           <p>
-            Starý odkaz pro {confirmLink.name} přestane fungovat. Hodí se, když se dostal k někomu dalšímu. Nový odkaz jí pak
+            Starý odkaz pro {confirmLink.name} přestane fungovat. Hodí se, když se dostal k někomu dalšímu. Nový odkaz pak
             musíš poslat znovu.
           </p>
         </ConfirmDialog>
@@ -1012,7 +1012,7 @@ function Settings({
 
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
         <div>
-          <h2 className="font-display text-lg font-semibold">Co uklízečky uvidí</h2>
+          <h2 className="font-display text-lg font-semibold">Co personál uvidí</h2>
           <p className="text-sm text-soft">Termíny a časy příjezdů a odjezdů vidí vždy. O hostech jen to, co tu zaškrtneš.</p>
         </div>
         {CLEANER_FIELDS.map((f) => (
@@ -1030,7 +1030,7 @@ function Settings({
             {f.label}
           </label>
         ))}
-        <p className="rounded-xl bg-bg px-3 py-2 text-xs text-soft">🔒 Cenu pobytu ani e-mail hosta uklízečky nikdy neuvidí.</p>
+        <p className="rounded-xl bg-bg px-3 py-2 text-xs text-soft">🔒 Cenu pobytu ani e-mail hosta personál nikdy neuvidí.</p>
       </div>
     </div>
   );

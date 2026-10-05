@@ -37,7 +37,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!guard.ok) return deny(guard.status);
   const count = await prisma.cleaning.count({ where: { cleanerId: id } });
   if (count > 0) {
-    return NextResponse.json({ error: "Uklízečka už má úklidy — můžeš ji jen deaktivovat." }, { status: 409 });
+    return NextResponse.json({ error: "Tenhle člen personálu už má úklidy — můžeš ho jen deaktivovat." }, { status: 409 });
   }
   await prisma.cleaner.delete({ where: { id } });
   return NextResponse.json({ ok: true });

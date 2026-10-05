@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   let cleanerId: string | null = null;
   if (body.cleanerId) {
     const cleaner = await prisma.cleaner.findFirst({ where: { id: String(body.cleanerId), siteId } });
-    if (!cleaner) return NextResponse.json({ error: "Tahle uklízečka už neexistuje — seznam jsem obnovil." }, { status: 404 });
+    if (!cleaner) return NextResponse.json({ error: "Tenhle člen personálu už neexistuje — seznam jsem obnovil." }, { status: 404 });
     cleanerId = cleaner.id;
   }
   const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId }, select: { cleaningChecklist: true } });

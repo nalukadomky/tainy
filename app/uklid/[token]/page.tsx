@@ -254,7 +254,7 @@ function Card({
                 : `Úklid od ${c.window.from} — po odjezdu hostů`}
             </p>
             {c.ownCreated && (
-              <span className="mt-1 inline-block rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-soft">Zapsala jsi</span>
+              <span className="mt-1 inline-block rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-soft">Tvůj zápis</span>
             )}
           </div>
           {locked ? (
