@@ -5,6 +5,7 @@ import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { fmtDate, type Reservation } from "@/lib/admin";
 import { czk, plural } from "@/lib/pricing";
 import { nightsOf } from "@/lib/stay";
+import { Skeleton } from "@/components/Skeleton";
 
 // Změna termínu rezervace: výběr v kalendáři (obsazenost bez této rezervace),
 // náhled nové ceny podle ceníku a volba, jestli ji použít.
@@ -119,7 +120,11 @@ export function RescheduleDialog({
 
         <div className="mt-4">
           {blocked === null ? (
-            <p className="py-10 text-center text-sm text-soft">Načítám obsazenost…</p>
+            <div role="status" aria-label="Načítám obsazenost" className="grid grid-cols-7 gap-1.5 py-2">
+              {Array.from({ length: 35 }, (_, i) => (
+                <Skeleton key={i} className="aspect-square w-full" />
+              ))}
+            </div>
           ) : (
             <DayPicker
               booked={blocked}

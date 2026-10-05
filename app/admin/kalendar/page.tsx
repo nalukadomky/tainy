@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   useAdminData,
   fmtDate,
   guestsLabel,
   SOURCE_LABEL,
+  type Blackout,
   type Reservation,
 } from "@/lib/admin";
 import { czk, plural } from "@/lib/pricing";
@@ -14,12 +15,12 @@ import { addDays, isTime, nightsOf, stayTimes, todayISO } from "@/lib/stay";
 import { StatusMenu } from "@/components/StatusMenu";
 import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
+import { CalendarPageSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 // Kalendář obsazenosti: měsíční mřížka Po–Ne, pobyty jako pruhy přes dny.
 // Pruh začíná v polovině dne příjezdu a končí v polovině dne odjezdu (jako
 // v hotelu), takže odjezd a příjezd tentýž den se nepřekrývají.
-
-type Blackout = { id: string; startDate: string; endDate: string; reason: string };
 
 type Bar =
   | { kind: "stay"; id: string; start: string; end: string; label: string; r: Reservation }
@@ -55,24 +56,46 @@ const HATCH = {
 };
 
 export default function CalendarPage() {
-  const { slug, site, reservations, loading, error, setStatus, setTimes, replaceReservation } = useAdminData();
+  const { slug, site, reservations, blackouts, setBlackouts, loading, error, setStatus, setTimes, replaceReservation } =
+    useAdminData();
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const today = todayISO();
   const [cursor, setCursor] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
-  const [blackouts, setBlackouts] = useState<Blackout[]>([]);
+  const toast = useToast();
+
+  // Blokace se v kalendáři ukáže hned, uloží se na pozadí. Když termín mezitím
+  // obsadila rezervace (server vrátí 409), blokace zmizí a ozve se proč.
+  async function createBlackout(start: string, end: string, reason: string) {
+    const tmp: Blackout = { id: `tmp-${Date.now()}`, startDate: start, endDate: end, reason };
+    setBlackouts((list) => [...list, tmp]);
+    setPick(null);
+    const res = await fetch("/api/blackouts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: slug, start, end, reason }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => ({}));
+      setBlackouts((list) => list.filter((b) => b.id !== tmp.id));
+      toast.show(data?.error || "Blokaci se nepodařilo uložit.");
+      return;
+    }
+    const created: Blackout = await res.json();
+    setBlackouts((list) => list.map((b) => (b.id === tmp.id ? created : b)));
+  }
+
+  async function deleteBlackout(b: Blackout) {
+    if (b.id.startsWith("tmp-")) return; // ještě se ukládá
+    setBlackouts((list) => list.filter((x) => x.id !== b.id));
+    const res = await fetch(`/api/blackouts/${b.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      setBlackouts((list) => [...list, b]);
+      toast.show("Blokaci se nepodařilo zrušit, zkus to znovu.");
+    }
+  }
   const [detail, setDetail] = useState<Bar | null>(null);
   // Výběr blokace: první klik = začátek, druhý = poslední den (včetně).
   const [pick, setPick] = useState<{ start: string; last: string | null } | null>(null);
-
-  const loadBlackouts = useCallback(async () => {
-    if (!slug) return;
-    const res = await fetch(`/api/blackouts?site=${slug}`);
-    if (res.ok) setBlackouts(await res.json());
-  }, [slug]);
-
-  useEffect(() => {
-    loadBlackouts();
-  }, [loadBlackouts]);
 
   const bars: Bar[] = useMemo(
     () => [
@@ -151,11 +174,12 @@ export default function CalendarPage() {
   const inPick = (day: string) =>
     !!pick && (pick.last ? day >= pick.start && day <= pick.last : day === pick.start);
 
-  if (loading) return <p className="py-16 text-center text-soft">Načítám kalendář…</p>;
+  if (loading) return <CalendarPageSkeleton />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
     <div className="space-y-5">
+      {toast.node}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Kalendář</h1>
@@ -308,10 +332,7 @@ export default function CalendarPage() {
           start={pick.start}
           last={pick.last}
           onCancel={() => setPick(null)}
-          onDone={async () => {
-            setPick(null);
-            await loadBlackouts();
-          }}
+          onSubmit={(reason) => createBlackout(pick.start, addDays(pick.last!, 1), reason)}
         />
       )}
 
@@ -383,13 +404,10 @@ export default function CalendarPage() {
           ) : (
             <BlockDetail
               b={detail.b}
-              onDelete={async () => {
+              onDelete={() => {
                 if (!confirm("Zrušit tuhle blokaci? Termín bude znovu k rezervaci.")) return;
-                const res = await fetch(`/api/blackouts/${detail.id}`, { method: "DELETE" });
-                if (res.ok) {
-                  setDetail(null);
-                  await loadBlackouts();
-                }
+                setDetail(null);
+                deleteBlackout(detail.b);
               }}
             />
           )}
@@ -431,36 +449,23 @@ function Legend({
 }
 
 function BlockPanel({
-  slug,
   start,
   last,
   onCancel,
-  onDone,
+  onSubmit,
 }: {
   slug: string;
   start: string;
   last: string;
   onCancel: () => void;
-  onDone: () => Promise<void>;
+  onSubmit: (reason: string) => void;
 }) {
   const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const end = addDays(last, 1);
   const days = nightsOf(start, end);
 
-  async function submit() {
-    setSaving(true);
-    setError("");
-    const res = await fetch("/api/blackouts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: slug, start, end, reason }),
-    });
-    setSaving(false);
-    if (res.ok) return onDone();
-    const data = await res.json().catch(() => ({}));
-    setError(data.error || "Blokaci se nepodařilo uložit.");
+  function submit() {
+    onSubmit(reason.trim());
   }
 
   return (
@@ -480,16 +485,15 @@ function BlockPanel({
           value={reason}
           maxLength={80}
           onChange={(e) => setReason(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !saving && submit()}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
         />
-        <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" disabled={saving} onClick={submit}>
-          {saving ? "Ukládám…" : "Zablokovat"}
+        <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" onClick={submit}>
+          Zablokovat
         </button>
         <button type="button" className="btn-ghost h-10 !px-4 !py-0 text-sm" onClick={onCancel}>
           Zrušit
         </button>
       </div>
-      {error && <p className="mt-2 text-sm font-medium text-coral">{error}</p>}
     </div>
   );
 }

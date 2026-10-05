@@ -5,6 +5,7 @@ import type { SiteEditing } from "@/components/EditableText";
 import { SiteView, type SiteViewData } from "@/components/SiteView";
 import type { BookedRange } from "@/components/DayPicker";
 import type { PreviewMessage } from "@/components/LivePreview";
+import { Skeleton } from "@/components/Skeleton";
 
 // Vnitřek živého náhledu: běží v iframe v administraci (/admin/web) a vykresluje
 // web z neuloženého formuláře, který mu editor posílá přes postMessage.
@@ -45,7 +46,15 @@ export default function PreviewFrame() {
     };
   }, []);
 
-  if (!data) return <p className="py-24 text-center text-sm text-soft">Načítám náhled…</p>;
+  if (!data)
+    return (
+      <div className="min-h-dvh space-y-6 bg-cream p-6" role="status" aria-label="Načítám náhled">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-[50vh] w-full rounded-2xl" />
+        <Skeleton className="h-5 w-2/3" />
+        <Skeleton className="h-5 w-1/2" />
+      </div>
+    );
   return <SiteView site={data.site} booked={data.booked} preview editing={data.editable ? editing : undefined} />;
 }
 

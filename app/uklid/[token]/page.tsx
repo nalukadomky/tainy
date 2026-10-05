@@ -5,9 +5,10 @@ import { Wordmark } from "@/components/Logo";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { greetingName } from "@/lib/vocative";
-import { cleaningAmount, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
+import { cleaningAmount, cleaningStart, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
 import { czk, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
+import { Skeleton, CardsSkeleton } from "@/components/Skeleton";
 
 // Kalendář úklidů uklízečky (tajný odkaz, bez přihlášení). Vidí jen své úklidy,
 // termíny a časy, údaje o hostech, které majitel povolil, a svou odměnu — nikdy
@@ -139,7 +140,16 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
       </main>
     );
   }
-  if (!data) return <p className="py-24 text-center text-sm text-soft">Načítám úklidy…</p>;
+  if (!data)
+    return (
+      <main className="mx-auto min-h-dvh max-w-xl space-y-5 px-4 pt-6" role="status" aria-label="Načítám úklidy">
+        <Skeleton className="h-6 w-20" />
+        <Skeleton className="mt-6 h-9 w-48" />
+        <Skeleton className="h-4 w-56" />
+        <Skeleton className="h-11 w-full rounded-full" />
+        <CardsSkeleton count={3} />
+      </main>
+    );
 
   const todo = groups.today.length + groups.upcoming.length;
   const earnedTotal = groups.done.reduce((sum, c) => sum + (c.earned ?? 0), 0);
@@ -159,7 +169,13 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
           : "Teď nemáš žádný úklid. Až ti majitel nějaký přiřadí, objeví se tady."}
       </p>
 
-      <AddOwn token={token} onAdded={load} toast={toast.show} />
+      <AddOwn
+        token={token}
+        onAdded={load}
+        toast={toast.show}
+        addLocal={(c) => setData((d) => d && { ...d, cleanings: [...d.cleanings, c] })}
+        removeLocal={(id) => setData((d) => d && { ...d, cleanings: d.cleanings.filter((c) => c.id !== id) })}
+      />
 
       <Section title="Dnes a po termínu" items={groups.today} open={open} setOpen={setOpen} patch={patch} remove={remove} highlight />
       <Section title="Nadcházející" items={groups.upcoming} open={open} setOpen={setOpen} patch={patch} remove={remove} />
@@ -567,35 +583,54 @@ function AddOwn({
   token,
   onAdded,
   toast,
+  addLocal,
+  removeLocal,
 }: {
   token: string;
   onAdded: () => Promise<void> | void;
   toast: (text: string, tone?: "error" | "success") => void;
+  addLocal: (c: Cleaning) => void;
+  removeLocal: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("");
   const [title, setTitle] = useState("");
-  const [saving, setSaving] = useState(false);
 
+  // Zapsaný úklid se v seznamu ukáže hned; úkoly a další hosty doplní server.
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !date) return;
-    setSaving(true);
-    const res = await fetch(`/api/uklid/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, time, title }),
-    }).catch(() => null);
-    setSaving(false);
-    if (!res?.ok) {
-      const json = await res?.json().catch(() => ({}));
-      return toast(json?.error || "Úklid se nepodařilo zapsat.");
-    }
-    toast("Úklid zapsaný — majitel ho uvidí v přehledu.", "success");
+    const tmpId = `tmp-${Date.now()}`;
+    addLocal({
+      id: tmpId,
+      kind: "manual",
+      title: title.trim(),
+      ownCreated: true,
+      startsAt: cleaningStart(date, time).toISOString(),
+      window: { date, from: time, nextArrival: null, sameDay: false },
+      checklist: [],
+      minutes: null,
+      status: "todo",
+      note: "",
+      paid: false,
+      amount: null,
+    });
+    const body = { date, time, title };
     setTitle("");
     setTime("");
     setOpen(false);
+    toast("Úklid zapsaný — majitel ho uvidí v přehledu.", "success");
+    const res = await fetch(`/api/uklid/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const json = await res?.json().catch(() => ({}));
+      removeLocal(tmpId);
+      return toast(json?.error || "Úklid se nepodařilo zapsat.");
+    }
     onAdded();
   }
 
@@ -624,8 +659,8 @@ function AddOwn({
         <button type="button" className="btn-ghost flex-1 !py-2.5 text-sm" onClick={() => setOpen(false)}>
           Zrušit
         </button>
-        <button type="submit" className="btn-primary flex-1 !py-2.5 text-sm" disabled={saving || !title.trim() || !date}>
-          {saving ? "Zapisuju…" : "Zapsat"}
+        <button type="submit" className="btn-primary flex-1 !py-2.5 text-sm" disabled={!title.trim() || !date}>
+          Zapsat
         </button>
       </div>
     </form>

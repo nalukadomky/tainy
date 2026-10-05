@@ -147,3 +147,17 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 .preview-in { animation: preview-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* Ghost loader: jemně přelévající se šedá plocha */
+.skeleton {
+  background: linear-gradient(90deg, #ece6da 0%, #f5f1e9 50%, #ece6da 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}

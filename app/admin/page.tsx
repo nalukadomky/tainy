@@ -8,6 +8,7 @@ import { StatusMenu } from "@/components/StatusMenu";
 import { Dropdown } from "@/components/Dropdown";
 import { spentToDate } from "@/lib/costs";
 import { czk, nightsBetween } from "@/lib/pricing";
+import { DashboardSkeleton } from "@/components/Skeleton";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`;
@@ -112,7 +113,7 @@ function Dashboard() {
     return { months, total, max: Math.max(...months.map((m) => m.revenue), 1) };
   }, [reservations, range]);
 
-  if (loading) return <p className="py-16 text-center text-soft">Načítám přehled…</p>;
+  if (loading) return <DashboardSkeleton />;
   if (error || !site)
     return (
       <div className="py-16 text-center">

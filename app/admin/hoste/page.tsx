@@ -15,6 +15,7 @@ import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
 import { VoucherBadge } from "@/components/VoucherBadge";
+import { ListPageSkeleton } from "@/components/Skeleton";
 
 type Show = "all" | "returning" | "upcoming" | "once";
 type Sort = "spent" | "last" | "stays" | "name";
@@ -146,7 +147,7 @@ export default function GuestsPage() {
     }
   }
 
-  if (loading) return <p className="py-16 text-center text-soft">Načítám hosty…</p>;
+  if (loading) return <ListPageSkeleton label="Načítám hosty" rows={6} />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (

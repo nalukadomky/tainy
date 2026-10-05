@@ -107,18 +107,34 @@ async function firstOwnedSlug(): Promise<string | null> {
   }
 }
 
-// Datový hook administrace: načte web + rezervace + náklady pro web přihlášeného
+// Poslední načtená data administrace (v paměti prohlížeče). Při přechodu mezi
+// stránkami se ukážou hned a na pozadí se tiše obnoví — žádné čekání na server.
+let cache: { slug: string; site: Site; reservations: Reservation[]; costs: Cost[]; blackouts: Blackout[] } | null = null;
+const cached = () => (typeof window !== "undefined" && cache && cache.slug === getSiteSlug() ? cache : null);
+
+/** Blokace termínu majitelem; `endDate` je den po posledním blokovaném dni. */
+export type Blackout = { id: string; startDate: string; endDate: string; reason: string };
+
+// Datový hook administrace: načte web + rezervace + náklady + blokace pro web přihlášeného
 // uživatele (uložený v localStorage, jinak jeho první web).
 export function useAdminData() {
-  const [slug, setSlug] = useState<string | null>(null);
-  const [site, setSite] = useState<Site | null>(null);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [costs, setCosts] = useState<Cost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [slug, setSlug] = useState<string | null>(() => cached()?.slug ?? null);
+  const [site, setSite] = useState<Site | null>(() => cached()?.site ?? null);
+  const [reservations, setReservations] = useState<Reservation[]>(() => cached()?.reservations ?? []);
+  const [costs, setCosts] = useState<Cost[]>(() => cached()?.costs ?? []);
+  const [blackouts, setBlackouts] = useState<Blackout[]>(() => cached()?.blackouts ?? []);
+  // Načítání (a ghost loader) jen poprvé — s daty z mezipaměti se obnovuje potichu.
+  const [loading, setLoading] = useState(() => !cached());
   const [error, setError] = useState("");
 
+  // Každá změna dat (i optimistická úprava) se propíše do mezipaměti.
+  useEffect(() => {
+    if (slug && site) cache = { slug, site, reservations, costs, blackouts };
+  }, [slug, site, reservations, costs, blackouts]);
+
   const reload = useCallback(async (s?: string) => {
-    setLoading(true);
+    const silent = !!cache && cache.slug === (s ?? getSiteSlug());
+    if (!silent) setLoading(true);
     setError("");
     try {
       let useSlug = s ?? getSiteSlug();
@@ -134,10 +150,11 @@ export function useAdminData() {
       }
       setSlug(useSlug);
 
-      const [siteRes, resRes, costRes] = await Promise.all([
+      const [siteRes, resRes, costRes, blockRes] = await Promise.all([
         fetch(`/api/sites/${useSlug}`),
         fetch(`/api/reservations?site=${useSlug}`),
         fetch(`/api/costs?site=${useSlug}`),
+        fetch(`/api/blackouts?site=${useSlug}`),
       ]);
 
       // Uložený web už není náš (403) nebo neexistuje (404) — zkus první vlastní
@@ -157,6 +174,11 @@ export function useAdminData() {
       setSite(await siteRes.json());
       setReservations(await resRes.json());
       setCosts(costRes.ok ? await costRes.json() : []);
+      // Blokace, které se teprve ukládají (tmp-…), odpověď nesmí smazat.
+      if (blockRes.ok) {
+        const fresh: Blackout[] = await blockRes.json();
+        setBlackouts((list) => [...fresh, ...list.filter((b) => b.id.startsWith("tmp-"))]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Načtení dat selhalo.");
     } finally {
@@ -168,15 +190,25 @@ export function useAdminData() {
     reload();
   }, [reload]);
 
-  // Změna stavu bez znovunačtení celé stránky: seznam se upraví na místě.
+  // Změna stavu se ukáže hned, ukládá se na pozadí; při chybě se vrátí původní.
   const setStatus = useCallback(async (id: string, status: Reservation["status"]) => {
+    let before: Reservation["status"] | undefined;
+    setReservations((list) =>
+      list.map((r) => {
+        if (r.id !== id) return r;
+        before = r.status;
+        return { ...r, status };
+      })
+    );
     const res = await fetch(`/api/reservations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error("Stav se nepodařilo změnit.");
-    setReservations((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
+    }).catch(() => null);
+    if (!res?.ok) {
+      if (before) setReservations((list) => list.map((r) => (r.id === id ? { ...r, status: before! } : r)));
+      throw new Error("Stav se nepodařilo změnit.");
+    }
   }, []);
 
   /** Změní check-in / check-out jedné rezervace — hned v seznamu, při chybě vrátí původní. */
@@ -208,7 +240,7 @@ export function useAdminData() {
     setReservations((list) => list.map((r) => (r.id === updated.id ? updated : r)));
   }, []);
 
-  return { slug, site, setSite, reservations, costs, setCosts, loading, error, reload, setStatus, setTimes, replaceReservation };
+  return { slug, site, setSite, reservations, costs, setCosts, blackouts, setBlackouts, loading, error, reload, setStatus, setTimes, replaceReservation };
 }
 
 export function fmtDate(iso: string): string {

@@ -16,6 +16,7 @@ import {
   type VoucherKind,
   type VoucherStatus,
 } from "@/lib/voucher";
+import { ListPageSkeleton } from "@/components/Skeleton";
 
 type Voucher = {
   id: string;
@@ -73,7 +74,6 @@ export default function VouchersPage() {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | VoucherStatus>("all");
   const [open, setOpen] = useState<string | null>(null);
@@ -117,6 +117,7 @@ export default function VouchersPage() {
   }
 
   function startEdit(v: Voucher) {
+    if (v.id.startsWith("tmp-")) return; // ještě se ukládá
     setDraft({
       code: v.code,
       kind: v.kind,
@@ -152,7 +153,6 @@ export default function VouchersPage() {
       document.getElementById(`voucher-${draftProblem.field}`)?.focus();
       return;
     }
-    setSaving(true);
     setFormError("");
     const body = {
       site: slug,
@@ -164,26 +164,54 @@ export default function VouchersPage() {
       maxUses: draft.limited && draft.maxUses ? Number(draft.maxUses) : null,
       note: draft.note,
     };
-    const res = await fetch(editing === "new" ? "/api/vouchers" : `/api/vouchers/${editing}`, {
-      method: editing === "new" ? "POST" : "PATCH",
+    // Voucher se v seznamu ukáže hned a formulář se zavře; uložení běží na pozadí.
+    // Když ho server odmítne (např. obsazený kód), formulář se vrátí i s chybou.
+    const target = editing;
+    const savedDraft = draft;
+    const tmpId = `tmp-${Date.now()}`;
+    const optimistic: Voucher = {
+      ...(target !== "new" ? vouchers?.find((v) => v.id === target) : undefined),
+      id: target === "new" ? tmpId : target!,
+      code: body.code.trim().toUpperCase(),
+      kind: body.kind,
+      value: body.value,
+      validFrom: body.validFrom,
+      validTo: body.validTo,
+      maxUses: body.maxUses,
+      note: body.note,
+      active: target === "new" ? true : (vouchers?.find((v) => v.id === target)?.active ?? true),
+      uses: target === "new" ? 0 : (vouchers?.find((v) => v.id === target)?.uses ?? 0),
+      discountTotal: target === "new" ? 0 : (vouchers?.find((v) => v.id === target)?.discountTotal ?? 0),
+      reservations: target === "new" ? [] : (vouchers?.find((v) => v.id === target)?.reservations ?? []),
+    };
+    const before = vouchers;
+    setVouchers((list) =>
+      target === "new" ? [optimistic, ...(list ?? [])] : (list?.map((v) => (v.id === target ? optimistic : v)) ?? list)
+    );
+    setEditing(null);
+    toast.show(target === "new" ? `Voucher ${body.code} je vytvořený.` : "Změny jsou uložené.", "success");
+
+    const res = await fetch(target === "new" ? "/api/vouchers" : `/api/vouchers/${target}`, {
+      method: target === "new" ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    setSaving(false);
-    if (!res.ok) {
-      setFormError(data.error || "Voucher se nepodařilo uložit.");
-      toast.show(data.error || "Voucher se nepodařilo uložit.");
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    if (!res?.ok) {
+      setVouchers(before);
+      setDraft(savedDraft);
+      setEditing(target);
+      setFormError(data?.error || "Voucher se nepodařilo uložit.");
+      toast.show(data?.error || "Voucher se nepodařilo uložit.");
       return;
     }
-    toast.show(editing === "new" ? `Voucher ${draft.code} je vytvořený.` : "Změny jsou uložené.", "success");
-    setEditing(null);
-    await load();
+    load(); // doplní čísla ze serveru (použití, ID nového voucheru)
   }
 
   // Přepínač se změní hned (optimisticky), server se dotáhne na pozadí.
   // Když uložení selže, vrátíme původní stav a dáme vědět.
   async function toggle(v: Voucher) {
+    if (v.id.startsWith("tmp-")) return; // ještě se ukládá
     const active = !v.active;
     const setActive = (value: boolean) =>
       setVouchers((list) => list?.map((x) => (x.id === v.id ? { ...x, active: value } : x)) ?? list);
@@ -203,13 +231,15 @@ export default function VouchersPage() {
   }
 
   async function remove(v: Voucher) {
+    if (v.id.startsWith("tmp-")) return; // ještě se ukládá
     if (!confirm(`Smazat voucher ${v.code}?`)) return;
-    const res = await fetch(`/api/vouchers/${v.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data.error || "Voucher se nepodařilo smazat.");
+    setVouchers((list) => list?.filter((x) => x.id !== v.id) ?? list);
+    const res = await fetch(`/api/vouchers/${v.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => ({}));
+      toast.show(data?.error || "Voucher se nepodařilo smazat.");
+      load();
     }
-    await load();
   }
 
   async function copy(code: string) {
@@ -222,7 +252,7 @@ export default function VouchersPage() {
     }
   }
 
-  if (siteLoading || vouchers === null) return <p className="py-16 text-center text-soft">Načítám vouchery…</p>;
+  if (siteLoading || vouchers === null) return <ListPageSkeleton label="Načítám vouchery" tiles rows={4} />;
   if (siteError) return <p className="py-16 text-center text-soft">{siteError}</p>;
 
 
@@ -439,8 +469,8 @@ export default function VouchersPage() {
           {formError && <p className="text-sm font-medium text-coral">{formError}</p>}
 
           <div className="flex gap-2">
-            <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" disabled={saving} onClick={save}>
-              {saving ? "Ukládám…" : editing === "new" ? "Vytvořit voucher" : "Uložit změny"}
+            <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" onClick={save}>
+              {editing === "new" ? "Vytvořit voucher" : "Uložit změny"}
             </button>
             <button type="button" className="btn-ghost h-10 !px-4 !py-0 text-sm" onClick={() => setEditing(null)}>
               Zrušit

@@ -18,6 +18,7 @@ import {
   type ChecklistItem,
   type PayMode,
 } from "@/lib/cleaning";
+import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
 // správa uklízeček a jejich odkazů a nastavení, co uklízečky uvidí.
@@ -187,7 +188,8 @@ export default function CleaningPage() {
     [load, toast]
   );
 
-  if (loading || !site) return <p className="py-16 text-center text-soft">{error || "Načítám úklidy…"}</p>;
+  if (error) return <p className="py-16 text-center text-soft">{error}</p>;
+  if (loading || !site) return <CardsPageSkeleton label="Načítám úklidy" />;
 
   const toPay = (items ?? []).filter((i) => i.cleaning?.status === "done" && !i.cleaning.paid).length;
 
@@ -327,7 +329,7 @@ function Cleanings({
     return [...list].reverse();
   }, [items, filter, today]);
 
-  if (!items) return <p className="py-10 text-center text-soft">Načítám úklidy…</p>;
+  if (!items) return <CardsSkeleton count={3} />;
 
   const active = cleaners.filter((c) => c.active);
 
@@ -726,30 +728,42 @@ function Cleaners({
   const [name, setName] = useState("");
   const [payMode, setPayMode] = useState<PayMode>("hourly");
   const [rate, setRate] = useState("");
-  const [saving, setSaving] = useState(false);
   const [confirmLink, setConfirmLink] = useState<Cleaner | null>(null);
 
+  // Nový člen se v seznamu ukáže hned; odkaz doplní server (do té doby „Vytvářím odkaz…").
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    setSaving(true);
+    const tmp: Cleaner = {
+      id: `tmp-${Date.now()}`,
+      name: name.trim(),
+      token: "",
+      payMode,
+      rate: Math.max(0, Math.round(Number(rate) || 0)),
+      active: true,
+      _count: { cleanings: 0 },
+    };
+    setCleaners((list) => [...(list ?? []), tmp]);
+    setName("");
+    setRate("");
     const res = await fetch("/api/cleaners", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: slug, name, payMode, rate: Number(rate) || 0 }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setSaving(false);
-    if (!res.ok) return toast(data.error || "Člena personálu se nepodařilo přidat.");
-    setCleaners((list) => [...(list ?? []), data]);
-    setName("");
-    setRate("");
+      body: JSON.stringify({ site: slug, name: tmp.name, payMode, rate: tmp.rate }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    if (!res?.ok) {
+      setCleaners((list) => list?.filter((x) => x.id !== tmp.id) ?? list);
+      return toast(data?.error || "Člena personálu se nepodařilo přidat.");
+    }
+    setCleaners((list) => list?.map((x) => (x.id === tmp.id ? data : x)) ?? list);
     toast(`${data.name} je v personálu — pošli odkaz.`, "success");
   }
 
   // Jméno, platba, sazba a aktivita se ukážou hned, uloží se na pozadí.
   // Nový odkaz musí vygenerovat server, ten se ukáže až po odpovědi.
   async function update(c: Cleaner, body: Record<string, unknown>, ok?: string) {
+    if (c.id.startsWith("tmp-")) return; // ještě se ukládá
     const local: Partial<Cleaner> = {};
     if (typeof body.name === "string") local.name = body.name.trim();
     if (body.payMode === "hourly" || body.payMode === "flat") local.payMode = body.payMode;
@@ -775,14 +789,15 @@ function Cleaners({
   }
 
   async function remove(c: Cleaner) {
-    const res = await fetch(`/api/cleaners/${c.id}`, { method: "DELETE" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      reload();
-      return toast(res.status === 404 ? "Tenhle člen personálu už neexistuje — seznam jsem obnovil." : data.error || "Člena personálu se nepodařilo smazat.");
-    }
+    if (c.id.startsWith("tmp-")) return; // ještě se ukládá
     setCleaners((list) => list?.filter((x) => x.id !== c.id) ?? list);
     toast("Odebráno z personálu.", "success");
+    const res = await fetch(`/api/cleaners/${c.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => ({}));
+      reload();
+      toast(res?.status === 404 ? "Tenhle člen personálu už neexistuje — seznam jsem obnovil." : data?.error || "Člena personálu se nepodařilo smazat.");
+    }
   }
 
   async function copy(c: Cleaner) {
@@ -805,7 +820,7 @@ function Cleaners({
     copy(c);
   }
 
-  if (!cleaners) return <p className="py-10 text-center text-soft">Načítám personál…</p>;
+  if (!cleaners) return <CardsSkeleton count={2} />;
 
   return (
     <div className="space-y-4">
@@ -831,16 +846,25 @@ function Cleaners({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-bg px-3 py-2">
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-soft">{cleanerLink(c.token)}</span>
-            <button type="button" onClick={() => copy(c)} className="text-sm font-medium text-pine hover:underline">
-              Kopírovat
-            </button>
-            <button type="button" onClick={() => share(c)} className="text-sm font-medium text-pine hover:underline">
-              Poslat
-            </button>
-            <a href={`/uklid/${c.token}`} target="_blank" className="text-sm font-medium text-pine hover:underline">
-              Otevřít ↗
-            </a>
+            {c.token ? (
+              <>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-soft">{cleanerLink(c.token)}</span>
+                <button type="button" onClick={() => copy(c)} className="text-sm font-medium text-pine hover:underline">
+                  Kopírovat
+                </button>
+                <button type="button" onClick={() => share(c)} className="text-sm font-medium text-pine hover:underline">
+                  Poslat
+                </button>
+                <a href={`/uklid/${c.token}`} target="_blank" className="text-sm font-medium text-pine hover:underline">
+                  Otevřít ↗
+                </a>
+              </>
+            ) : (
+              <span className="flex flex-1 items-center gap-2 text-xs text-soft">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+                Vytvářím odkaz…
+              </span>
+            )}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -895,8 +919,8 @@ function Cleaners({
             value={rate}
             onChange={(e) => setRate(e.target.value)}
           />
-          <button type="submit" className="btn-primary h-10 !px-5 !py-0 text-sm" disabled={saving || !name.trim()}>
-            {saving ? "Přidávám…" : "Přidat"}
+          <button type="submit" className="btn-primary h-10 !px-5 !py-0 text-sm" disabled={!name.trim()}>
+            Přidat
           </button>
         </div>
         <p className="text-xs text-soft">Každý dostane vlastní odkaz. Přihlašovat se nemusí.</p>

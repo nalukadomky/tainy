@@ -16,6 +16,7 @@ import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
 import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
+import { ListPageSkeleton } from "@/components/Skeleton";
 
 type Filter = "all" | Reservation["status"];
 /** all | upcoming | past | měsíc příjezdu ve tvaru YYYY-MM */
@@ -94,7 +95,7 @@ export default function ReservationsPage() {
     setSource("all");
   }
 
-  if (loading) return <p className="py-16 text-center text-soft">Načítám rezervace…</p>;
+  if (loading) return <ListPageSkeleton label="Načítám rezervace" rows={6} />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (

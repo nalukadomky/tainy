@@ -6,6 +6,8 @@ import { czk } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
 import { REPEAT_LABEL, isActive, monthlyFixed, spentToDate, type Repeat } from "@/lib/costs";
+import { ListPageSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 const CATEGORIES = ["provoz", "energie", "služby", "úklid", "údržba", "pojištění", "vybavení", "jiné"];
 
@@ -18,7 +20,7 @@ export default function CostsPage() {
   const [category, setCategory] = useState("provoz");
   const [repeat, setRepeat] = useState<Repeat>("once");
   const [date, setDate] = useState(todayISO());
-  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   const totals = useMemo(() => {
     const revenue = reservations.filter((r) => r.status === "paid").reduce((s, r) => s + r.totalPrice, 0);
@@ -31,50 +33,66 @@ export default function CostsPage() {
   const ended = recurring.filter((c) => !isActive(c));
   const oneOff = costs.filter((c) => c.repeat === "once");
 
+  // Všechny úpravy se ukážou hned a ukládají se na pozadí; při chybě se vrátí a ozve toast.
+  const sortCosts = (list: Cost[]) => [...list].sort((a, b) => b.date.localeCompare(a.date));
+
   async function addCost() {
-    setSaving(true);
+    const tmpId = `tmp-${Date.now()}`;
+    const draft: Cost = { id: tmpId, label: label.trim(), amount: Math.round(Number(amount)), category, repeat, date, endDate: null };
+    setCosts((list) => sortCosts([draft, ...list]));
+    setLabel("");
+    setAmount("");
     const res = await fetch("/api/costs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: slug, label, amount: Number(amount), category, repeat, date }),
-    });
-    if (res.ok) {
-      const created: Cost = await res.json();
-      setCosts((list) => [created, ...list].sort((a, b) => b.date.localeCompare(a.date)));
-      setLabel("");
-      setAmount("");
+      body: JSON.stringify({ site: slug, label: draft.label, amount: draft.amount, category, repeat, date }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setCosts((list) => list.filter((x) => x.id !== tmpId));
+      return toast.show("Náklad se nepodařilo uložit, zkus to znovu.");
     }
-    setSaving(false);
+    const created: Cost = await res.json();
+    setCosts((list) => sortCosts(list.map((x) => (x.id === tmpId ? created : x))));
   }
 
   async function setEnd(c: Cost, endDate: string | null) {
+    if (c.id.startsWith("tmp-")) return; // ještě se ukládá
     if (endDate && !confirm(`Ukončit „${c.label}"? Od zítřka se přestane započítávat, dosavadní platby zůstanou.`)) return;
+    setCosts((list) => list.map((x) => (x.id === c.id ? { ...x, endDate } : x)));
     const res = await fetch(`/api/costs/${c.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endDate }),
-    });
-    if (res.ok) {
-      const updated: Cost = await res.json();
-      setCosts((list) => list.map((x) => (x.id === c.id ? updated : x)));
+    }).catch(() => null);
+    if (!res?.ok) {
+      setCosts((list) => list.map((x) => (x.id === c.id ? c : x)));
+      return toast.show("Změnu se nepodařilo uložit, zkus to znovu.");
     }
+    const updated: Cost = await res.json();
+    setCosts((list) => list.map((x) => (x.id === c.id ? updated : x)));
   }
 
   async function remove(c: Cost) {
+    if (c.id.startsWith("tmp-")) return; // ještě se ukládá
     const warn =
       c.repeat === "once"
         ? `Smazat náklad „${c.label}"?`
         : `Smazat „${c.label}" i s celou historií plateb? Pokud ho jen už neplatíš, použij raději Ukončit.`;
     if (!confirm(warn)) return;
-    const res = await fetch(`/api/costs/${c.id}`, { method: "DELETE" });
-    if (res.ok) setCosts((list) => list.filter((x) => x.id !== c.id));
+    setCosts((list) => list.filter((x) => x.id !== c.id));
+    const res = await fetch(`/api/costs/${c.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      setCosts((list) => sortCosts([...list, c]));
+      toast.show("Náklad se nepodařilo smazat, zkus to znovu.");
+    }
   }
 
-  if (loading) return <p className="py-16 text-center text-soft">Načítám náklady…</p>;
+  if (loading) return <ListPageSkeleton label="Načítám náklady" tiles />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
     <div className="space-y-5">
+      {toast.node}
       <h1 className="font-display text-3xl font-semibold tracking-tight">Náklady</h1>
 
       {/* Bilance */}
@@ -157,7 +175,7 @@ export default function CostsPage() {
           </label>
           <button
             className="btn-primary h-10 !px-5 !py-0 text-sm"
-            disabled={saving || !label.trim() || !(Number(amount) > 0) || !date}
+            disabled={!label.trim() || !(Number(amount) > 0) || !date}
             onClick={addCost}
           >
             + Přidat

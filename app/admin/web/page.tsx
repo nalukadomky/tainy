@@ -14,6 +14,7 @@ import { isTime } from "@/lib/stay";
 import { LivePreview, type PreviewSection } from "@/components/LivePreview";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { useToast } from "@/components/Toast";
+import { FormPageSkeleton } from "@/components/Skeleton";
 
 // Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
 function ibanPreview(account: string): string {
@@ -28,13 +29,17 @@ const TABS: Record<Tab, { label: string; hint: string }> = {
 };
 
 export default function SiteEditPage() {
-  const { slug, site, loading, error, reload } = useAdminData();
+  const { slug, site, setSite, loading, error, reload } = useAdminData();
   const [form, setForm] = useState<Site | null>(null);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [failed, setFailed] = useState(false);
 
+  // Formulář převezme data ze serveru — ale nepřepíše, co majitel mezitím
+  // napsal po kliknutí na „Uložit" (ukládá se na pozadí).
+  const sentRef = useRef<string | null>(null);
   useEffect(() => {
-    if (site) setForm(site);
+    if (!site) return;
+    setForm((f) => (!f || f.id !== site.id || !sentRef.current || JSON.stringify(f) === sentRef.current ? site : f));
   }, [site]);
 
   // Záložka se drží v adrese (?sekce=cenik), ať ji jde poslat odkazem a přežije obnovení.
@@ -84,18 +89,27 @@ export default function SiteEditPage() {
       toast.show("Vyplň čas check-inu i check-outu (Ceník a pobyt).");
       return;
     }
-    setSaving(true);
-    setSaved(false);
-    await fetch(`/api/sites/${slug}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    await reload();
-    window.dispatchEvent(new Event(SITES_CHANGED));
-    setSaving(false);
+    // „Uloženo" hned, ukládá se na pozadí. Při chybě se změny označí jako
+    // neuložené (zůstanou ve formuláři) a ozve se toast.
+    const sent = form;
+    sentRef.current = JSON.stringify(sent);
+    setFailed(false);
+    setSite(sent);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+    const res = await fetch(`/api/sites/${slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sent),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setSaved(false);
+      setFailed(true);
+      toast.show("Změny se nepodařilo uložit — zkus to znovu.");
+      return;
+    }
+    window.dispatchEvent(new Event(SITES_CHANGED));
+    reload(); // potichu doplní data ze serveru (např. ID nových sezón)
   }
 
   const categories = parseCategories(form?.guestCategories ?? "", form?.pricingMode);
@@ -113,8 +127,8 @@ export default function SiteEditPage() {
   const dirty = useMemo(() => {
     if (!form || !site) return false;
     const pick = ({ photos, heroStyle, heroPhoto, ...rest }: Site) => JSON.stringify(rest);
-    return pick(form) !== pick(site);
-  }, [form, site]);
+    return failed || pick(form) !== pick(site);
+  }, [form, site, failed]);
 
   // Potvrzení po návratu z builderu („Změny webu jsou uložené.")
   const toast = useToast();
@@ -139,7 +153,7 @@ export default function SiteEditPage() {
     };
   }, [dirty]);
 
-  if (loading || !form) return <p className="py-16 text-center text-soft">Načítám web…</p>;
+  if (loading || !form) return <FormPageSkeleton label="Načítám web" />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
@@ -265,8 +279,8 @@ export default function SiteEditPage() {
               </label>
             </div>
             <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" disabled={saving} onClick={save}>
-                {saving ? "Ukládám…" : "Uložit změny"}
+              <button className="btn-primary" onClick={save}>
+                Uložit změny
               </button>
               {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
             </div>
@@ -538,8 +552,8 @@ export default function SiteEditPage() {
             )}
 
             <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" disabled={saving} onClick={save}>
-                {saving ? "Ukládám…" : "Uložit změny"}
+              <button className="btn-primary" onClick={save}>
+                Uložit změny
               </button>
               {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
             </div>
@@ -647,8 +661,8 @@ export default function SiteEditPage() {
             </label>
 
             <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" disabled={saving} onClick={save}>
-                {saving ? "Ukládám…" : "Uložit změny"}
+              <button className="btn-primary" onClick={save}>
+                Uložit změny
               </button>
               {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
             </div>

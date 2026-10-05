@@ -16,6 +16,7 @@ import { AmenityPicker } from "@/components/AmenityPicker";
 import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { FLASH_KEY } from "@/components/Toast";
+import { Skeleton } from "@/components/Skeleton";
 
 // Builder (varianta B): web se upravuje přímo v sobě. Texty se přepisují
 // kliknutím do webu, sekce mají „Upravit", které otevře boční panel.
@@ -252,7 +253,9 @@ export default function BuilderPage() {
             </div>
           )}
           {loading || !form ? (
-            <p className="py-24 text-center text-sm text-soft">Načítám web…</p>
+            <div className="paper flex flex-1 items-start justify-center p-6" role="status" aria-label="Načítám web">
+              <Skeleton className="h-[70%] w-full max-w-3xl rounded-xl" />
+            </div>
           ) : (
             <DeviceStage device={device} slug={form.slug} frameRef={frameRef} title="Úpravy webu" />
           )}

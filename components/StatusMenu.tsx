@@ -23,7 +23,6 @@ export function StatusMenu({
   onChange: (status: Status) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -46,15 +45,9 @@ export function StatusMenu({
     setOpen(false);
     if (next === status) return;
     if (next === "cancelled" && !confirm(`Opravdu zrušit rezervaci hosta ${guestName}? Termín se uvolní.`)) return;
-    setBusy(true);
+    // Nový stav se ukáže hned (rodič ho mění optimisticky), ukládá se na pozadí.
     setError("");
-    try {
-      await onChange(next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Změna selhala.");
-    } finally {
-      setBusy(false);
-    }
+    onChange(next).catch((e) => setError(e instanceof Error ? e.message : "Změna selhala."));
   }
 
   return (
@@ -62,12 +55,11 @@ export function StatusMenu({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        disabled={busy}
         aria-haspopup="menu"
         aria-expanded={open}
         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition hover:ring-2 hover:ring-line disabled:opacity-50 ${STATUS_STYLE[status]}`}
       >
-        {busy ? "Ukládám…" : STATUS_LABEL[status]}
+        {STATUS_LABEL[status]}
         <span aria-hidden className="text-[9px] opacity-70">▾</span>
       </button>
       {open && (
