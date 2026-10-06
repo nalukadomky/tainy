@@ -150,15 +150,11 @@ export function useAdminData() {
       }
       setSlug(useSlug);
 
-      const [siteRes, resRes, costRes, blockRes] = await Promise.all([
-        fetch(`/api/sites/${useSlug}`),
-        fetch(`/api/reservations?site=${useSlug}`),
-        fetch(`/api/costs?site=${useSlug}`),
-        fetch(`/api/blackouts?site=${useSlug}`),
-      ]);
+      // Jeden požadavek na všechno — prohlížeč nemá frontu, přechody nečekají.
+      const res = await fetch(`/api/admin-data?site=${encodeURIComponent(useSlug)}`);
 
       // Uložený web už není náš (403) nebo neexistuje (404) — zkus první vlastní
-      if (!siteRes.ok || !resRes.ok) {
+      if (!res.ok) {
         const first = await firstOwnedSlug();
         if (!first) {
           window.location.href = "/onboarding";
@@ -171,14 +167,12 @@ export function useAdminData() {
         throw new Error("Web se nepodařilo načíst.");
       }
 
-      setSite(await siteRes.json());
-      setReservations(await resRes.json());
-      setCosts(costRes.ok ? await costRes.json() : []);
+      const data: { site: Site; reservations: Reservation[]; costs: Cost[]; blackouts: Blackout[] } = await res.json();
+      setSite(data.site);
+      setReservations(data.reservations);
+      setCosts(data.costs);
       // Blokace, které se teprve ukládají (tmp-…), odpověď nesmí smazat.
-      if (blockRes.ok) {
-        const fresh: Blackout[] = await blockRes.json();
-        setBlackouts((list) => [...fresh, ...list.filter((b) => b.id.startsWith("tmp-"))]);
-      }
+      setBlackouts((list) => [...data.blackouts, ...list.filter((b) => b.id.startsWith("tmp-"))]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Načtení dat selhalo.");
     } finally {

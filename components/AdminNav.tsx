@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { Logo } from "@/components/Logo";
 import { Dropdown } from "@/components/Dropdown";
 import { createClient } from "@/lib/supabase/client";
@@ -39,8 +40,9 @@ export function AdminNav() {
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileRef = useRef<HTMLElement>(null);
 
-  // Seznam webů obnovíme po každém přechodu a po uložení webu — jinak by
-  // přepínač po přejmenování nemovitosti ukazoval starý název.
+  // Seznam webů načteme jednou a znovu po uložení webu (SITES_CHANGED) — jinak by
+  // přepínač po přejmenování nemovitosti ukazoval starý název. Ne při každém
+  // přechodu: zbytečný požadavek by zdržoval přepínání sekcí.
   useEffect(() => {
     const load = () => {
       setCurrent(localStorage.getItem("tainy.site") ?? "");
@@ -52,7 +54,7 @@ export function AdminNav() {
     load();
     window.addEventListener(SITES_CHANGED, load);
     return () => window.removeEventListener(SITES_CHANGED, load);
-  }, [pathname]);
+  }, []);
 
   // Data administrace se načítají v hooku při mountu, takže přepnutí
   // nemovitosti znamená načíst stránku znovu — jinak by zůstala stará čísla.
@@ -65,6 +67,18 @@ export function AdminNav() {
   const matches = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`));
   const isActive = (href: string) => matches(href) && !ALL.some((h) => h.length > href.length && h.startsWith(href) && matches(h));
   const moreActive = MORE.some((i) => isActive(i.href));
+
+  // Všechny sekce se po otevření administrace přednačtou (i ty schované v „Více"),
+  // takže klik mezi nimi nečeká na server. Data si stránky berou z paměti
+  // (useAdminData) a obnovují je na pozadí.
+  useEffect(() => {
+    const hrefs = [...MAIN, ...MORE].map((i) => i.href);
+    const warm = () => {
+      for (const href of hrefs) router.prefetch(href, { kind: PrefetchKind.FULL });
+    };
+    const id = "requestIdleCallback" in window ? requestIdleCallback(warm) : setTimeout(warm, 300);
+    return () => ("cancelIdleCallback" in window ? cancelIdleCallback(id as number) : clearTimeout(id));
+  }, [router]);
 
   // Nabídky: zavřít po přechodu na jinou stránku, klikem mimo a Esc.
   useEffect(() => setMenu(null), [pathname]);
@@ -259,6 +273,7 @@ function NavLink({ item, active, tabIndex }: { item: Item; active: boolean; tabI
   return (
     <Link
       href={item.href}
+      prefetch
       tabIndex={tabIndex}
       className={`whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition ${
         active ? "bg-ink text-white" : "text-soft hover:bg-line/50 hover:text-ink"
@@ -286,6 +301,7 @@ function MenuLink({ item, active }: { item: Item; active: boolean }) {
   return (
     <Link
       href={item.href}
+      prefetch
       role="menuitem"
       className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition hover:bg-bg ${
         active ? "bg-pine/10 font-semibold text-pine" : "text-ink"
@@ -304,7 +320,7 @@ const tabClass = (active: boolean) =>
 
 function TabLink({ item, active }: { item: Item; active: boolean }) {
   return (
-    <Link href={item.href} aria-current={active ? "page" : undefined} className={tabClass(active)}>
+    <Link href={item.href} prefetch aria-current={active ? "page" : undefined} className={tabClass(active)}>
       <Icon name={item.icon} />
       <span className="truncate">{item.label}</span>
     </Link>
