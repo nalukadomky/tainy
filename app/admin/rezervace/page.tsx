@@ -24,8 +24,9 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { cancelReservationConfirm } from "@/components/StatusMenu";
 import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
+import { SwipeToPay } from "@/components/SwipeToPay";
 
-type Filter = "all" | Reservation["status"];
+type Filter = "all" | "active" | Reservation["status"];
 /** all | upcoming | past | měsíc příjezdu ve tvaru YYYY-MM */
 type Period = string;
 type Sort = "nearest" | "arrival-desc" | "arrival-asc" | "created-desc" | "price-desc";
@@ -36,7 +37,15 @@ function monthLabel(key: string): string {
 }
 
 export default function ReservationsPage() {
-  const { site, reservations, loading, error, setStatus: saveStatus, replaceReservation, setAccessCode } = useAdminData();
+  const {
+    site,
+    reservations,
+    loading,
+    error,
+    setStatus: saveStatus,
+    replaceReservation,
+    setAccessCode,
+  } = useAdminData();
   const toast = useToast();
   const confirmDlg = useConfirm();
   async function cancelStay(r: Reservation) {
@@ -72,7 +81,7 @@ export default function ReservationsPage() {
     if (window.matchMedia("(min-width: 640px)").matches) {
       setDetails(new Set([id]));
       requestAnimationFrame(() =>
-        document.getElementById(`rez-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })
+        document.getElementById(`rez-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
       );
     } else setSheetId(id);
   }, [reservations]);
@@ -100,7 +109,7 @@ export default function ReservationsPage() {
   // Měsíce a zdroje, které se v rezervacích opravdu vyskytují — nabízet prázdné volby nemá smysl.
   const months = useMemo(
     () => [...new Set(reservations.map((r) => r.startDate.slice(0, 7)))].sort().reverse(),
-    [reservations]
+    [reservations],
   );
   const sources = useMemo(() => [...new Set(reservations.map((r) => r.source))], [reservations]);
 
@@ -120,7 +129,7 @@ export default function ReservationsPage() {
   }, [reservations, query, period, source]);
 
   const shown = useMemo(() => {
-    const list = matching.filter((r) => filter === "all" || r.status === filter);
+    const list = matching.filter((r) => matchesFilter(r, filter));
     // „Od nejbližší“: probíhající a nadcházející od nejbližšího příjezdu, pak proběhlé od posledního
     const today = todayISO();
     const ahead = (r: Reservation) => r.endDate.slice(0, 10) >= today;
@@ -141,7 +150,7 @@ export default function ReservationsPage() {
     return list.sort(by[sort]);
   }, [matching, filter, sort]);
 
-  const count = (f: Filter) => matching.filter((r) => f === "all" || r.status === f).length;
+  const count = (f: Filter) => matching.filter((r) => matchesFilter(r, f)).length;
   const active = shown.filter((r) => r.status !== "cancelled");
   const sum = active.reduce((acc, r) => acc + r.totalPrice, 0);
   const nights = active.reduce((acc, r) => acc + nightsBetween(new Date(r.startDate), new Date(r.endDate)), 0);
@@ -225,6 +234,7 @@ export default function ReservationsPage() {
         {(
           [
             ["all", "Všechny"],
+            ["active", "Nejbližší aktivní"],
             ["pending", "Čekající"],
             ["paid", "Zaplacené"],
             ["cancelled", "Zrušené"],
@@ -234,9 +244,7 @@ export default function ReservationsPage() {
             key={id}
             onClick={() => setFilter(id)}
             className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-              filter === id
-                ? "border-ink bg-ink text-white"
-                : "border-line bg-surface text-soft hover:border-ink/30"
+              filter === id ? "border-ink bg-ink text-white" : "border-line bg-surface text-soft hover:border-ink/30"
             }`}
           >
             {label}
@@ -262,7 +270,8 @@ export default function ReservationsPage() {
           </strong>
           {active.length > 0 && (
             <>
-              {" "}· {czk(sum)} · {nights} {plural(nights, "noc", "noci", "nocí")}
+              {" "}
+              · {czk(sum)} · {nights} {plural(nights, "noc", "noci", "nocí")}
               {active.length < shown.length && " (bez zrušených)"}
             </>
           )}
@@ -281,121 +290,138 @@ export default function ReservationsPage() {
           </p>
         )}
         {shown.map((r) => (
-          <div
+          <SwipeToPay
             key={r.id}
             id={`rez-${r.id}`}
-            // Klik kamkoli do karty rozbalí detail — kromě tlačítek a odkazů uvnitř
-            // a kromě označení textu (např. kopírování e-mailu)
-            onClick={(e) => {
-              // Okna (kód k zámku…) jsou v portálu mimo kartu — jejich kliky sem jen probublají
-              if (!e.currentTarget.contains(e.target as Node)) return;
-              if ((e.target as HTMLElement).closest("button, a, input, select, [role=menu], [role=dialog]")) return;
-              if (window.getSelection()?.toString()) return;
-              // Na mobilu detail v okně, na větší obrazovce rozbalený v kartě
-              if (window.matchMedia("(min-width: 640px)").matches) toggleDetail(r.id);
-              else setSheetId(r.id);
+            className="scroll-mt-24"
+            enabled={r.status === "pending"}
+            onPay={() => {
+              setStatus(r.id, "paid");
+              toast.show(`${r.guestName}: zaplaceno`, "success");
             }}
-            className="scroll-mt-24 cursor-pointer rounded-2xl border border-line bg-surface p-5 transition hover:border-pine/30"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold">
-                  {r.guestName}
-                  {r.source !== "web" && (
-                    <span className="rounded-full border border-line px-2 py-0.5 font-sans text-[11px] font-semibold text-soft">
-                      {SOURCE_LABEL[r.source] ?? r.source}
+            <div
+              // Klik kamkoli do karty rozbalí detail — kromě tlačítek a odkazů uvnitř
+              // a kromě označení textu (např. kopírování e-mailu)
+              onClick={(e) => {
+                // Okna (kód k zámku…) jsou v portálu mimo kartu — jejich kliky sem jen probublají
+                if (!e.currentTarget.contains(e.target as Node)) return;
+                if ((e.target as HTMLElement).closest("button, a, input, select, [role=menu], [role=dialog]")) return;
+                if (window.getSelection()?.toString()) return;
+                // Na mobilu detail v okně, na větší obrazovce rozbalený v kartě
+                if (window.matchMedia("(min-width: 640px)").matches) toggleDetail(r.id);
+                else setSheetId(r.id);
+              }}
+              className="cursor-pointer rounded-2xl border border-line bg-surface p-5 transition hover:border-pine/30"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold">
+                    {r.guestName}
+                    {r.source !== "web" && (
+                      <span className="rounded-full border border-line px-2 py-0.5 font-sans text-[11px] font-semibold text-soft">
+                        {SOURCE_LABEL[r.source] ?? r.source}
+                      </span>
+                    )}
+                    <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-soft">
+                    <span>
+                      {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {nightsOf(r)}{" "}
+                      {plural(nightsOf(r), "noc", "noci", "nocí")} · {r.guests}{" "}
+                      {plural(r.guests, "host", "hosté", "hostů")}
                     </span>
-                  )}
-                  <VoucherBadge code={r.voucherCode} discount={r.discount} />
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-soft">
-                  <span>
-                    {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {nightsOf(r)} {plural(nightsOf(r), "noc", "noci", "nocí")} ·{" "}
-                    {r.guests} {plural(r.guests, "host", "hosté", "hostů")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleDetail(r.id)}
-                    aria-expanded={details.has(r.id)}
-                    className="hidden font-medium text-pine hover:underline sm:inline"
-                  >
-                    {details.has(r.id) ? "Skrýt detail ▴" : "Detail ▾"}
-                  </button>
-                </p>
-              </div>
-              <div className="flex shrink-0 items-start gap-1">
-                <div className="text-right">
-                  <p className="font-display text-lg font-semibold">{czk(r.totalPrice)}</p>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
-                    {STATUS_LABEL[r.status]}
-                  </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleDetail(r.id)}
+                      aria-expanded={details.has(r.id)}
+                      className="hidden font-medium text-pine hover:underline sm:inline"
+                    >
+                      {details.has(r.id) ? "Skrýt detail ▴" : "Detail ▾"}
+                    </button>
+                  </p>
                 </div>
-                {/* Mobil: akce v nabídce místo řady tlačítek */}
-                <ActionsMenu
-                  items={[
-                    r.status === "pending" && { label: "✓ Označit zaplaceno", run: () => setStatus(r.id, "paid") },
-                    r.status !== "cancelled" && { label: "Změnit termín", run: () => setRescheduling(r) },
-                    r.status !== "cancelled" &&
-                      r.endDate.slice(0, 10) >= todayISO() && {
-                        label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
-                        run: () => setCodeFor(r),
+                <div className="flex shrink-0 items-start gap-1">
+                  <div className="text-right">
+                    <p className="font-display text-lg font-semibold">{czk(r.totalPrice)}</p>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                  </div>
+                  {/* Mobil: akce v nabídce místo řady tlačítek */}
+                  <ActionsMenu
+                    items={[
+                      r.status === "pending" && { label: "✓ Označit zaplaceno", run: () => setStatus(r.id, "paid") },
+                      r.status === "paid" && {
+                        label: "↺ Vrátit na nezaplaceno",
+                        run: () => {
+                          setStatus(r.id, "pending");
+                          toast.show(`${r.guestName}: vráceno na nezaplaceno`, "success");
+                        },
                       },
-                    r.status !== "cancelled"
-                      ? { label: "✕ Zrušit rezervaci", run: () => cancelStay(r), danger: true }
-                      : { label: "↺ Obnovit", run: () => setStatus(r.id, "pending") },
-                  ]}
-                />
+                      r.status !== "cancelled" && { label: "Změnit termín", run: () => setRescheduling(r) },
+                      r.status !== "cancelled" &&
+                        r.endDate.slice(0, 10) >= todayISO() && {
+                          label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
+                          run: () => setCodeFor(r),
+                        },
+                      r.status !== "cancelled"
+                        ? { label: "✕ Zrušit rezervaci", run: () => cancelStay(r), danger: true }
+                        : { label: "↺ Obnovit", run: () => setStatus(r.id, "pending") },
+                    ]}
+                  />
+                </div>
+              </div>
+              {details.has(r.id) && (
+                <div className="hidden sm:block">
+                  <StayDetail r={r} site={site} />
+                </div>
+              )}
+              <div className="mt-3 hidden flex-wrap gap-2 border-t border-line pt-3 sm:flex">
+                {r.status === "pending" && (
+                  <button
+                    className="btn-primary !px-4 !py-1.5 text-xs"
+                    disabled={busy === r.id}
+                    onClick={() => setStatus(r.id, "paid")}
+                  >
+                    ✓ Označit zaplaceno
+                  </button>
+                )}
+                {r.status !== "cancelled" && (
+                  <button className="btn-ghost !px-4 !py-1.5 text-xs" onClick={() => setRescheduling(r)}>
+                    Změnit termín
+                  </button>
+                )}
+                {/* Kód k zámku jen u pobytů, které ještě neskončily — u proběhlých je jen v detailu */}
+                {r.status !== "cancelled" && r.endDate.slice(0, 10) >= todayISO() && (
+                  <AccessCode
+                    key={r.accessCode}
+                    code={r.accessCode}
+                    sendAt={accessCodeSendAt(r)}
+                    context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
+                    onSave={(code) => saveAccessCode(r, code)}
+                  />
+                )}
+                {r.status !== "cancelled" ? (
+                  <button
+                    className="btn-ghost !px-4 !py-1.5 text-xs !text-coral"
+                    disabled={busy === r.id}
+                    onClick={() => cancelStay(r)}
+                  >
+                    ✕ Zrušit rezervaci
+                  </button>
+                ) : (
+                  <button
+                    className="btn-ghost !px-4 !py-1.5 text-xs"
+                    disabled={busy === r.id}
+                    onClick={() => setStatus(r.id, "pending")}
+                  >
+                    ↺ Obnovit
+                  </button>
+                )}
               </div>
             </div>
-            {details.has(r.id) && (
-              <div className="hidden sm:block">
-                <StayDetail r={r} site={site} />
-              </div>
-            )}
-            <div className="mt-3 hidden flex-wrap gap-2 border-t border-line pt-3 sm:flex">
-              {r.status === "pending" && (
-                <button
-                  className="btn-primary !px-4 !py-1.5 text-xs"
-                  disabled={busy === r.id}
-                  onClick={() => setStatus(r.id, "paid")}
-                >
-                  ✓ Označit zaplaceno
-                </button>
-              )}
-              {r.status !== "cancelled" && (
-                <button className="btn-ghost !px-4 !py-1.5 text-xs" onClick={() => setRescheduling(r)}>
-                  Změnit termín
-                </button>
-              )}
-              {/* Kód k zámku jen u pobytů, které ještě neskončily — u proběhlých je jen v detailu */}
-              {r.status !== "cancelled" && r.endDate.slice(0, 10) >= todayISO() && (
-                <AccessCode
-                  key={r.accessCode}
-                  code={r.accessCode}
-                  sendAt={accessCodeSendAt(r)}
-                  context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
-                  onSave={(code) => saveAccessCode(r, code)}
-                />
-              )}
-              {r.status !== "cancelled" ? (
-                <button
-                  className="btn-ghost !px-4 !py-1.5 text-xs !text-coral"
-                  disabled={busy === r.id}
-                  onClick={() => cancelStay(r)}
-                >
-                  ✕ Zrušit rezervaci
-                </button>
-              ) : (
-                <button
-                  className="btn-ghost !px-4 !py-1.5 text-xs"
-                  disabled={busy === r.id}
-                  onClick={() => setStatus(r.id, "pending")}
-                >
-                  ↺ Obnovit
-                </button>
-              )}
-            </div>
-          </div>
+          </SwipeToPay>
         ))}
       </div>
 
@@ -437,7 +463,13 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
   const times = site ? stayTimes(r, site) : r;
   const nights = nightsOf(r);
   const dateTime = (iso: string) =>
-    new Date(iso).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    new Date(iso).toLocaleString("cs-CZ", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   const hidden = r.anonymized || r.guestRef;
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -576,7 +608,10 @@ function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
         </svg>
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-lg">
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-lg"
+        >
           {list.map((item) => (
             <button
               key={item.label}
@@ -652,12 +687,21 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
               }`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${sent ? "bg-pine" : "bg-amber"}`} aria-hidden />
-              {sent ? `Kód odeslán hostovi ${fmtSendAt(sendAt)}` : `Kód čeká na odeslání · pošle se ${fmtSendAt(sendAt)}`}
+              {sent
+                ? `Kód odeslán hostovi ${fmtSendAt(sendAt)}`
+                : `Kód čeká na odeslání · pošle se ${fmtSendAt(sendAt)}`}
             </p>
           )}
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
+}
+
+/** Filtr rezervací. „Nejbližší aktivní“ = nezrušené pobyty, které probíhají nebo teprve přijdou. */
+function matchesFilter(r: Reservation, f: Filter): boolean {
+  if (f === "all") return true;
+  if (f === "active") return r.status !== "cancelled" && r.endDate.slice(0, 10) >= todayISO();
+  return r.status === f;
 }

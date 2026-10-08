@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
 import { applyAdjust, czk } from "@/lib/pricing";
 import { PhotoManager } from "@/components/PhotoManager";
@@ -121,28 +122,29 @@ export function SiteEditor({ area }: { area: EditorArea }) {
   const setRule = (index: number, patch: Partial<PriceRule>) =>
     setForm((f) => (f ? { ...f, priceRules: f.priceRules.map((r, i) => (i === index ? { ...r, ...patch } : r)) } : f));
 
-  async function save() {
-    if (!form) return;
+  /** Uloží formulář; vrací, jestli se uložení povedlo (kvůli „Uložit a odejít"). */
+  async function save(): Promise<boolean> {
+    if (!form) return false;
     // Check-in a check-out musí být vždy vyplněné — kopírují se do každé nové rezervace.
     if (!isTime(form.checkInTime) || !isTime(form.checkOutTime)) {
       switchTab("cenik");
       toast.show("Vyplň čas check-inu i check-outu (Ceník a pobyt).");
-      return;
+      return false;
     }
     if (form.businessId.trim() && !isValidIco(form.businessId)) {
       switchTab("pravni");
       toast.show("IČ není platné — zkontroluj ho (Firma a platby).");
-      return;
+      return false;
     }
     if (form.vatId.trim() && !isValidVatId(form.vatId)) {
       switchTab("pravni");
       toast.show("DIČ má tvar CZ a 8–10 číslic (Firma a platby).");
-      return;
+      return false;
     }
     if (form.vatPayer && !form.vatId.trim()) {
       switchTab("pravni");
       toast.show("Plátce DPH musí mít vyplněné DIČ (Firma a platby).");
-      return;
+      return false;
     }
     // „Uloženo" hned, ukládá se na pozadí. Při chybě se změny označí jako
     // neuložené (zůstanou ve formuláři) a ozve se toast.
@@ -169,10 +171,11 @@ export function SiteEditor({ area }: { area: EditorArea }) {
       setSaved(false);
       setFailed(true);
       toast.show(data?.error ?? "Změny se nepodařilo uložit — zkus to znovu.");
-      return;
+      return false;
     }
     window.dispatchEvent(new Event(SITES_CHANGED));
     reload(); // potichu doplní data ze serveru (např. ID nových sezón)
+    return true;
   }
 
   useEffect(() => {
@@ -214,7 +217,9 @@ export function SiteEditor({ area }: { area: EditorArea }) {
   // Potvrzení po návratu z builderu („Změny webu jsou uložené.")
   const toast = useToast();
 
-  // Odchod s neuloženými změnami: zavření/obnovení záložky i odkaz v administraci se zeptá.
+  // Odchod s neuloženými změnami: odkaz v administraci otevře okno „Uložit / Neukládat /
+  // Zůstat“. Zavření nebo obnovení záložky umí hlídat jen prohlížeč sám (jeho dotaz).
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
   useEffect(() => {
     if (!dirty) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -222,9 +227,9 @@ export function SiteEditor({ area }: { area: EditorArea }) {
       const a = (e.target as HTMLElement).closest("a");
       if (!a || a.target === "_blank" || a.origin !== window.location.origin) return;
       if (a.pathname === window.location.pathname && a.search === window.location.search) return;
-      if (confirm("Máš neuložené změny. Odejít bez uložení?")) return;
       e.preventDefault();
       e.stopPropagation();
+      setLeaveTo(a.pathname + a.search);
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("click", onClick, true);
@@ -238,8 +243,24 @@ export function SiteEditor({ area }: { area: EditorArea }) {
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
-    <div className="space-y-5" onKeyDown={submitOnEnter(save)}>
+    // pb-20: plovoucí „Uložit změny“ nesmí zakrýt poslední pole
+    <div className="space-y-5 pb-20" onKeyDown={submitOnEnter(save)}>
       {toast.node}
+      <SaveBar dirty={dirty} saved={saved} onSave={save} />
+      {leaveTo && (
+        <LeaveDialog
+          onSave={async () => {
+            if (await save()) router.push(leaveTo);
+            setLeaveTo(null);
+          }}
+          onDiscard={() => {
+            const to = leaveTo;
+            setLeaveTo(null);
+            router.push(to);
+          }}
+          onStay={() => setLeaveTo(null)}
+        />
+      )}
       {icoSaved && <ProviderSavedDialog change={icoSaved} onClose={() => setIcoSaved(null)} />}
       <LivePreview site={form} dirty={dirty} focus={focus} />
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -328,12 +349,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
               />
             </label>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="btn-primary" onClick={save}>
-              Uložit změny
-            </button>
-            {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-          </div>
         </div>
       ) : tab === "pravni" ? (
         <>
@@ -345,12 +360,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
             toast={toast}
             requestSave={() => setSaveRequested(true)}
           />
-          <div className="flex items-center gap-3">
-            <button className="btn-primary" onClick={save}>
-              Uložit změny
-            </button>
-            {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-          </div>
         </>
       ) : tab === "vzhled" ? (
         <>
@@ -407,12 +416,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                 onChange={(e) => set("amenities", e.target.value)}
               />
             </label>
-            <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" onClick={save}>
-                Uložit změny
-              </button>
-              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-            </div>
           </div>
         </>
       ) : (
@@ -686,13 +689,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                 </p>
               </div>
             )}
-
-            <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" onClick={save}>
-                Uložit změny
-              </button>
-              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-            </div>
           </div>
 
           {/* Pravidla pobytu a poplatky */}
@@ -780,16 +776,88 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                 onChange={(e) => set("cancellationPolicy", e.target.value)}
               />
             </label>
-
-            <div className="flex items-center gap-3 pt-1">
-              <button className="btn-primary" onClick={save}>
-                Uložit změny
-              </button>
-              {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
-            </div>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Plovoucí „Uložit změny“ dole na obrazovce — ukáže se, jakmile je co ukládat
+ * (na mobilu vlevo nad navigací, vpravo je tlačítko náhledu webu).
+ */
+function SaveBar({ dirty, saved, onSave }: { dirty: boolean; saved: boolean; onSave: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted || (!dirty && !saved)) return null;
+  // Do <body>: předek s CSS transformací by jinak rozbil `fixed`.
+  return createPortal(
+    <div className="rise fixed bottom-28 left-5 z-40 sm:bottom-8 sm:left-1/2 sm:-translate-x-1/2">
+      {dirty ? (
+        <div className="flex items-center gap-3 rounded-full bg-surface py-1.5 pl-4 pr-1.5 shadow-xl ring-1 ring-line">
+          <span className="hidden items-center gap-2 text-sm text-soft sm:flex">
+            <span className="h-2 w-2 rounded-full bg-amber" aria-hidden />
+            Neuložené změny
+          </span>
+          <span className="h-2 w-2 rounded-full bg-amber sm:hidden" aria-hidden />
+          <button type="button" className="btn-primary !px-5 !py-2 text-sm" onClick={onSave}>
+            Uložit změny
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-full bg-pine px-5 py-2.5 text-sm font-semibold text-white shadow-xl">✓ Uloženo</div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
+/** Odchod ze stránky s neuloženými změnami: uložit, neukládat, nebo zůstat. */
+function LeaveDialog({ onSave, onDiscard, onStay }: { onSave: () => Promise<void>; onDiscard: () => void; onStay: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    saveRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onStay();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onStay]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6" onClick={onStay}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Máš neuložené změny"
+        className="rise w-full max-w-sm rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-xl font-semibold">Máš neuložené změny</h2>
+        <p className="mt-2 text-sm text-soft">Chceš je před odchodem uložit?</p>
+        <div className="mt-5 space-y-2">
+          <button
+            ref={saveRef}
+            type="button"
+            className="btn-primary w-full !py-2.5"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              await onSave();
+              setSaving(false);
+            }}
+          >
+            {saving ? "Ukládám…" : "Uložit a odejít"}
+          </button>
+          <button type="button" className="btn-ghost w-full !py-2.5 !text-coral" disabled={saving} onClick={onDiscard}>
+            Odejít bez uložení
+          </button>
+          <button type="button" className="w-full py-2 text-sm font-medium text-soft hover:text-ink" disabled={saving} onClick={onStay}>
+            Zůstat na stránce
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
