@@ -29,3 +29,17 @@ export async function ensurePhotoBucket(supabase: SupabaseClient): Promise<void>
   // Souběžné první nahrání mohlo bucket mezitím založit.
   if (error && !/already exists/i.test(error.message)) throw error;
 }
+
+export const DOCUMENT_BUCKET = "documents";
+
+/** Veřejný bucket na PDF dokumenty webu (obchodní podmínky, zásady). */
+export async function ensureDocumentBucket(supabase: SupabaseClient): Promise<void> {
+  const { data } = await supabase.storage.getBucket(DOCUMENT_BUCKET);
+  if (data) return;
+  const { error } = await supabase.storage.createBucket(DOCUMENT_BUCKET, {
+    public: true,
+    fileSizeLimit: 10 * 1024 * 1024,
+    allowedMimeTypes: ["application/pdf"],
+  });
+  if (error && !/already exists/i.test(error.message)) throw error;
+}

@@ -4,6 +4,8 @@
 
 import type { SiteViewData } from "@/components/SiteView";
 import { parseCategories } from "@/lib/guests";
+import { hasDoc, privacyTextOf, termsTextOf, type LegalSource } from "@/lib/legal";
+import type { LegalDocData } from "@/components/LegalModal";
 
 export type SiteSource = {
   slug: string;
@@ -32,6 +34,18 @@ export type SiteSource = {
   touristTax: number;
   bankAccount: string;
   cancellationPolicy: string;
+  // Provozovatel a dokumenty — v průvodci zakládání webu ještě nejsou.
+  businessName?: string;
+  businessId?: string;
+  vatId?: string;
+  businessAddress?: string;
+  businessRegister?: string;
+  termsText?: string;
+  termsPdf?: string;
+  termsUpdatedAt?: Date | string | null;
+  privacyText?: string;
+  privacyPdf?: string;
+  privacyUpdatedAt?: Date | string | null;
   /** Data jako ISO „YYYY-MM-DD". */
   priceRules: { label: string; startDate: string; endDate: string; value: number; unit: string }[];
 };
@@ -66,11 +80,36 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
     touristTax: site.touristTax,
     paymentMode: site.bankAccount ? "qr" : "onsite",
     cancellationPolicy: site.cancellationPolicy,
+    provider: {
+      name: site.businessName ?? "",
+      id: site.businessId ?? "",
+      vatId: site.vatId ?? "",
+      address: site.businessAddress ?? "",
+    },
+    hasTerms: hasDoc(site, "terms"),
+    hasPrivacy: hasDoc(site, "privacy"),
+    docs: {
+      terms: legalDoc(site, "terms"),
+      privacy: legalDoc(site, "privacy"),
+    },
     priceRules: site.priceRules.map((r) => ({
       label: r.label,
       startDate: r.startDate.slice(0, 10),
       endDate: r.endDate.slice(0, 10),
       adjust: { value: r.value, unit: r.unit === "czk" ? "czk" : "pct" } as const,
     })),
+  };
+}
+
+/** Obsah dokumentu pro okno na webu (vlastní znění, PDF, nebo výchozí text). */
+function legalDoc(site: SiteSource, kind: "terms" | "privacy"): LegalDocData | undefined {
+  const src = site as LegalSource;
+  if (!hasDoc(src, kind)) return undefined;
+  const own = kind === "terms" ? site.termsPdf || site.termsText?.trim() : site.privacyPdf || site.privacyText?.trim();
+  const updated = kind === "terms" ? site.termsUpdatedAt : site.privacyUpdatedAt;
+  return {
+    text: kind === "terms" ? termsTextOf(src) : privacyTextOf(src),
+    pdf: (kind === "terms" ? site.termsPdf : site.privacyPdf) ?? "",
+    updatedAt: own && updated ? new Date(updated).toISOString() : null,
   };
 }

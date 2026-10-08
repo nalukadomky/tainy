@@ -55,6 +55,24 @@ model Site {
   cleaningChecklist  String  @default("")
   cleanerFields      String  @default("guests")
 
+  // Provozovatel (povinná identifikace podnikatele na webu)
+  businessName     String  @default("") // jméno / obchodní firma
+  businessId       String  @default("") // IČ
+  vatId            String  @default("") // DIČ
+  businessAddress  String  @default("") // sídlo / místo podnikání
+  businessRegister String  @default("") // zápis v rejstříku
+
+  // Obchodní podmínky a zásady ochrany osobních údajů: text (náš zápis
+  // s formátováním) nebo PDF. PDF má přednost. UpdatedAt = verze dokumentu.
+  termsText        String    @default("")
+  termsPdf         String    @default("")
+  termsName        String    @default("")
+  termsUpdatedAt   DateTime?
+  privacyText      String    @default("")
+  privacyPdf       String    @default("")
+  privacyName      String    @default("")
+  privacyUpdatedAt DateTime?
+
   createdAt    DateTime      @default(now())
   reservations Reservation[]
   costs        Cost[]
@@ -111,6 +129,9 @@ model Reservation {
   source     String   @default("web") // web | manual | airbnb | booking
   status     String   @default("pending")
   expiresAt  DateTime?                // nezaplacená rezervace po expiraci uvolní termín
+  // Souhlas hosta s obchodními podmínkami: kdy a s jakou verzí (termsUpdatedAt webu)
+  termsAcceptedAt DateTime?
+  termsVersion    String   @default("")
   createdAt  DateTime @default(now())
   cleaning   Cleaning?
 

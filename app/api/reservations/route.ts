@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LEGAL_PATH, hasDoc, providerLine, termsTextOf, textFingerprint } from "@/lib/legal";
 import { prisma } from "@/lib/prisma";
 import { pricedCategories } from "@/lib/pricing";
 import { quoteForSite } from "@/lib/quote";
@@ -9,7 +10,7 @@ import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
 import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
-import { sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
+import { appUrl, sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
 
 // Jak dlouho držíme nezaplacenou rezervaci, než termín zase uvolní.
 const HOLD_HOURS = { qr: 24, onsite: 72, demo: 0 } as const;
@@ -73,8 +74,14 @@ export async function POST(req: NextRequest) {
   if (guestName.length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "Chybí jméno nebo platný e-mail hosta." }, { status: 400 });
   }
-  if (body.consent !== true) {
-    return NextResponse.json({ error: "Bez souhlasu se zpracováním údajů nelze rezervaci dokončit." }, { status: 400 });
+  // Souhlas s obchodními podmínkami (a storno podmínkami), pokud je web má.
+  // Zpracování osobních údajů pro rezervaci souhlas nepotřebuje — host je jen informovaný.
+  const hasTerms = hasDoc(site, "terms");
+  if ((hasTerms || site.cancellationPolicy) && body.termsAccepted !== true) {
+    return NextResponse.json(
+      { error: "Pro dokončení rezervace je potřeba souhlasit s obchodními podmínkami." },
+      { status: 400 }
+    );
   }
 
   // Ukázkovou platbu smí přijmout jen server, kde je povolená — jinak by
@@ -117,6 +124,14 @@ export async function POST(req: NextRequest) {
         data: {
           publicId: newPublicId(),
           siteId: site.id,
+          ...(hasTerms && {
+            termsAcceptedAt: new Date(),
+            // Vlastní podmínky = datum jejich verze; výchozí = otisk textu, který host viděl
+            termsVersion:
+              site.termsPdf || site.termsText.trim()
+                ? (site.termsUpdatedAt ?? site.createdAt).toISOString()
+                : `vychozi-${textFingerprint(termsTextOf(site))}`,
+          }),
           guestName,
           email,
           phone: String(body.phone ?? "").trim(),
@@ -165,6 +180,11 @@ export async function POST(req: NextRequest) {
     demo,
     checkInTime: created.checkInTime,
     checkOutTime: created.checkOutTime,
+    legal: {
+      provider: providerLine(site),
+      termsUrl: hasTerms ? `${appUrl()}/w/${site.slug}/${LEGAL_PATH.terms}` : undefined,
+      privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/w/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
+    },
   };
   await Promise.all([sendGuestConfirmation(mail), sendOwnerNotification(mail, site.contactEmail)]);
 

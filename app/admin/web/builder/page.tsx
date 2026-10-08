@@ -425,6 +425,9 @@ function SectionPanel({
           <button type="button" onClick={() => onLeave("/admin/web?sekce=cenik")} className="btn-primary w-full">
             Upravit ceník a pobyt →
           </button>
+          <button type="button" onClick={() => onLeave("/admin/web?sekce=pravni")} className="btn-ghost w-full">
+            Provozovatel a obchodní podmínky →
+          </button>
         </>
       );
   }

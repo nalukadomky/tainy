@@ -50,6 +50,21 @@ export type Site = {
   /** Úklid: výchozí úkoly (jeden na řádek) a co uklízečky uvidí (čárkou). */
   cleaningChecklist: string;
   cleanerFields: string;
+  /** Provozovatel: jméno/firma, IČ, DIČ, sídlo, zápis v rejstříku. */
+  businessName: string;
+  businessId: string;
+  vatId: string;
+  businessAddress: string;
+  businessRegister: string;
+  /** Obchodní podmínky a zásady: text nebo PDF (PDF má přednost). */
+  termsText: string;
+  termsPdf: string;
+  termsName: string;
+  termsUpdatedAt: string | null;
+  privacyText: string;
+  privacyPdf: string;
+  privacyName: string;
+  privacyUpdatedAt: string | null;
 };
 
 export type Reservation = {

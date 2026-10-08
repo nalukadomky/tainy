@@ -18,6 +18,7 @@ import { demoPaymentsEnabled } from "@/lib/demo";
 import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { GuestPicker } from "@/components/GuestPicker";
 import { useToast } from "@/components/Toast";
+import { LEGAL_PATH, type LegalKind } from "@/lib/legal";
 
 export type BookingSite = {
   slug: string;
@@ -35,6 +36,9 @@ export type BookingSite = {
   touristTax: number;
   paymentMode: string;
   cancellationPolicy: string;
+  /** Má web obchodní podmínky / zásady ochrany osobních údajů? */
+  hasTerms?: boolean;
+  hasPrivacy?: boolean;
   guestMode: string;
   categories: GuestCategory[];
 };
@@ -52,8 +56,11 @@ export function BookingWidget({
   site,
   preview = false,
   initialBooked = [],
+  onOpenDoc,
 }: {
   site: BookingSite;
+  /** Otevře obchodní podmínky / zásady v okně nad webem (jinak odkaz na stránku). */
+  onOpenDoc?: (kind: LegalKind) => void;
   preview?: boolean;
   /** Obsazenost ze serveru — kalendář je vyplněný hned v prvním renderu. */
   initialBooked?: BookedRange[];
@@ -67,6 +74,8 @@ export function BookingWidget({
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [consent, setConsent] = useState(false);
+  // Zaškrtnutí je potřeba, jen když je s čím souhlasit (obchodní/storno podmínky).
+  const needsConsent = !!site.hasTerms || !!site.cancellationPolicy;
   const [payment, setPayment] = useState<Payment>(site.paymentMode === "onsite" ? "onsite" : "qr");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -249,7 +258,7 @@ export function BookingWidget({
           email,
           phone,
           note,
-          consent,
+          termsAccepted: consent,
           payment,
           voucherCode: voucher?.code ?? "",
         }),
@@ -571,22 +580,48 @@ export function BookingWidget({
               </div>
 
               {site.cancellationPolicy && (
-                <div className="rounded-xl bg-bg px-4 py-3 text-xs text-soft">
+                <div className="whitespace-pre-line rounded-xl bg-bg px-4 py-3 text-xs text-soft">
                   <strong className="text-ink">Storno podmínky:</strong> {site.cancellationPolicy}
                 </div>
               )}
 
-              <label className="flex cursor-pointer gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 accent-[var(--pine)]"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                />
-                <span className="text-soft">
-                  Souhlasím se zpracováním osobních údajů pro vyřízení rezervace a s uvedenými podmínkami pobytu.
-                </span>
-              </label>
+              {needsConsent && (
+                <label className="flex cursor-pointer gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-[var(--pine)]"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                  />
+                  <span className="text-soft">
+                    {site.hasTerms ? (
+                      <>
+                        Souhlasím s{" "}
+                        <DocLink slug={site.slug} kind="terms" onOpen={onOpenDoc}>
+                          obchodními podmínkami
+                        </DocLink>
+                        {site.cancellationPolicy ? " a storno podmínkami." : "."}
+                      </>
+                    ) : (
+                      "Souhlasím se storno podmínkami."
+                    )}
+                  </span>
+                </label>
+              )}
+              <p className="text-xs text-soft">
+                Osobní údaje zpracujeme jen pro vyřízení rezervace a pobytu
+                {site.hasPrivacy ? (
+                  <>
+                    {" — "}
+                    <DocLink slug={site.slug} kind="privacy" onOpen={onOpenDoc}>
+                      zásady ochrany osobních údajů
+                    </DocLink>
+                    .
+                  </>
+                ) : (
+                  "."
+                )}
+              </p>
 
               {error && (
                 <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error}</p>
@@ -595,7 +630,7 @@ export function BookingWidget({
               <button
                 type="button"
                 className="btn-primary w-full"
-                disabled={sending || !consent}
+                disabled={sending || (needsConsent && !consent)}
                 onClick={submit}
               >
                 {sending ? "Odesílám…" : `Závazně rezervovat · ${price ? czk(total) : ""}`}
@@ -613,5 +648,37 @@ export function BookingWidget({
         </div>
       </div>
     </>
+  );
+}
+
+/** Odkaz na obchodní podmínky / zásady — otevře je v okně nad webem (bez okna v nové
+ * kartě), rozpracovaná rezervace zůstane. */
+function DocLink({
+  slug,
+  kind,
+  onOpen,
+  children,
+}: {
+  slug: string;
+  kind: LegalKind;
+  onOpen?: (kind: LegalKind) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={`/w/${slug}/${LEGAL_PATH[kind]}`}
+      target="_blank"
+      rel="noopener"
+      onClick={(e) => {
+        if (!onOpen || e.metaKey || e.ctrlKey) return;
+        // Klik na odkaz uvnitř <label> by jinak přepnul i checkbox
+        e.preventDefault();
+        e.stopPropagation();
+        onOpen(kind);
+      }}
+      className="font-medium text-ink underline underline-offset-2 hover:text-pine"
+    >
+      {children}
+    </a>
   );
 }

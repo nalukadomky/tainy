@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { czk, type PriceRuleInput, type PricingMode } from "@/lib/pricing";
@@ -10,6 +11,8 @@ import { parsePhotos } from "@/lib/photos";
 import { defaultCategories, type GuestCategory } from "@/lib/guests";
 import { Wordmark } from "@/components/Logo";
 import { EditableText, EditSection, EditStyles, type SiteEditing } from "@/components/EditableText";
+import { LEGAL_PATH, LEGAL_TITLE, providerLine, type LegalKind } from "@/lib/legal";
+import { LegalModal, type LegalDocData } from "@/components/LegalModal";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
 // jednak jako živý náhled v průvodci (data z draftu, preview=true).
@@ -43,6 +46,13 @@ export type SiteViewData = {
   touristTax?: number;
   paymentMode?: string;
   cancellationPolicy?: string;
+  /** Identifikace provozovatele do patičky. */
+  provider?: { name: string; id: string; vatId: string; address: string };
+  /** Má web obchodní podmínky / zásady (stránky /w/[slug]/podminky, /ochrana-udaju)? */
+  hasTerms?: boolean;
+  hasPrivacy?: boolean;
+  /** Obsah podmínek a zásad pro okno nad webem. */
+  docs?: Partial<Record<LegalKind, LegalDocData>>;
 };
 
 // Odsazení od okrajů okna pro hlavičku a úvod s fotkou přes celou šířku
@@ -74,9 +84,38 @@ export function SiteView({
 
   const edge = site.heroStyle === "photo" && !!site.heroPhoto;
 
+  // Obchodní podmínky / zásady v okně nad webem (odkaz vede i na samostatnou stránku)
+  const [openKind, setOpenKind] = useState<LegalKind | null>(null);
+  const openDoc = useCallback((kind: LegalKind) => setOpenKind(kind), []);
+  const closeDoc = useCallback(() => setOpenKind(null), []);
+  function openDocFrom(e: React.MouseEvent, kind: LegalKind) {
+    if (!site.docs?.[kind] || e.metaKey || e.ctrlKey) return; // Cmd+klik = nová karta
+    e.preventDefault();
+    openDoc(kind);
+  }
+  const openedDoc = openKind ? site.docs?.[openKind] : undefined;
+
   return (
     <div className="min-h-dvh bg-cream pb-24 sm:pb-0">
       {editing && <EditStyles />}
+      {openKind && openedDoc && (
+        <LegalModal
+          kind={openKind}
+          doc={openedDoc}
+          slug={site.slug}
+          provider={
+            site.provider?.name
+              ? providerLine({
+                  businessName: site.provider.name,
+                  businessId: site.provider.id,
+                  vatId: site.provider.vatId,
+                  businessAddress: site.provider.address,
+                })
+              : undefined
+          }
+          onClose={closeDoc}
+        />
+      )}
       <header className="sticky top-0 z-40 border-b border-line/70 bg-cream/85 backdrop-blur">
         {/* S úvodní fotkou přes celou šířku jde hlavička od okraje k okraji, ať lícuje s fotkou */}
         <div className={`mx-auto flex items-center justify-between py-3.5 ${edge ? EDGE : "max-w-4xl px-5 lg:max-w-6xl lg:px-8 2xl:max-w-7xl"}`}>
@@ -296,6 +335,7 @@ export function SiteView({
             <BookingWidget
               preview={preview}
               initialBooked={booked}
+              onOpenDoc={site.docs ? openDoc : undefined}
               site={{
                 slug: site.slug ?? "",
                 name: site.name,
@@ -312,6 +352,8 @@ export function SiteView({
                 touristTax: site.touristTax ?? 0,
                 paymentMode: site.paymentMode ?? "qr",
                 cancellationPolicy: site.cancellationPolicy ?? "",
+                hasTerms: !!site.hasTerms,
+                hasPrivacy: !!site.hasPrivacy,
                 guestMode: site.guestMode ?? "total",
                 categories: site.categories ?? defaultCategories(site.pricingMode),
               }}
@@ -322,11 +364,45 @@ export function SiteView({
       </EditSection>
 
       <footer className="border-t border-line bg-cream">
-        <div className="mx-auto flex max-w-4xl lg:max-w-6xl 2xl:max-w-7xl items-center justify-between px-5 lg:px-8 py-6 text-sm text-soft">
-          <span>© {new Date().getFullYear()} {site.name || "Tvůj web"}</span>
-          <Link href="/" className="inline-flex items-center gap-1.5 hover:text-ink">
-            vytvořeno s <Wordmark className="text-base" />
-          </Link>
+        <div className="mx-auto max-w-4xl space-y-3 px-5 py-6 text-sm text-soft lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
+          {(site.provider?.name || site.provider?.id) && (
+            <p>
+              Provozovatel: {providerLine({
+                businessName: site.provider.name,
+                businessId: site.provider.id,
+                vatId: site.provider.vatId,
+                businessAddress: site.provider.address,
+              })}
+            </p>
+          )}
+          {(site.hasTerms || site.hasPrivacy) && site.slug && (
+            <p className="flex flex-wrap gap-x-5 gap-y-1">
+              {site.hasTerms && (
+                <Link
+                  href={`/w/${site.slug}/${LEGAL_PATH.terms}`}
+                  onClick={(e) => openDocFrom(e, "terms")}
+                  className="underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {LEGAL_TITLE.terms}
+                </Link>
+              )}
+              {site.hasPrivacy && (
+                <Link
+                  href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}
+                  onClick={(e) => openDocFrom(e, "privacy")}
+                  className="underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {LEGAL_TITLE.privacy}
+                </Link>
+              )}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <span>© {new Date().getFullYear()} {site.name || "Tvůj web"}</span>
+            <Link href="/" className="inline-flex items-center gap-1.5 hover:text-ink">
+              vytvořeno s <Wordmark className="text-base" />
+            </Link>
+          </div>
         </div>
       </footer>
 

@@ -78,7 +78,24 @@ export type StayMail = {
   demo: boolean;
   checkInTime: string;
   checkOutTime: string;
+  /** Provozovatel a odkazy na obchodní podmínky / zásady (jen pokud je web má). */
+  legal?: { provider: string; termsUrl?: string; privacyUrl?: string };
 };
+
+const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+function legalBlock(legal: StayMail["legal"]): string {
+  if (!legal) return "";
+  const links = [
+    legal.termsUrl && `<a href="${esc(legal.termsUrl)}" style="color:#5a6557">Obchodní podmínky</a>`,
+    legal.privacyUrl && `<a href="${esc(legal.privacyUrl)}" style="color:#5a6557">Ochrana osobních údajů</a>`,
+  ].filter(Boolean);
+  if (!legal.provider && !links.length) return "";
+  return `<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e4ddcf;font-size:12px;line-height:1.6;color:#5a6557">
+    ${legal.provider ? `Provozovatel: ${esc(legal.provider)}<br>` : ""}${links.join(" · ")}
+  </p>`;
+}
 
 /** Potvrzení hostovi s odkazem na jeho rezervaci. */
 export async function sendGuestConfirmation(r: StayMail): Promise<void> {
@@ -99,7 +116,8 @@ export async function sendGuestConfirmation(r: StayMail): Promise<void> {
        ${next}
        <p style="margin:0 0 20px;font-size:14px;color:#5a6557">Příjezd od ${r.checkInTime}, odjezd do ${r.checkOutTime}.</p>
        <a href="${link}" style="display:inline-block;background:#2c5e3f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;font-size:15px">Zobrazit rezervaci</a>
-       <p style="margin:20px 0 0;font-size:13px;color:#5a6557">Kód rezervace: <strong>${r.publicId}</strong></p>`
+       <p style="margin:20px 0 0;font-size:13px;color:#5a6557">Kód rezervace: <strong>${r.publicId}</strong></p>
+       ${legalBlock(r.legal)}`
     ),
   });
 }

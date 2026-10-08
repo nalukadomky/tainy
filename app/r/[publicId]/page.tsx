@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LEGAL_PATH, hasDoc, providerLine } from "@/lib/legal";
 import { prisma } from "@/lib/prisma";
 import { czk, plural } from "@/lib/pricing";
 import { nightsOf, stayTimes, toISO } from "@/lib/stay";
@@ -238,9 +239,41 @@ export default async function ReservationPage({
         )}
 
         {site.cancellationPolicy && (
-          <p className="px-1 text-xs text-soft">
+          <p className="whitespace-pre-line px-1 text-xs text-soft">
             <strong className="text-ink">Storno podmínky:</strong> {site.cancellationPolicy}
           </p>
+        )}
+
+        {/* Provozovatel a dokumenty, se kterými host souhlasil */}
+        {(providerLine(site) || reservation.termsAcceptedAt || hasDoc(site, "privacy")) && (
+          <div className="space-y-1 px-1 text-xs text-soft">
+            {providerLine(site) && <p>Provozovatel: {providerLine(site)}</p>}
+            {reservation.termsAcceptedAt && (
+              <p>
+                Souhlas s{" "}
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/w/${site.slug}/${LEGAL_PATH.terms}`}>
+                  obchodními podmínkami
+                </Link>{" "}
+                udělen{" "}
+                {reservation.termsAcceptedAt.toLocaleString("cs-CZ", {
+                  day: "numeric",
+                  month: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "Europe/Prague",
+                })}
+                .
+              </p>
+            )}
+            {hasDoc(site, "privacy") && (
+              <p>
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}>
+                  Zásady ochrany osobních údajů
+                </Link>
+              </p>
+            )}
+          </div>
         )}
 
         <p className="pt-2 text-center text-sm text-soft">

@@ -77,7 +77,8 @@ body {
 @media (pointer: coarse) {
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]),
   select,
-  textarea {
+  textarea,
+  .ProseMirror {
     font-size: 16px !important;
   }
 }
@@ -160,4 +161,41 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
+}
+
+/* Vizuální editor obchodních podmínek a zásad (components/RichTextEditor) */
+.rich-editor {
+  min-height: 16rem;
+  padding: 0.75rem 1rem;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  outline: none;
+}
+.rich-editor > * + * { margin-top: 0.6rem; }
+.rich-editor h1 {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.rich-editor h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.rich-editor > h1:not(:first-child),
+.rich-editor > h2:not(:first-child) { margin-top: 1.25rem; }
+.rich-editor ul { list-style: disc; padding-left: 1.5rem; }
+.rich-editor ol { list-style: decimal; padding-left: 1.5rem; }
+.rich-editor li + li { margin-top: 0.2rem; }
+.rich-editor li p { margin: 0; }
+.rich-editor strong { font-weight: 700; }
+.rich-editor em { font-style: italic; }
+.rich-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--soft);
+  pointer-events: none;
 }

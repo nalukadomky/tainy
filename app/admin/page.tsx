@@ -9,6 +9,7 @@ import { Dropdown } from "@/components/Dropdown";
 import { spentToDate } from "@/lib/costs";
 import { czk, nightsBetween } from "@/lib/pricing";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { hasDoc } from "@/lib/legal";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`;
@@ -151,6 +152,29 @@ function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* Chybějící povinné údaje webu */}
+      {(!site.businessName.trim() || !site.businessId.trim() || !hasDoc(site, "terms")) && (
+        <Link
+          href="/admin/web?sekce=pravni"
+          className="flex items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber/10 p-4 transition hover:bg-amber/15"
+        >
+          <span>
+            <span className="block text-sm font-semibold text-ink">Doplň provozovatele a obchodní podmínky</span>
+            <span className="block text-sm text-soft">
+              {[
+                (!site.businessName.trim() || !site.businessId.trim()) && "jméno a IČ provozovatele",
+                !hasDoc(site, "terms") && "obchodní podmínky",
+              ]
+                .filter(Boolean)
+                .join(" a ")
+                .replace(/^./, (c) => c.toUpperCase())}{" "}
+              — hosté je mají vidět na webu a odsouhlasit u rezervace.
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-pine">Doplnit →</span>
+        </Link>
+      )}
 
       {/* KPI dlaždice */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

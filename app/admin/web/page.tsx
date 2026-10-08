@@ -15,6 +15,8 @@ import { LivePreview, type PreviewSection } from "@/components/LivePreview";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { useToast } from "@/components/Toast";
 import { FormPageSkeleton } from "@/components/Skeleton";
+import { LegalSettings } from "@/components/LegalSettings";
+import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 
 // Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
 function ibanPreview(account: string): string {
@@ -22,11 +24,13 @@ function ibanPreview(account: string): string {
   return iban ? `Uloží se jako ${formatIBAN(iban)}` : "Tohle číslo účtu neumím přečíst — zkontroluj ho.";
 }
 
-type Tab = "vzhled" | "cenik";
-const TABS: Record<Tab, { label: string; hint: string }> = {
-  vzhled: { label: "Vzhled a obsah", hint: "Úvod, fotky, texty a kontakt" },
-  cenik: { label: "Ceník a pobyt", hint: "Ceny, hosté, pravidla a poplatky" },
+type Tab = "vzhled" | "cenik" | "pravni";
+const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
+  vzhled: { label: "Vzhled a obsah", short: "Vzhled", hint: "Úvod, fotky, texty a kontakt" },
+  cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
+  pravni: { label: "Provozovatel a podmínky", short: "Podmínky", hint: "IČ, obchodní podmínky, GDPR" },
 };
+const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 
 export default function SiteEditPage() {
   const { slug, site, setSite, loading, error, reload } = useAdminData();
@@ -45,7 +49,8 @@ export default function SiteEditPage() {
   // Záložka se drží v adrese (?sekce=cenik), ať ji jde poslat odkazem a přežije obnovení.
   const [tab, setTab] = useState<Tab>("vzhled");
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("sekce") === "cenik") setTab("cenik");
+    const sekce = new URLSearchParams(window.location.search).get("sekce");
+    if (isTab(sekce)) setTab(sekce);
   }, []);
   // Sekce, kterou majitel právě upravuje — živý náhled na ni odscrolluje.
   const [focus, setFocus] = useState<{ section: PreviewSection; at: number } | null>(null);
@@ -64,9 +69,9 @@ export default function SiteEditPage() {
 
   function switchTab(t: Tab) {
     setTab(t);
-    point(t === "cenik" ? "rezervace" : "uvod");
+    point(t === "vzhled" ? "uvod" : "rezervace");
     const url = new URL(window.location.href);
-    if (t === "cenik") url.searchParams.set("sekce", "cenik");
+    if (t !== "vzhled") url.searchParams.set("sekce", t);
     else url.searchParams.delete("sekce");
     window.history.replaceState(null, "", url);
   }
@@ -78,6 +83,20 @@ export default function SiteEditPage() {
     [],
   );
 
+  // PDF podmínek/zásad se ukládá hned po nahrání — zapíše se do formuláře
+  // i do uložených dat, ať se nepočítá jako neuložená změna.
+  const setDoc = useCallback(
+    (kind: LegalKind, doc: { url: string; name: string; updatedAt: string | null } | null) => {
+      const patch =
+        kind === "terms"
+          ? { termsPdf: doc?.url ?? "", termsName: doc?.name ?? "", ...(doc && { termsUpdatedAt: doc.updatedAt }) }
+          : { privacyPdf: doc?.url ?? "", privacyName: doc?.name ?? "", ...(doc && { privacyUpdatedAt: doc.updatedAt }) };
+      setForm((f) => (f ? { ...f, ...patch } : f));
+      setSite((s) => (s ? { ...s, ...patch } : s));
+    },
+    [setSite]
+  );
+
   const setRule = (index: number, patch: Partial<PriceRule>) =>
     setForm((f) => (f ? { ...f, priceRules: f.priceRules.map((r, i) => (i === index ? { ...r, ...patch } : r)) } : f));
 
@@ -87,6 +106,16 @@ export default function SiteEditPage() {
     if (!isTime(form.checkInTime) || !isTime(form.checkOutTime)) {
       switchTab("cenik");
       toast.show("Vyplň čas check-inu i check-outu (Ceník a pobyt).");
+      return;
+    }
+    if (form.businessId.trim() && !isValidIco(form.businessId)) {
+      switchTab("pravni");
+      toast.show("IČ není platné — zkontroluj ho (Provozovatel a podmínky).");
+      return;
+    }
+    if (form.vatId.trim() && !isValidVatId(form.vatId)) {
+      switchTab("pravni");
+      toast.show("DIČ má tvar CZ a 8–10 číslic (Provozovatel a podmínky).");
       return;
     }
     // „Uloženo" hned, ukládá se na pozadí. Při chybě se změny označí jako
@@ -103,9 +132,10 @@ export default function SiteEditPage() {
       body: JSON.stringify(sent),
     }).catch(() => null);
     if (!res?.ok) {
+      const data = await res?.json().catch(() => null);
       setSaved(false);
       setFailed(true);
-      toast.show("Změny se nepodařilo uložit — zkus to znovu.");
+      toast.show(data?.error ?? "Změny se nepodařilo uložit — zkus to znovu.");
       return;
     }
     window.dispatchEvent(new Event(SITES_CHANGED));
@@ -126,7 +156,18 @@ export default function SiteEditPage() {
   // Neuložené změny formuláře. Fotky a úvod se ukládají hned samy, ty nepočítáme.
   const dirty = useMemo(() => {
     if (!form || !site) return false;
-    const pick = ({ photos, heroStyle, heroPhoto, ...rest }: Site) => JSON.stringify(rest);
+    const pick = ({
+      photos,
+      heroStyle,
+      heroPhoto,
+      termsPdf,
+      termsName,
+      termsUpdatedAt,
+      privacyPdf,
+      privacyName,
+      privacyUpdatedAt,
+      ...rest
+    }: Site) => JSON.stringify(rest);
     return failed || pick(form) !== pick(site);
   }, [form, site, failed]);
 
@@ -192,14 +233,25 @@ export default function SiteEditPage() {
             }`}
           >
             <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
-              {TABS[t].label}
+              <span className="sm:hidden">{TABS[t].short}</span>
+              <span className="hidden sm:inline">{TABS[t].label}</span>
             </span>
             <span className="hidden text-xs text-soft sm:block">{TABS[t].hint}</span>
           </button>
         ))}
       </div>
 
-      {tab === "vzhled" ? (
+      {tab === "pravni" ? (
+        <>
+          <LegalSettings form={form} saved={site ?? form} set={set} setDoc={setDoc} toast={toast} />
+          <div className="flex items-center gap-3">
+            <button className="btn-primary" onClick={save}>
+              Uložit změny
+            </button>
+            {saved && <span className="text-sm font-medium text-pine">✓ Uloženo</span>}
+          </div>
+        </>
+      ) : tab === "vzhled" ? (
         <>
           {/* Úvod webu */}
           <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("uvod")}>

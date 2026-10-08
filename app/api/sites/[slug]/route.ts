@@ -4,6 +4,7 @@ import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
 import { parseCategories, serializeCategories } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
 import { parseCleanerFields } from "@/lib/cleaning";
+import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
 
 const TEXT_FIELDS = [
   "name",
@@ -18,7 +19,15 @@ const TEXT_FIELDS = [
   "bankAccount",
   "cancellationPolicy",
   "cleaningChecklist",
+  "businessName",
+  "businessAddress",
+  "businessRegister",
 ] as const;
+
+// Obchodní podmínky a zásady bývají dlouhé — vlastní limit. PDF se mění jen
+// přes /documents, tady jen text.
+const LEGAL_TEXT_FIELDS = { termsText: "termsUpdatedAt", privacyText: "privacyUpdatedAt" } as const;
+const MAX_LEGAL_TEXT = 100_000;
 
 // Celá čísla s rozsahem, ve kterém dávají smysl.
 const NUMBER_FIELDS: Record<string, { min: number; max: number }> = {
@@ -69,10 +78,37 @@ export async function PATCH(
   if (!guard.ok) return deny(guard.status);
 
   const body = await req.json();
-  const data: Record<string, string | number> = {};
+  const data: Record<string, string | number | Date> = {};
   for (const key of TEXT_FIELDS) {
     if (body[key] === undefined || body[key] === null) continue;
     data[key] = String(body[key]).slice(0, 5000);
+  }
+  // IČ a DIČ: prázdné jde, jinak musí být platné
+  if (typeof body.businessId === "string") {
+    const ico = body.businessId.trim() ? normalizeIco(body.businessId) : "";
+    if (ico && !isValidIco(ico)) return NextResponse.json({ error: "IČ není platné — zkontroluj ho." }, { status: 400 });
+    data.businessId = ico;
+  }
+  if (typeof body.vatId === "string") {
+    const dic = normalizeVatId(body.vatId);
+    if (dic && !isValidVatId(dic)) return NextResponse.json({ error: "DIČ má tvar CZ a 8–10 číslic." }, { status: 400 });
+    data.vatId = dic;
+  }
+  // Texty dokumentů: při změně se posune verze (datum, se kterým host souhlasí)
+  const legalKeys = (Object.keys(LEGAL_TEXT_FIELDS) as (keyof typeof LEGAL_TEXT_FIELDS)[]).filter(
+    (k) => typeof body[k] === "string"
+  );
+  if (legalKeys.length) {
+    const current = await prisma.site.findUniqueOrThrow({
+      where: { id: guard.site.id },
+      select: { termsText: true, privacyText: true },
+    });
+    for (const key of legalKeys) {
+      const text = String(body[key]).slice(0, MAX_LEGAL_TEXT);
+      if (text === current[key]) continue;
+      data[key] = text;
+      data[LEGAL_TEXT_FIELDS[key]] = new Date();
+    }
   }
   // Fotky: dlouhé URL z úložiště by se do 5 000 znaků nevešly — řádek se neusekává
   // uprostřed, jen se omezí počet fotek.
