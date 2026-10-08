@@ -72,6 +72,13 @@ export type Site = {
   privacyPdf: string;
   privacyName: string;
   privacyUpdatedAt: string | null;
+  /** Automatizace: e-maily hostům (JSON, lib/email-templates.ts), kódy k zámkům a příjezd. */
+  emailSettings: string;
+  locks: string;
+  arrivalAddress: string;
+  arrivalInfo: string;
+  wifiName: string;
+  wifiPassword: string;
 };
 
 /** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */

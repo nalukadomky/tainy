@@ -26,20 +26,23 @@ import {
   type ProviderChange,
 } from "@/components/LegalSettings";
 import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
+import { AutomationSettings } from "@/components/AutomationSettings";
+import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 
-type Tab = "vzhled" | "zakladni" | "cenik" | "pravni";
+type Tab = "vzhled" | "zakladni" | "cenik" | "pravni" | "automatizace";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   vzhled: { label: "Vzhled a obsah", short: "Vzhled", hint: "Úvod, fotky, texty a kontakt" },
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
   pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
+  automatizace: { label: "Automatizace", short: "E-maily", hint: "E-maily hostům a zámky" },
 };
 const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 
 // Stejný editor slouží dvěma sekcím administrace: „Můj web" (vzhled a obsah)
 // a „Nastavení" (ceník a pobyt, firma a platby). Formulář i ukládání jsou společné.
 export type EditorArea = "web" | "settings";
-const AREA_TABS: Record<EditorArea, Tab[]> = { web: ["vzhled"], settings: ["zakladni", "cenik", "pravni"] };
+const AREA_TABS: Record<EditorArea, Tab[]> = { web: ["vzhled"], settings: ["zakladni", "cenik", "pravni", "automatizace"] };
 const AREA_PATH: Record<EditorArea, string> = { web: "/admin/web", settings: "/admin/nastaveni" };
 const areaOf = (t: Tab): EditorArea => (AREA_TABS.web.includes(t) ? "web" : "settings");
 
@@ -151,7 +154,19 @@ export function SiteEditor({ area }: { area: EditorArea }) {
     // Nové IČ / jméno / sídlo se propíše i do vlastního znění podmínek a zásad
     const providerChange = site ? providerChangeOf(site, form) : null;
     const withDocs = site ? withProviderInDocs(site, form) : form;
-    const sent = withDocs.termsText === form.termsText && withDocs.privacyText === form.privacyText ? form : withDocs;
+    // E-maily a zámky ve stejném tvaru, v jakém je uloží server (jinak by formulář
+    // po uložení vypadal pořád jako neuložený)
+    const automation = {
+      emailSettings: serializeEmailSettings(parseEmailSettings(form.emailSettings)),
+      locks: JSON.stringify(parseLocks(form.locks)),
+    };
+    const sent =
+      withDocs.termsText === form.termsText &&
+      withDocs.privacyText === form.privacyText &&
+      automation.emailSettings === form.emailSettings &&
+      automation.locks === form.locks
+        ? form
+        : { ...withDocs, ...automation };
     if (sent !== form) setForm(sent);
     sentRef.current = JSON.stringify(sent);
     setFailed(false);
@@ -267,7 +282,7 @@ export function SiteEditor({ area }: { area: EditorArea }) {
         {area === "settings" ? (
           <div>
             <h1 className="font-display text-3xl font-semibold tracking-tight">Nastavení</h1>
-            <p className="mt-1 text-sm text-soft">Ceny a pravidla pobytu, údaje o firmě, platby a dokumenty.</p>
+            <p className="mt-1 text-sm text-soft">Ceny a pravidla pobytu, údaje o firmě, platby, dokumenty a e-maily hostům.</p>
           </div>
         ) : (
         <div>
@@ -361,6 +376,8 @@ export function SiteEditor({ area }: { area: EditorArea }) {
             requestSave={() => setSaveRequested(true)}
           />
         </>
+      ) : tab === "automatizace" ? (
+        <AutomationSettings form={form} set={set} />
       ) : tab === "vzhled" ? (
         <>
           {/* Úvod webu */}

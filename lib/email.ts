@@ -2,9 +2,19 @@
 // Bez RESEND_API_KEY se zpráva jen vypíše do konzole, aby vývoj běžel dál.
 
 import { Resend } from "resend";
-import { czk, plural } from "@/lib/pricing";
+import { czk } from "@/lib/pricing";
 import { greetingName } from "@/lib/vocative";
-import { vatNote } from "@/lib/vat";
+import {
+  fmt,
+  layout,
+  renderEmail,
+  stayBlock,
+  type EmailExtras,
+  type EmailSite,
+  type StayMail,
+} from "@/lib/email-templates";
+
+export type { StayMail } from "@/lib/email-templates";
 
 const FROM = process.env.RESEND_FROM ?? "tainy <rezervace@resend.dev>";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -32,101 +42,13 @@ async function send({ to, subject, html }: Mail): Promise<void> {
   }
 }
 
-function fmt(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${Number(d)}. ${Number(m)}. ${y}`;
-}
+/** E-mail s nadpisem (upozornění majiteli, změna termínu — texty zatím pevné). */
+const titled = (title: string, body: string) => layout(body, title);
 
-function layout(title: string, body: string): string {
-  return `<!doctype html><html lang="cs"><body style="margin:0;background:#f6f3ec;padding:24px;font-family:system-ui,-apple-system,sans-serif;color:#1e2a20">
-  <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e4ddcf;border-radius:16px;padding:28px">
-    <p style="margin:0 0 20px;font-size:18px;font-weight:700;letter-spacing:-.01em">tainy</p>
-    <h1 style="margin:0 0 16px;font-size:21px;line-height:1.3">${title}</h1>
-    ${body}
-  </div>
-</body></html>`;
-}
-
-function stayBlock(r: StayMail): string {
-  const nights = r.nights;
-  return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0">
-    <tr><td style="padding:6px 0;color:#5a6557">Termín</td><td style="padding:6px 0;text-align:right;font-weight:600">${fmt(r.startDate)} – ${fmt(r.endDate)}</td></tr>
-    <tr><td style="padding:6px 0;color:#5a6557">Délka</td><td style="padding:6px 0;text-align:right">${nights} ${plural(nights, "noc", "noci", "nocí")}</td></tr>
-    <tr><td style="padding:6px 0;color:#5a6557">Hosté</td><td style="padding:6px 0;text-align:right">${r.guestSummary || r.guests}</td></tr>
-    ${r.discount ? `<tr><td style="padding:6px 0;color:#5a6557">Sleva (voucher ${r.voucherCode})</td><td style="padding:6px 0;text-align:right;color:#2c5e3f">−${czk(r.discount)}</td></tr>` : ""}
-    <tr><td style="padding:10px 0 0;border-top:1px solid #e4ddcf;font-weight:600">Celkem</td><td style="padding:10px 0 0;border-top:1px solid #e4ddcf;text-align:right;font-weight:700">${czk(r.total)}</td></tr>
-    ${r.vatRate !== undefined ? `<tr><td colspan="2" style="padding:2px 0 0;text-align:right;font-size:12px;color:#5a6557">${vatNote(r.vatRate, r.vatAmount ?? 0)}</td></tr>` : ""}
-  </table>`;
-}
-
-export type StayMail = {
-  publicId: string;
-  siteName: string;
-  guestName: string;
-  /** Křestní jméno pro oslovení (u starších rezervací prázdné — vezme se z celého jména). */
-  firstName?: string;
-  email: string;
-  phone: string;
-  guests: number;
-  /** Rozpis skladby, např. „2× dospělí · 1× pes". Prázdné = hosté se nedělí. */
-  guestSummary: string;
-  startDate: string;
-  endDate: string;
-  nights: number;
-  total: number;
-  /** Sleva z voucheru v Kč (0 = bez voucheru). */
-  discount?: number;
-  voucherCode?: string;
-  /** DPH obsažené v ceně (vatRate 0 = ubytovatel není plátce). */
-  vatRate?: number;
-  vatAmount?: number;
-  paid: boolean;
-  /** Zaplaceno ukázkovou platbou — nesmí se splést se skutečnou. */
-  demo: boolean;
-  checkInTime: string;
-  checkOutTime: string;
-  /** Provozovatel a odkazy na obchodní podmínky / zásady (jen pokud je web má). */
-  legal?: { provider: string; termsUrl?: string; privacyUrl?: string };
-};
-
-const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-
-function legalBlock(legal: StayMail["legal"]): string {
-  if (!legal) return "";
-  const links = [
-    legal.termsUrl && `<a href="${esc(legal.termsUrl)}" style="color:#5a6557">Obchodní podmínky</a>`,
-    legal.privacyUrl && `<a href="${esc(legal.privacyUrl)}" style="color:#5a6557">Ochrana osobních údajů</a>`,
-  ].filter(Boolean);
-  if (!legal.provider && !links.length) return "";
-  return `<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e4ddcf;font-size:12px;line-height:1.6;color:#5a6557">
-    ${legal.provider ? `Provozovatel: ${esc(legal.provider)}<br>` : ""}${links.join(" · ")}
-  </p>`;
-}
-
-/** Potvrzení hostovi s odkazem na jeho rezervaci. */
-export async function sendGuestConfirmation(r: StayMail): Promise<void> {
-  const link = `${appUrl()}/r/${r.publicId}`;
-  const next = r.demo
-    ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6"><strong>Ukázková platba</strong> — žádné peníze se nestrhly, rezervace slouží k vyzkoušení systému.</p>`
-    : r.paid
-      ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Platba je zaznamenaná, nic dalšího řešit nemusíš.</p>`
-      : `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Rezervaci držíme <strong>24 hodin</strong>. Platební údaje i QR kód najdeš na stránce rezervace.</p>`;
-
-  await send({
-    to: r.email,
-    subject: `Rezervace ${r.siteName} — ${fmt(r.startDate)}`,
-    html: layout(
-      `Díky za rezervaci, ${greetingName(r.firstName || r.guestName)}!`,
-      `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Máš u nás rezervovaný pobyt v <strong>${r.siteName}</strong>.</p>
-       ${stayBlock(r)}
-       ${next}
-       <p style="margin:0 0 20px;font-size:14px;color:#5a6557">Příjezd od ${r.checkInTime}, odjezd do ${r.checkOutTime}.</p>
-       <a href="${link}" style="display:inline-block;background:#2c5e3f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;font-size:15px">Zobrazit rezervaci</a>
-       <p style="margin:20px 0 0;font-size:13px;color:#5a6557">Kód rezervace: <strong>${r.publicId}</strong></p>
-       ${legalBlock(r.legal)}`
-    ),
-  });
+/** Potvrzení přijetí rezervace hostovi — text podle Nastavení → Automatizace. */
+export async function sendGuestConfirmation(r: StayMail, site: EmailSite, extras: Omit<EmailExtras, "link">): Promise<void> {
+  const { subject, html } = renderEmail("booking", site, r, { ...extras, link: `${appUrl()}/r/${r.publicId}` });
+  await send({ to: r.email, subject, html });
 }
 
 /** Upozornění majiteli na novou rezervaci. */
@@ -135,7 +57,7 @@ export async function sendOwnerNotification(r: StayMail, ownerEmail: string): Pr
   await send({
     to: ownerEmail,
     subject: `Nová rezervace — ${r.siteName}, ${fmt(r.startDate)}`,
-    html: layout(
+    html: titled(
       "Máš novou rezervaci",
       `<p style="margin:0 0 16px;font-size:15px;line-height:1.6"><strong>${r.guestName}</strong> si rezervoval pobyt v ${r.siteName}.</p>
        ${stayBlock(r)}
@@ -160,7 +82,7 @@ export async function sendGuestDateChange(
   await send({
     to: r.email,
     subject: `Změna termínu — ${r.siteName}, ${fmt(r.startDate)}`,
-    html: layout(
+    html: titled(
       `${greetingName(r.firstName || r.guestName)}, termín pobytu je změněný`,
       `<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Tvůj pobyt v <strong>${r.siteName}</strong> má nový termín.</p>
        <p style="margin:0 0 4px;font-size:14px;color:#5a6557">Původně: <s>${fmt(old.startDate)} – ${fmt(old.endDate)}</s></p>

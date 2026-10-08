@@ -78,6 +78,14 @@ model Site {
   privacyPdf       String    @default("")
   privacyName      String    @default("")
   privacyUpdatedAt DateTime?
+  // Automatizace: nastavení e-mailů hostům (JSON, lib/email-templates.ts),
+  // kódy k zámkům (JSON [{name, code}]) a informace k příjezdu
+  emailSettings  String @default("")
+  locks          String @default("")
+  arrivalAddress String @default("")
+  arrivalInfo    String @default("")
+  wifiName       String @default("")
+  wifiPassword   String @default("")
 
   createdAt    DateTime      @default(now())
   reservations Reservation[]

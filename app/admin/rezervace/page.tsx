@@ -23,6 +23,7 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { cancelReservationConfirm } from "@/components/StatusMenu";
 import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
+import { arrivalDaysOf } from "@/lib/email-templates";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { SwipeToPay } from "@/components/SwipeToPay";
 
@@ -52,7 +53,7 @@ export default function ReservationsPage() {
     if (await confirmDlg.ask(cancelReservationConfirm(r.guestName))) setStatus(r.id, "cancelled");
   }
   function saveAccessCode(r: Reservation, code: string) {
-    toast.show(accessCodeSavedMessage(r, code), "success");
+    toast.show(accessCodeSavedMessage(r, code, arrivalDaysOf(site)), "success");
     setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));
   }
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
@@ -397,7 +398,7 @@ export default function ReservationsPage() {
                   <AccessCode
                     key={r.accessCode}
                     code={r.accessCode}
-                    sendAt={accessCodeSendAt(r)}
+                    sendAt={accessCodeSendAt(r, arrivalDaysOf(site))}
                     context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
                     onSave={(code) => saveAccessCode(r, code)}
                   />
@@ -646,7 +647,7 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
       document.body.style.overflow = overflow;
     };
   }, [onClose]);
-  const sendAt = accessCodeSendAt(r);
+  const sendAt = accessCodeSendAt(r, arrivalDaysOf(site));
   const sent = !!sendAt && sendAt <= new Date();
 
   // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.

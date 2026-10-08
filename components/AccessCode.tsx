@@ -8,9 +8,9 @@ import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
 // Používá se v Rezervacích i na Přehledu (nejbližší pobyt).
 
 /** Hláška po uložení kódu: kdy ho host dostane. */
-export function accessCodeSavedMessage(r: { startDate: string }, code: string): string {
+export function accessCodeSavedMessage(r: { startDate: string }, code: string, daysBefore?: number): string {
   if (!code) return "Kód k zámku je smazaný.";
-  const sendAt = accessCodeSendAt({ startDate: r.startDate, accessCode: code, accessCodeSetAt: new Date().toISOString() });
+  const sendAt = accessCodeSendAt({ startDate: r.startDate, accessCode: code, accessCodeSetAt: new Date().toISOString() }, daysBefore);
   return sendAt && sendAt > new Date()
     ? `Kód je uložený — hostovi ho pošleme e-mailem ${fmtSendAt(sendAt)}.`
     : "Kód je uložený — hostovi ho posíláme e-mailem hned.";

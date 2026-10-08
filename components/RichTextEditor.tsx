@@ -21,6 +21,7 @@ export function RichTextEditor({
   placeholder,
   collapsible = false,
   forceExpanded = false,
+  insertRef,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -29,6 +30,8 @@ export function RichTextEditor({
   collapsible?: boolean;
   /** Rozbalit (např. po převodu z Wordu, ať majitel text zkontroluje). */
   forceExpanded?: boolean;
+  /** Sem editor zapíše funkci, která vloží text na místo kurzoru (proměnné v e-mailech). */
+  insertRef?: React.MutableRefObject<((text: string) => void) | null>;
 }) {
   const [expanded, setExpanded] = useState(!collapsible || !value.trim());
   useEffect(() => {
@@ -77,6 +80,14 @@ export function RichTextEditor({
     emitted.current = value;
     editor.commands.setContent(richTextToHtml(value), { emitUpdate: false });
   }, [editor, value]);
+
+  useEffect(() => {
+    if (!insertRef) return;
+    insertRef.current = editor ? (text) => editor.chain().focus().insertContent(text).run() : null;
+    return () => {
+      insertRef.current = null;
+    };
+  }, [editor, insertRef]);
 
   const active = useEditorState({
     editor,

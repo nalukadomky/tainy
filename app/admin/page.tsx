@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAdminData, fmtDate, fmtStay, type Reservation, type Site } from "@/lib/admin";
 import { AccessCode, accessCodeSavedMessage } from "@/components/AccessCode";
 import { accessCodeSendAt } from "@/lib/access-code";
+import { arrivalDaysOf } from "@/lib/email-templates";
 import { useToast } from "@/components/Toast";
 import { StatusMenu } from "@/components/StatusMenu";
 import { Dropdown } from "@/components/Dropdown";
@@ -37,7 +38,7 @@ function Dashboard() {
   const { site, reservations, costs, loading, error, setStatus, setAccessCode } = useAdminData();
   const toast = useToast();
   function saveAccessCode(r: Reservation, code: string) {
-    toast.show(accessCodeSavedMessage(r, code), "success");
+    toast.show(accessCodeSavedMessage(r, code, arrivalDaysOf(site)), "success");
     setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));
   }
   const [range, setRange] = useState<Range>("6");
@@ -448,7 +449,7 @@ function NextStay({
             compact
             key={r.accessCode}
             code={r.accessCode}
-            sendAt={accessCodeSendAt(r)}
+            sendAt={accessCodeSendAt(r, arrivalDaysOf(site))}
             context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
             onSave={onAccessCode}
           />

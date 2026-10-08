@@ -11,6 +11,8 @@ import { blockedRanges, lockSite } from "@/lib/availability";
 import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { vatOfQuote, vatRateOf } from "@/lib/vat";
+import { buildPayment } from "@/lib/payment";
+import { parseEmailSettings } from "@/lib/email-templates";
 import { appUrl, sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
 
 // Jak dlouho držíme nezaplacenou rezervaci, než termín zase uvolní.
@@ -205,7 +207,14 @@ export async function POST(req: NextRequest) {
       privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/w/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
     },
   };
-  await Promise.all([sendGuestConfirmation(mail), sendOwnerNotification(mail, site.contactEmail)]);
+  const pay = payment === "qr" ? buildPayment(site.bankAccount, created.totalPrice, site.name, created.publicId) : null;
+  await Promise.all([
+    sendGuestConfirmation(mail, site, {
+      payment: pay ? { account: site.bankAccount, vs: pay.vs, amount: created.totalPrice } : null,
+      holdUntil: created.expiresAt?.toISOString() ?? null,
+    }),
+    parseEmailSettings(site.emailSettings).ownerNotify && sendOwnerNotification(mail, site.contactEmail),
+  ]);
 
   return NextResponse.json(
     { publicId: created.publicId, total: created.totalPrice, status: created.status },

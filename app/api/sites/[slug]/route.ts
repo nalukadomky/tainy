@@ -6,6 +6,7 @@ import { isTime } from "@/lib/stay";
 import { parseCleanerFields } from "@/lib/cleaning";
 import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { cleanVatRate } from "@/lib/vat";
+import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
 
 const TEXT_FIELDS = [
@@ -24,6 +25,10 @@ const TEXT_FIELDS = [
   "businessName",
   "businessAddress",
   "businessRegister",
+  "arrivalAddress",
+  "arrivalInfo",
+  "wifiName",
+  "wifiPassword",
 ] as const;
 
 // Obchodní podmínky a zásady bývají dlouhé — vlastní limit. PDF se mění jen
@@ -63,9 +68,20 @@ export async function GET(
   if (!site) return NextResponse.json({ error: "Web nenalezen." }, { status: 404 });
 
   // Číslo účtu vidí jen vlastník — hostovi se ukazuje až v QR platbě jeho rezervace.
+  // Kódy k zámkům, Wi‑Fi, adresa a pokyny k příjezdu jdou hostům jen e-mailem k jejich pobytu.
   const user = await getUser();
   if (site.ownerId && site.ownerId === user?.id) return NextResponse.json(site);
-  const { bankAccount: _bankAccount, ownerId: _ownerId, ...publicSite } = site;
+  const {
+    bankAccount: _bankAccount,
+    ownerId: _ownerId,
+    emailSettings: _emailSettings,
+    locks: _locks,
+    arrivalAddress: _arrivalAddress,
+    arrivalInfo: _arrivalInfo,
+    wifiName: _wifiName,
+    wifiPassword: _wifiPassword,
+    ...publicSite
+  } = site;
   return NextResponse.json(publicSite);
 }
 
@@ -148,6 +164,9 @@ export async function PATCH(
     if (!isTime(body[key])) continue;
     data[key] = body[key];
   }
+  // Automatizace: e-maily a zámky projdou parserem (výchozí hodnoty, limity, jen http odkazy)
+  if (typeof body.emailSettings === "string") data.emailSettings = serializeEmailSettings(parseEmailSettings(body.emailSettings));
+  if (typeof body.locks === "string") data.locks = JSON.stringify(parseLocks(body.locks));
   if (body.heroStyle !== undefined) {
     data.heroStyle = body.heroStyle === "photo" ? "photo" : "text";
   }
