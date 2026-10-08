@@ -29,6 +29,7 @@ const MORE: Item[] = [
   { href: "/admin/kalendar/uklid", label: "Úklid", icon: "broom" },
   { href: "/admin/naklady", label: "Náklady", icon: "receipt" },
   { href: "/admin/vouchery", label: "Vouchery", icon: "ticket" },
+  { href: "/admin/nastaveni", label: "Nastavení", icon: "settings" },
 ];
 
 export function AdminNav() {
@@ -328,7 +329,7 @@ function TabLink({ item, active }: { item: Item; active: boolean }) {
 }
 
 // Jednotné kreslené ikony (místo emoji, které každý systém kreslí jinak)
-type IconName = "home" | "calendar" | "list" | "users" | "web" | "broom" | "receipt" | "ticket" | "dots" | "menu" | "close" | "logout";
+type IconName = "home" | "calendar" | "list" | "users" | "web" | "broom" | "receipt" | "ticket" | "settings" | "dots" | "menu" | "close" | "logout";
 const PATHS: Record<IconName, React.ReactNode> = {
   home: (
     <>
@@ -380,6 +381,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M3.5 7.5a2 2 0 0 0 2-2h13a2 2 0 0 0 2 2v3a2 2 0 0 0 0 3v3a2 2 0 0 0-2 2h-13a2 2 0 0 0-2-2v-3a2 2 0 0 0 0-3z" />
       <path d="M14 7v10" strokeDasharray="2 2" />
+    </>
+  ),
+  // Ozubené kolo (tvar podle ikon Lucide, licence ISC)
+  settings: (
+    <>
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
     </>
   ),
   dots: (

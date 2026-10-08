@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   useAdminData,
   fmtDate,
@@ -9,6 +10,7 @@ import {
   SOURCE_LABEL,
   STATUS_LABEL,
   STATUS_STYLE,
+  type GuestDeleteMode,
   type Reservation,
 } from "@/lib/admin";
 import { czk, nightsBetween, plural } from "@/lib/pricing";
@@ -16,6 +18,7 @@ import { todayISO } from "@/lib/stay";
 import { Dropdown } from "@/components/Dropdown";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { ListPageSkeleton } from "@/components/Skeleton";
+import { useToast } from "@/components/Toast";
 
 type Show = "all" | "returning" | "upcoming" | "once";
 type Sort = "spent" | "last" | "stays" | "name";
@@ -24,6 +27,8 @@ type Guest = {
   key: string;
   name: string;
   email: string;
+  /** Číslo anonymizovaného hosta (nesouhlas s GDPR), jinak prázdné. */
+  ref: string;
   phone: string;
   /** Všechny rezervace hosta včetně zrušených, od nejnovější. */
   stays: Reservation[];
@@ -40,22 +45,47 @@ type Guest = {
 const nightsOf = (r: Reservation) => nightsBetween(new Date(r.startDate), new Date(r.endDate));
 
 export default function GuestsPage() {
-  const { site, reservations, loading, error } = useAdminData();
+  const { site, reservations, loading, error, removeGuest } = useAdminData();
+  const toast = useToast();
+  // Host, u kterého se právě potvrzuje smazání
+  const [deleting, setDeleting] = useState<Guest | null>(null);
+
+  async function confirmDelete(g: Guest, mode: GuestDeleteMode) {
+    setDeleting(null);
+    setOpen(null);
+    try {
+      await removeGuest({ email: g.email, ref: g.ref }, mode);
+      toast.show(
+        mode === "pseudonymize"
+          ? "Host je anonymizovaný — ve statistikách zůstal bez osobních údajů."
+          : mode === "keepRevenue"
+            ? "Host je smazaný, částky zůstaly v příjmech."
+            : "Host je smazaný.",
+        "success"
+      );
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Hosta se nepodařilo smazat.");
+    }
+  }
   const [query, setQuery] = useState("");
   const [show, setShow] = useState<Show>("all");
   const [sort, setSort] = useState<Sort>("spent");
   const [open, setOpen] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  // Host = e-mail. Zrušené rezervace se ukážou v detailu, ale nepočítají se.
+  // Host = e-mail (anonymizovaný host = jeho číslo). Zrušené rezervace se ukážou
+  // v detailu, ale nepočítají se.
   const guests = useMemo(() => {
     const today = todayISO();
     const map = new Map<string, Guest>();
-    for (const r of [...reservations].sort((a, b) => b.startDate.localeCompare(a.startDate))) {
-      const key = r.email.toLowerCase();
+    // Rezervace smazaných hostů (ponechané kvůli příjmům) už žádnému hostovi nepatří
+    for (const r of [...reservations]
+      .filter((r) => !r.anonymized && (r.email || r.guestRef))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate))) {
+      const key = r.guestRef || r.email.toLowerCase();
       const g =
         map.get(key) ??
-        ({ key, name: r.guestName, email: r.email, phone: r.phone, stays: [], count: 0, nights: 0, spent: 0, first: "", last: "", next: null } as Guest);
+        ({ key, name: r.guestName, email: r.email, ref: r.guestRef, phone: r.phone, stays: [], count: 0, nights: 0, spent: 0, first: "", last: "", next: null } as Guest);
       g.stays.push(r);
       if (!g.phone && r.phone) g.phone = r.phone;
       if (r.status !== "cancelled") {
@@ -152,6 +182,10 @@ export default function GuestsPage() {
 
   return (
     <div className="space-y-5">
+      {toast.node}
+      {deleting && (
+        <DeleteGuestDialog guest={deleting} onCancel={() => setDeleting(null)} onConfirm={(mode) => confirmDelete(deleting, mode)} />
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Hosté</h1>
@@ -270,7 +304,7 @@ export default function GuestsPage() {
                     )}
                   </p>
                   <p className="truncate text-sm text-soft">
-                    {g.email}
+                    {g.ref ? "Anonymizovaný na žádost (GDPR)" : g.email}
                     {g.phone && <span className="hidden sm:inline"> · {g.phone}</span>}
                   </p>
                   <p className="mt-0.5 text-xs text-soft sm:hidden">
@@ -304,14 +338,19 @@ export default function GuestsPage() {
                       poprvé <strong className="text-ink">{fmtDate(g.first)}</strong>
                     </span>
                     <span className="ml-auto flex gap-3">
-                      <a href={`mailto:${g.email}`} className="font-medium text-pine hover:underline">
-                        Napsat e-mail
-                      </a>
+                      {g.email && (
+                        <a href={`mailto:${g.email}`} className="font-medium text-pine hover:underline">
+                          Napsat e-mail
+                        </a>
+                      )}
                       {g.phone && (
                         <a href={`tel:${g.phone.replace(/\s/g, "")}`} className="font-medium text-pine hover:underline">
                           Zavolat
                         </a>
                       )}
+                      <button type="button" onClick={() => setDeleting(g)} className="font-medium text-coral hover:underline">
+                        Smazat hosta
+                      </button>
                     </span>
                   </div>
                   <div className="divide-y divide-line rounded-xl border border-line bg-surface">
@@ -355,5 +394,111 @@ export default function GuestsPage() {
         })}
       </div>
     </div>
+  );
+}
+
+/** Potvrzení smazání hosta — co se smaže a jak naložit s daty pro statistiky. */
+function DeleteGuestDialog({
+  guest,
+  onCancel,
+  onConfirm,
+}: {
+  guest: Guest;
+  onCancel: () => void;
+  onConfirm: (mode: GuestDeleteMode) => void;
+}) {
+  // Už anonymizovaného hosta jde jen smazat (s částkami, nebo úplně)
+  const [mode, setMode] = useState<GuestDeleteMode>(guest.ref ? "keepRevenue" : "pseudonymize");
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    cancelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const n = guest.stays.length;
+  const option = (value: GuestDeleteMode, title: string, hint: string) => (
+    <label
+      className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
+        mode === value ? "border-pine/50 bg-pine/5" : "border-line hover:bg-bg"
+      }`}
+    >
+      <input
+        type="radio"
+        name="guest-delete-mode"
+        className="mt-0.5 accent-[var(--pine)]"
+        checked={mode === value}
+        onChange={() => setMode(value)}
+      />
+      <span>
+        <span className="block text-sm font-semibold text-ink">{title}</span>
+        <span className="mt-0.5 block text-xs text-soft">{hint}</span>
+      </span>
+    </label>
+  );
+
+  // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onCancel}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={`Smazat hosta ${guest.name}?`}
+        className="rise max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-xl font-semibold">Smazat hosta {guest.name}?</h2>
+        <p className="mt-2 text-sm text-soft">
+          Smaže se jméno, e-mail, telefon a poznámky k{" "}
+          <strong className="text-ink">
+            {n} {plural(n, "rezervaci", "rezervacím", "rezervacím")}
+          </strong>
+          . Úklidy a náklady za úklid zůstanou vždy. Tuhle akci nejde vrátit.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {!guest.ref &&
+            option(
+              "pseudonymize",
+              "Anonymizovat (nesouhlas s GDPR)",
+              "Z hosta bude „Host č. …“ bez jména a kontaktu. Zůstane v seznamu hostů i ve všech statistikách — pobyty, noci, útrata."
+            )}
+          {option(
+            "keepRevenue",
+            "Smazat, ponechat částky v příjmech",
+            "Host zmizí ze seznamu hostů. Rezervace zůstanou jako „Smazaný host“ jen s termínem a částkou, aby seděly tržby."
+          )}
+          {option(
+            "full",
+            "Smazat úplně",
+            "Rezervace zmizí i z tržeb a statistik, včetně informací o ubytování."
+          )}
+        </div>
+
+        {guest.next && mode === "full" && (
+          <p className="mt-3 rounded-xl bg-amber/15 px-4 py-2.5 text-sm text-[#92600a]">
+            Host má nadcházející pobyt ({fmtDate(guest.next)}) — při úplném smazání se termín v kalendáři uvolní.
+          </p>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button ref={cancelRef} type="button" className="btn-ghost flex-1 !py-2.5" onClick={onCancel}>
+            Zrušit
+          </button>
+          <button
+            type="button"
+            className="btn-primary flex-1 !bg-coral !py-2.5 hover:!bg-coral/90"
+            onClick={() => onConfirm(mode)}
+          >
+            {mode === "pseudonymize" ? "Anonymizovat" : "Smazat hosta"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

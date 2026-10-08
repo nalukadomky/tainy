@@ -6,7 +6,7 @@ import type { Site } from "@/lib/admin";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { htmlToRichText } from "@/lib/richtext";
 import { toIBAN, formatIBAN } from "@/lib/payment";
-import { DEFAULT_VAT_RATE, cleanVatRate } from "@/lib/vat";
+import { cleanVatRate } from "@/lib/vat";
 import {
   LEGAL_PATH,
   LEGAL_TITLE,
@@ -292,34 +292,7 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
           <div className="mt-3 space-y-2">
             <div className="flex items-center gap-3">
               <span className="text-sm text-soft">Sazba</span>
-              <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg p-1">
-                <button
-                  type="button"
-                  aria-pressed={form.vatRate === DEFAULT_VAT_RATE}
-                  onClick={() => set("vatRate", DEFAULT_VAT_RATE)}
-                  className={`${segment(form.vatRate === DEFAULT_VAT_RATE)} !flex-none !px-4`}
-                >
-                  {DEFAULT_VAT_RATE} %
-                </button>
-                {/* Vlastní sazba — libovolné celé procento */}
-                <label className="relative">
-                  <span className="sr-only">Jiná sazba DPH v procentech</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={50}
-                    placeholder="jiná"
-                    value={form.vatRate === DEFAULT_VAT_RATE ? "" : form.vatRate || ""}
-                    onChange={(e) => set("vatRate", e.target.value ? Number(e.target.value) : DEFAULT_VAT_RATE)}
-                    onBlur={() => set("vatRate", cleanVatRate(form.vatRate))}
-                    className={`h-8 w-20 appearance-none rounded-lg border bg-surface pl-3 pr-7 text-sm tabular-nums outline-none transition [-moz-appearance:textfield] focus:border-pine/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                      form.vatRate !== DEFAULT_VAT_RATE ? "border-pine/40 font-medium text-ink" : "border-transparent text-soft"
-                    }`}
-                  />
-                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-soft">%</span>
-                </label>
-              </div>
+              <VatRateInput value={form.vatRate} onChange={(rate) => set("vatRate", rate)} />
             </div>
             <button
               type="button"
@@ -329,7 +302,7 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
               Proč 12 %? Znění zákona
             </button>
             <p className="text-xs text-soft">
-              Ubytování má sníženou sazbu 12 %, jinou sazbu napiš do pole vedle. Ceny v ceníku zadávej{" "}
+              Ubytování má sníženou sazbu 12 %. Ceny v ceníku zadávej{" "}
               <strong>včetně DPH</strong> — host vždy vidí konečnou cenu a pod ní „včetně DPH {form.vatRate} %“ s částkou.
             </p>
             {!form.vatId.trim() && (
@@ -346,8 +319,75 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
   );
 }
 
+/**
+ * Sazba DPH v procentech: zamčená, upravit jde až po potvrzení (12 % platí pro
+ * krátkodobé ubytování). Jen číslice; prázdné nebo neplatné → 12 %.
+ */
+function VatRateInput({ value, onChange }: { value: number; onChange: (rate: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [editable, setEditable] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Změna zvenku (např. obnovení dat ze serveru) se propíše do pole
+  useEffect(() => setText(String(value)), [value]);
+
+  return (
+    <>
+      {asking && (
+        <VatLawDialog
+          onClose={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            setEditable(true);
+            requestAnimationFrame(() => inputRef.current?.select());
+          }}
+        />
+      )}
+      <label className="flex items-center gap-2">
+        <span className="sr-only">Sazba DPH v procentech</span>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
+          readOnly={!editable}
+          aria-readonly={!editable}
+          className="field text-center tabular-nums"
+          style={{ width: "4.5rem", ...(editable ? {} : { background: "var(--bg)", color: "var(--soft)", cursor: "default" }) }}
+          value={text}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+            setText(digits);
+            const n = Number(digits);
+            if (n >= 1 && n <= 50) onChange(n);
+          }}
+          onBlur={() => {
+            if (!editable) return;
+            const rate = cleanVatRate(text);
+            setText(String(rate));
+            onChange(rate);
+            setEditable(false); // po úpravě se pole zase zamkne
+          }}
+        />
+        <span className="text-sm font-medium text-soft">%</span>
+      </label>
+      {!editable && (
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="text-sm font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine"
+        >
+          Upravit
+        </button>
+      )}
+    </>
+  );
+}
+
 /** Výňatek ze zákona o DPH ke snížené sazbě 12 % pro ubytovací služby. */
-function VatLawDialog({ onClose }: { onClose: () => void }) {
+function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?: () => void }) {
+  // S onConfirm je to potvrzení před úpravou sazby, jinak jen informace
+  const confirm = !!onConfirm;
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     closeRef.current?.focus();
@@ -365,13 +405,15 @@ function VatLawDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Sazba DPH u ubytování"
+        aria-label={confirm ? "Opravdu změnit sazbu DPH?" : "Sazba DPH u ubytování"}
         className="rise flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
-            <h2 className="font-display text-xl font-semibold">Sazba DPH u ubytování</h2>
+            <h2 className="font-display text-xl font-semibold">
+              {confirm ? "Opravdu změnit sazbu DPH?" : "Sazba DPH u ubytování"}
+            </h2>
             <p className="mt-0.5 text-xs text-soft">Zákon č. 235/2004 Sb., o dani z přidané hodnoty — znění od 1. 1. 2024</p>
           </div>
           <button
@@ -386,6 +428,12 @@ function VatLawDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-4 overflow-y-auto px-5 py-5 text-sm text-soft">
+          {confirm && (
+            <p className="rounded-xl bg-amber/15 px-4 py-3 text-sm text-[#92600a]">
+              Pro krátkodobý pronájem (ubytování hostů na noci) platí sazba <strong>12 %</strong>. Jinou sazbu nastav, jen
+              pokud víš, že se na tvoje ubytování vztahuje — z ceny pobytu se podle ní počítá DPH, které uvidí hosté.
+            </p>
+          )}
           <p>
             Krátkodobé ubytování hostů (chata, apartmán, pokoj) je <strong className="text-ink">ubytovací služba</strong>.
             Pro ubytovací služby platí <strong className="text-ink">snížená sazba DPH 12 %</strong>.
@@ -418,23 +466,34 @@ function VatLawDialog({ onClose }: { onClose: () => void }) {
             k ubytování prodáváš i jiné služby (např. stravování s alkoholem, wellness), mohou mít jinou sazbu.
           </p>
 
-          <p className="rounded-xl bg-amber/15 px-4 py-3 text-xs text-[#92600a]">
-            Informace je orientační. V konkrétním případě se poraď s daňovým poradcem nebo účetní.
+          <p className="text-xs">
+            Informace je orientační, v konkrétním případě se poraď s daňovým poradcem nebo účetní.{" "}
+            <a
+              href="https://www.zakonyprolidi.cz/cs/2004-235"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-pine underline-offset-2 hover:underline"
+            >
+              Celé znění zákona ↗
+            </a>
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
-          <a
-            href="https://www.zakonyprolidi.cz/cs/2004-235"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-soft underline-offset-2 hover:text-ink hover:underline"
-          >
-            Celé znění zákona ↗
-          </a>
-          <button type="button" onClick={onClose} className="btn-ghost !px-5 !py-2 text-sm">
-            Zavřít
-          </button>
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
+          {confirm ? (
+            <>
+              <button type="button" onClick={onConfirm} className="btn-ghost flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none">
+                Přesto upravit
+              </button>
+              <button type="button" onClick={onClose} className="btn-primary flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none">
+                Ponechat 12 %
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onClose} className="btn-ghost !px-5 !py-2 text-sm">
+              Zavřít
+            </button>
+          )}
         </div>
       </div>
     </div>,

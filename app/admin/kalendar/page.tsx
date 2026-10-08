@@ -578,9 +578,15 @@ function StayDetail({
         </dd>
         <dt className="text-soft">Kontakt</dt>
         <dd className="min-w-0 space-y-0.5">
-          <a href={`mailto:${r.email}`} className="block truncate text-pine hover:underline">
-            {r.email}
-          </a>
+          {r.email ? (
+            <a href={`mailto:${r.email}`} className="block truncate text-pine hover:underline">
+              {r.email}
+            </a>
+          ) : (
+            <span className="text-soft">
+              {r.anonymized ? "Údaje hosta smazány" : r.guestRef ? "Anonymizovaný na žádost (GDPR)" : "—"}
+            </span>
+          )}
           {r.phone && (
             <a href={`tel:${r.phone.replace(/\s/g, "")}`} className="block text-pine hover:underline">
               {r.phone}
@@ -667,7 +673,7 @@ function StayTimes({
             ? "✓ Časy pobytu uloženy"
             : state === "error"
               ? "Čas se nepodařilo uložit, zkus to znovu."
-              : "Jen pro tuhle rezervaci — výchozí časy jsou v Ceník a pobyt."}
+              : "Jen pro tuhle rezervaci — výchozí časy jsou v Nastavení → Ceník a pobyt."}
       </p>
     </div>
   );

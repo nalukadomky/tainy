@@ -163,7 +163,7 @@ function Dashboard() {
       {/* Chybějící údaje webu (provozovatel, podmínky, účet pro platby) */}
       {missing.length > 0 && (
         <Link
-          href="/admin/web?sekce=pravni"
+          href="/admin/nastaveni?sekce=pravni"
           className="flex items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber/10 p-4 transition hover:bg-amber/15"
         >
           <span>

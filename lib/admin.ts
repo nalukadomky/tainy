@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
-import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
+import { DELETED_GUEST, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { stayTimes } from "@/lib/stay";
 
 export type Unit = "pct" | "czk";
@@ -74,9 +74,18 @@ export type Site = {
   privacyUpdatedAt: string | null;
 };
 
+/** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */
+export type GuestDeleteMode = "pseudonymize" | "keepRevenue" | "full";
+
 export type Reservation = {
   id: string;
   guestName: string;
+  /** Křestní jméno (oslovení). */
+  firstName: string;
+  /** Host byl smazán — rezervace zůstala bez osobních údajů kvůli příjmům. */
+  anonymized: boolean;
+  /** Anonymizovaný host (nesouhlas s GDPR): „host-4821" — dál se počítá mezi hosty. */
+  guestRef: string;
   email: string;
   phone: string;
   guests: number;
@@ -251,12 +260,60 @@ export function useAdminData() {
     []
   );
 
+  /**
+   * Smaže hosta (rezervace se stejným e-mailem nebo číslem anonymizovaného hosta) —
+   * hned v seznamu, na pozadí na serveru. Režimy:
+   *  pseudonymize — „Host č. 4821" bez osobních údajů, zůstává ve statistikách hostů
+   *  keepRevenue  — rezervace zůstanou jako „Smazaný host" kvůli příjmům
+   *  full         — rezervace zmizí (úklidy zůstanou jako samostatné)
+   */
+  const removeGuest = useCallback(
+    async (guest: { email: string; ref: string }, mode: GuestDeleteMode) => {
+      const key = guest.email.toLowerCase();
+      const mine = (r: Reservation) =>
+        !r.anonymized && (guest.ref ? r.guestRef === guest.ref : r.email.toLowerCase() === key);
+      const scrub = { firstName: "", email: "", phone: "", note: "" };
+      // Číslo anonymizovaného hosta určí server — do té doby dočasné označení
+      const tmpRef = `tmp-${Date.now()}`;
+      let before: Reservation[] = [];
+      setReservations((list) => {
+        before = list;
+        if (mode === "full") return list.filter((r) => !mine(r));
+        return list.map((r) =>
+          !mine(r)
+            ? r
+            : mode === "keepRevenue"
+              ? { ...r, ...scrub, guestName: DELETED_GUEST, guestRef: "", anonymized: true }
+              : { ...r, ...scrub, guestName: "Anonymizovaný host", guestRef: guest.ref || tmpRef }
+        );
+      });
+      const res = await fetch("/api/guests/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: slug, email: guest.email, ref: guest.ref, mode }),
+      }).catch(() => null);
+      if (!res?.ok) {
+        setReservations(before);
+        throw new Error("Hosta se nepodařilo smazat, zkus to znovu.");
+      }
+      if (mode === "pseudonymize") {
+        const data: { ref?: string; name?: string } = await res.json().catch(() => ({}));
+        if (data.ref && data.name) {
+          setReservations((list) =>
+            list.map((r) => (r.guestRef === tmpRef ? { ...r, guestRef: data.ref!, guestName: data.name! } : r))
+          );
+        }
+      }
+    },
+    [slug]
+  );
+
   /** Nahradí rezervaci v seznamu její novou verzí ze serveru (např. po změně termínu). */
   const replaceReservation = useCallback((updated: Reservation) => {
     setReservations((list) => list.map((r) => (r.id === updated.id ? updated : r)));
   }, []);
 
-  return { slug, site, setSite, reservations, costs, setCosts, blackouts, setBlackouts, loading, error, reload, setStatus, setTimes, replaceReservation };
+  return { slug, site, setSite, reservations, costs, setCosts, blackouts, setBlackouts, loading, error, reload, setStatus, setTimes, replaceReservation, removeGuest };
 }
 
 export function fmtDate(iso: string): string {

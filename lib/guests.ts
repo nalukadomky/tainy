@@ -7,6 +7,9 @@
 
 import type { Adjust } from "@/lib/pricing";
 
+/** Jméno rezervace, jejíž host byl smazán (zůstala jen kvůli příjmům). */
+export const DELETED_GUEST = "Smazaný host";
+
 export type GuestKey = "adult" | "child" | "infant" | "dog";
 
 export type GuestCategory = {

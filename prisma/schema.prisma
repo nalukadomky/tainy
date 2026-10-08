@@ -111,6 +111,10 @@ model Reservation {
   site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   guestName  String
   firstName  String   @default("") // křestní jméno — podle něj se hosta oslovuje
+  // Host byl smazán, ale rezervace zůstala kvůli příjmům — bez osobních údajů
+  anonymized Boolean  @default(false)
+  // Anonymizovaný host (nesouhlas s GDPR): „Host č. 4821" — zůstává ve statistikách hostů
+  guestRef   String   @default("")
   email      String
   phone      String   @default("")
   guests     Int                          // osoby počítané do kapacity

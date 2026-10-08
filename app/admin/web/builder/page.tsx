@@ -420,12 +420,12 @@ function SectionPanel({
         <>
           <p className="text-sm text-soft">
             Ceny, počty hostů, pravidla pobytu a poplatky se nastavují zvlášť v části{" "}
-            <strong className="text-ink">Ceník a pobyt</strong>, ať je cenotvorba přehledně na jednom místě.
+            <strong className="text-ink">Nastavení → Ceník a pobyt</strong>, ať je cenotvorba přehledně na jednom místě.
           </p>
-          <button type="button" onClick={() => onLeave("/admin/web?sekce=cenik")} className="btn-primary w-full">
+          <button type="button" onClick={() => onLeave("/admin/nastaveni?sekce=cenik")} className="btn-primary w-full">
             Upravit ceník a pobyt →
           </button>
-          <button type="button" onClick={() => onLeave("/admin/web?sekce=pravni")} className="btn-ghost w-full">
+          <button type="button" onClick={() => onLeave("/admin/nastaveni?sekce=pravni")} className="btn-ghost w-full">
             Provozovatel a obchodní podmínky →
           </button>
         </>

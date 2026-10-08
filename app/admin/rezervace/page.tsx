@@ -225,7 +225,7 @@ export default function ReservationsPage() {
                   {fmtStay(r, site)} · {guestsLabel(r, site)}
                 </p>
                 <p className="mt-0.5 text-sm text-soft">
-                  {r.email}
+                  {r.anonymized ? "Údaje hosta smazány" : r.guestRef ? "Anonymizovaný na žádost (GDPR)" : r.email}
                   {r.phone && ` · ${r.phone}`}
                 </p>
               </div>
