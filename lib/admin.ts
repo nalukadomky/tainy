@@ -109,6 +109,15 @@ export type Reservation = {
   expiresAt: string | null;
   publicId: string;
   createdAt: string;
+  /** DPH v době rezervace (0 = neplátce) a jeho částka obsažená v ceně. */
+  vatRate: number;
+  vatAmount: number;
+  /** Kdy host souhlasil s obchodními podmínkami. */
+  termsAcceptedAt: string | null;
+  /** Kód k zámku pro přístup do nemovitosti (prázdný = zatím nezadaný). */
+  accessCode: string;
+  /** Kdy byl kód zadaný — podle toho se počítá odeslání hostovi. */
+  accessCodeSetAt: string | null;
 };
 
 export type Cost = {
@@ -260,6 +269,27 @@ export function useAdminData() {
     []
   );
 
+  /** Kód k zámku rezervace — hned v seznamu, při chybě vrátí původní. */
+  const setAccessCode = useCallback(async (id: string, accessCode: string) => {
+    let before: Pick<Reservation, "accessCode" | "accessCodeSetAt"> | undefined;
+    setReservations((list) =>
+      list.map((r) => {
+        if (r.id !== id) return r;
+        before = { accessCode: r.accessCode, accessCodeSetAt: r.accessCodeSetAt };
+        return { ...r, accessCode, accessCodeSetAt: accessCode ? new Date().toISOString() : null };
+      })
+    );
+    const res = await fetch(`/api/reservations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessCode }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setReservations((list) => list.map((r) => (r.id === id && before ? { ...r, ...before } : r)));
+      throw new Error("Kód k zámku se nepodařilo uložit, zkus to znovu.");
+    }
+  }, []);
+
   /**
    * Smaže hosta (rezervace se stejným e-mailem nebo číslem anonymizovaného hosta) —
    * hned v seznamu, na pozadí na serveru. Režimy:
@@ -313,7 +343,7 @@ export function useAdminData() {
     setReservations((list) => list.map((r) => (r.id === updated.id ? updated : r)));
   }, []);
 
-  return { slug, site, setSite, reservations, costs, setCosts, blackouts, setBlackouts, loading, error, reload, setStatus, setTimes, replaceReservation, removeGuest };
+  return { slug, site, setSite, reservations, costs, setCosts, blackouts, setBlackouts, loading, error, reload, setStatus, setTimes, replaceReservation, removeGuest, setAccessCode };
 }
 
 export function fmtDate(iso: string): string {

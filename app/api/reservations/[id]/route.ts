@@ -16,7 +16,18 @@ export async function PATCH(
   if (!guard.ok) return deny(guard.status);
 
   const body = await req.json();
-  const data: { status?: string; checkInTime?: string; checkOutTime?: string } = {};
+  const data: {
+    status?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
+    accessCode?: string;
+    accessCodeSetAt?: Date | null;
+  } = {};
+  // Kód k zámku pro přístup do nemovitosti (prázdný = smazat)
+  if (typeof body.accessCode === "string") {
+    data.accessCode = body.accessCode.trim().slice(0, 40);
+    data.accessCodeSetAt = data.accessCode ? new Date() : null;
+  }
   if (body.status !== undefined) {
     if (!STATUSES.includes(body.status)) {
       return NextResponse.json({ error: "Neplatný stav rezervace." }, { status: 400 });

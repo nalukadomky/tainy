@@ -115,6 +115,9 @@ model Reservation {
   anonymized Boolean  @default(false)
   // Anonymizovaný host (nesouhlas s GDPR): „Host č. 4821" — zůstává ve statistikách hostů
   guestRef   String   @default("")
+  // Kód k zámku / schránce s klíči pro tenhle pobyt (vidí ho jen majitel)
+  accessCode String   @default("")
+  accessCodeSetAt DateTime? // kdy byl kód zadaný (uložený na poslední chvíli = odeslat hned)
   email      String
   phone      String   @default("")
   guests     Int                          // osoby počítané do kapacity
