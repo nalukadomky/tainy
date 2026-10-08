@@ -151,6 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         publicId: updated.publicId,
         siteName: site.name,
         guestName: updated.guestName,
+        firstName: updated.firstName,
         email: updated.email,
         phone: updated.phone,
         guests: updated.guests,

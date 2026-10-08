@@ -12,6 +12,7 @@ import { defaultCategories, type GuestCategory } from "@/lib/guests";
 import { Wordmark } from "@/components/Logo";
 import { EditableText, EditSection, EditStyles, type SiteEditing } from "@/components/EditableText";
 import { LEGAL_PATH, LEGAL_TITLE, providerLine, type LegalKind } from "@/lib/legal";
+import { bedLabels, bedroomsLabel, type Sleeping } from "@/lib/sleeping";
 import { LegalModal, type LegalDocData } from "@/components/LegalModal";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
@@ -46,6 +47,8 @@ export type SiteViewData = {
   touristTax?: number;
   paymentMode?: string;
   cancellationPolicy?: string;
+  /** Ložnice a lůžka (počty). */
+  sleeping?: Sleeping;
   /** Identifikace provozovatele do patičky. */
   provider?: { name: string; id: string; vatId: string; address: string };
   /** Má web obchodní podmínky / zásady (stránky /w/[slug]/podminky, /ochrana-udaju)? */
@@ -83,6 +86,7 @@ export function SiteView({
     .filter(Boolean);
 
   const edge = site.heroStyle === "photo" && !!site.heroPhoto;
+  const beds = site.sleeping ? bedLabels(site.sleeping) : [];
 
   // Obchodní podmínky / zásady v okně nad webem (odkaz vede i na samostatnou stránku)
   const [openKind, setOpenKind] = useState<LegalKind | null>(null);
@@ -148,6 +152,7 @@ export function SiteView({
           <div className={`w-full pb-28 pt-24 text-white sm:pb-16 lg:pb-20 ${EDGE}`}>
             <p className="rise text-xs font-semibold uppercase tracking-widest text-white/80">
               {site.propertyType} · až {site.maxGuests} hostů
+              {site.sleeping?.bedrooms ? ` · ${bedroomsLabel(site.sleeping.bedrooms)}` : ""}
             </p>
             <EditableText
               as="h1"
@@ -182,6 +187,7 @@ export function SiteView({
           <div className="mx-auto max-w-4xl lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 pb-12 pt-12 sm:pt-16">
             <p className="rise text-xs font-semibold uppercase tracking-widest text-soft">
               {site.propertyType} · až {site.maxGuests} hostů
+              {site.sleeping?.bedrooms ? ` · ${bedroomsLabel(site.sleeping.bedrooms)}` : ""}
             </p>
             <EditableText
               as="h1"
@@ -257,14 +263,23 @@ export function SiteView({
             multiline
             className="mt-3 whitespace-pre-line leading-relaxed text-soft"
           />
-          {site.checkInTime && site.checkOutTime && (
+          {((site.checkInTime && site.checkOutTime) || beds.length > 0) && (
             <div className="mt-5 flex flex-wrap gap-2 text-sm">
-              <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
-                Check-in <strong className="font-semibold">od {site.checkInTime}</strong>
-              </span>
-              <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
-                Check-out <strong className="font-semibold">do {site.checkOutTime}</strong>
-              </span>
+              {site.checkInTime && site.checkOutTime && (
+                <>
+                  <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
+                    Check-in <strong className="font-semibold">od {site.checkInTime}</strong>
+                  </span>
+                  <span className="rounded-full border border-line bg-surface px-3.5 py-1.5">
+                    Check-out <strong className="font-semibold">do {site.checkOutTime}</strong>
+                  </span>
+                </>
+              )}
+              {beds.map((b) => (
+                <span key={b} className="rounded-full border border-line bg-surface px-3.5 py-1.5">
+                  🛏 {b}
+                </span>
+              ))}
             </div>
           )}
           {(site.contactEmail || site.contactPhone || editing) && (

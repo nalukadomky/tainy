@@ -61,6 +61,8 @@ export type StayMail = {
   publicId: string;
   siteName: string;
   guestName: string;
+  /** Křestní jméno pro oslovení (u starších rezervací prázdné — vezme se z celého jména). */
+  firstName?: string;
   email: string;
   phone: string;
   guests: number;
@@ -110,7 +112,7 @@ export async function sendGuestConfirmation(r: StayMail): Promise<void> {
     to: r.email,
     subject: `Rezervace ${r.siteName} — ${fmt(r.startDate)}`,
     html: layout(
-      `Díky za rezervaci, ${greetingName(r.guestName)}!`,
+      `Díky za rezervaci, ${greetingName(r.firstName || r.guestName)}!`,
       `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Máš u nás rezervovaný pobyt v <strong>${r.siteName}</strong>.</p>
        ${stayBlock(r)}
        ${next}
@@ -154,7 +156,7 @@ export async function sendGuestDateChange(
     to: r.email,
     subject: `Změna termínu — ${r.siteName}, ${fmt(r.startDate)}`,
     html: layout(
-      `${greetingName(r.guestName)}, termín pobytu je změněný`,
+      `${greetingName(r.firstName || r.guestName)}, termín pobytu je změněný`,
       `<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Tvůj pobyt v <strong>${r.siteName}</strong> má nový termín.</p>
        <p style="margin:0 0 4px;font-size:14px;color:#5a6557">Původně: <s>${fmt(old.startDate)} – ${fmt(old.endDate)}</s></p>
        ${stayBlock(r)}

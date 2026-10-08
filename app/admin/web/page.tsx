@@ -16,6 +16,7 @@ import { SITES_CHANGED } from "@/components/AdminNav";
 import { useToast } from "@/components/Toast";
 import { FormPageSkeleton } from "@/components/Skeleton";
 import { submitOnEnter } from "@/lib/enter";
+import { SleepingField } from "@/components/SleepingField";
 import {
   LegalSettings,
   ProviderSavedDialog,
@@ -535,6 +536,13 @@ export default function SiteEditPage() {
                 cenu.
               </p>
             </div>
+
+            <SleepingField
+              value={form.sleeping}
+              onChange={(v) => set("sleeping", v)}
+              maxGuests={form.maxGuests}
+              onMaxGuests={(n) => set("maxGuests", n)}
+            />
 
             <label className="block sm:max-w-48">
               <span className="mb-1.5 block text-sm font-medium">Maximální počet hostů</span>

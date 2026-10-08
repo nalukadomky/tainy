@@ -69,10 +69,15 @@ export async function POST(req: NextRequest) {
   );
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
-  const guestName = String(body.guestName ?? "").trim();
+  // Jméno a příjmení zvlášť (oslovení podle křestního jména); starší klient posílá celé jméno
+  const clip = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+  const firstName = clip(body.firstName);
+  const lastName = clip(body.lastName);
+  const guestName = firstName || lastName ? `${firstName} ${lastName}`.trim() : clip(body.guestName);
   const email = String(body.email ?? "").trim();
-  if (guestName.length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return NextResponse.json({ error: "Chybí jméno nebo platný e-mail hosta." }, { status: 400 });
+  const namesOk = body.firstName !== undefined ? firstName.length >= 2 && lastName.length >= 2 : guestName.length >= 3;
+  if (!namesOk || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: "Chybí jméno, příjmení nebo platný e-mail hosta." }, { status: 400 });
   }
   // Souhlas s obchodními podmínkami (a storno podmínkami), pokud je web má.
   // Zpracování osobních údajů pro rezervaci souhlas nepotřebuje — host je jen informovaný.
@@ -133,6 +138,7 @@ export async function POST(req: NextRequest) {
                 : `vychozi-${textFingerprint(termsTextOf(site))}`,
           }),
           guestName,
+          firstName,
           email,
           phone: String(body.phone ?? "").trim(),
           guests: capacityCount(counts, categories),
@@ -166,6 +172,7 @@ export async function POST(req: NextRequest) {
     publicId: created.publicId,
     siteName: site.name,
     guestName: created.guestName,
+    firstName: created.firstName,
     email: created.email,
     phone: created.phone,
     guests: created.guests,

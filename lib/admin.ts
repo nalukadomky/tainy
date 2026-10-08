@@ -50,6 +50,8 @@ export type Site = {
   /** Úklid: výchozí úkoly (jeden na řádek) a co uklízečky uvidí (čárkou). */
   cleaningChecklist: string;
   cleanerFields: string;
+  /** Ložnice a lůžka (JSON, lib/sleeping.ts). */
+  sleeping: string;
   /** Provozovatel: jméno/firma, IČ, DIČ, sídlo, zápis v rejstříku. */
   businessName: string;
   businessId: string;

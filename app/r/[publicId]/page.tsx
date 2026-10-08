@@ -80,7 +80,7 @@ export default async function ReservationPage({
   return (
     <div className="min-h-dvh bg-bg">
       <header className="border-b border-line/70 bg-cream">
-        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5">
+        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5 md:max-w-5xl">
           <Link href={`/w/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
             {site.name}
           </Link>
@@ -97,14 +97,15 @@ export default async function ReservationPage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg space-y-4 px-5 py-8">
+      {/* Mobil: vše pod sebou. Tablet a počítač: shrnutí vlevo, platba a kontakt vpravo. */}
+      <main className="mx-auto max-w-lg px-5 py-8 md:max-w-5xl md:py-6">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             {reservation.status === "cancelled"
               ? "Rezervace byla zrušena"
               : expired
                 ? "Rezervace vypršela"
-                : `Díky, ${greetingName(reservation.guestName)}!`}
+                : `Díky, ${greetingName(reservation.firstName || reservation.guestName)}!`}
           </h1>
           <p className="mt-1.5 text-soft">
             {reservation.status === "cancelled" || expired ? (
@@ -120,8 +121,11 @@ export default async function ReservationPage({
           </p>
         </div>
 
+        {/* Mobil: pod sebou (shrnutí, platba, kontakt…). Tablet a počítač: dva sloupce —
+            vlevo shrnutí, kontakt a podmínky, vpravo platba a pozvánka na tainy. */}
+        <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:grid-rows-[auto_1fr_auto] md:items-start md:gap-x-6 md:gap-y-4 md:[grid-template-areas:'summary_pay'_'contact_pay'_'legal_promo'] lg:[grid-template-areas:'summary_pay'_'contact_promo'_'legal_promo']">
         {/* Shrnutí pobytu */}
-        <div className="rounded-2xl border border-line bg-surface p-5">
+        <div className="rounded-2xl border border-line bg-surface p-5 md:p-6 md:[grid-area:summary] lg:flex lg:h-full lg:flex-col lg:justify-center">
           <dl className="space-y-2.5 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-soft">Termín</dt>
@@ -175,23 +179,24 @@ export default async function ReservationPage({
 
         {/* Platební údaje */}
         {payment && qr && (
-          <div className="rounded-2xl border border-line bg-surface p-5">
+          <div className="rounded-2xl border border-line bg-surface p-5 md:[grid-area:pay]">
             <h2 className="font-display text-lg font-semibold">Zaplať převodem</h2>
             <p className="mt-1 text-sm text-soft">
               Načti QR kód v bankovní aplikaci — částka i variabilní symbol se doplní samy.
             </p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
+            <div className="lg:mt-4 lg:flex lg:items-center lg:gap-5">
             <img
               src={qr}
               alt="QR kód pro platbu"
               width={200}
               height={200}
-              className="mx-auto mt-4 h-50 w-50 rounded-xl border border-line"
+              className="mx-auto mt-4 h-50 w-50 shrink-0 rounded-xl border border-line lg:mx-0 lg:mt-0 lg:h-40 lg:w-40"
             />
-            <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between gap-4">
+            <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm lg:mt-0 lg:min-w-0 lg:flex-1 lg:border-t-0 lg:pt-0">
+              <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                 <dt className="text-soft">Účet</dt>
-                <dd className="text-right font-mono text-xs">{formatIBAN(payment.iban)}</dd>
+                <dd className="whitespace-nowrap text-right font-mono text-xs">{formatIBAN(payment.iban)}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-soft">Variabilní symbol</dt>
@@ -202,6 +207,7 @@ export default async function ReservationPage({
                 <dd className="text-right font-semibold">{czk(reservation.totalPrice)}</dd>
               </div>
             </dl>
+            </div>
             {reservation.expiresAt && (
               <p className="mt-4 rounded-xl bg-amber/15 px-4 py-2.5 text-xs font-medium text-[#92600a]">
                 Termín držíme do {reservation.expiresAt.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}.
@@ -212,7 +218,7 @@ export default async function ReservationPage({
         )}
 
         {reservation.status === "pending" && !expired && !payment && (
-          <div className="rounded-2xl border border-line bg-surface p-5">
+          <div className="rounded-2xl border border-line bg-surface p-5 md:[grid-area:pay]">
             <h2 className="font-display text-lg font-semibold">Co bude dál</h2>
             <p className="mt-1.5 text-sm text-soft">
               Majitel se ti ozve a domluvíte se na platbě i předání klíčů.
@@ -222,7 +228,7 @@ export default async function ReservationPage({
 
         {/* Kontakt na majitele */}
         {(site.contactEmail || site.contactPhone) && (
-          <div className="rounded-2xl border border-line bg-surface p-5">
+          <div className="rounded-2xl border border-line bg-surface p-5 md:[grid-area:contact]">
             <h2 className="font-display text-lg font-semibold">Kontakt na majitele</h2>
             <div className="mt-2 space-y-1 text-sm text-soft">
               {site.contactEmail && (
@@ -238,6 +244,7 @@ export default async function ReservationPage({
           </div>
         )}
 
+        <div className="space-y-3 md:[grid-area:legal]">
         {site.cancellationPolicy && (
           <p className="whitespace-pre-line px-1 text-xs text-soft">
             <strong className="text-ink">Storno podmínky:</strong> {site.cancellationPolicy}
@@ -276,11 +283,26 @@ export default async function ReservationPage({
           </div>
         )}
 
-        <p className="pt-2 text-center text-sm text-soft">
-          <Link href="/" className="inline-flex items-center gap-1.5 hover:text-ink">
-            vytvořeno s <Wordmark className="text-base" />
-          </Link>
-        </p>
+        </div>
+
+        {/* Pozvánka na tainy — rezervační web pro další majitele */}
+        <Link
+          href="/"
+          className="group mt-2 flex flex-col items-start gap-3 rounded-2xl border border-line bg-cream p-5 transition hover:border-pine/40 sm:flex-row sm:items-center sm:justify-between md:mt-0 md:flex-col md:items-start md:[grid-area:promo]"
+        >
+          <span>
+            <span className="flex items-center gap-1.5 text-xs text-soft">
+              Rezervační web běží na <Wordmark className="text-sm" />
+            </span>
+            <span className="mt-1 block font-display text-lg font-semibold leading-snug">
+              Pronajímáš chatu nebo apartmán? Vlastní web s rezervacemi máš za pár minut.
+            </span>
+          </span>
+          <span className="btn-primary shrink-0 !px-5 !py-2 text-sm transition group-hover:translate-x-0.5">
+            Vyzkoušet tainy →
+          </span>
+        </Link>
+        </div>
       </main>
     </div>
   );

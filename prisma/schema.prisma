@@ -54,6 +54,9 @@ model Site {
   // (čárkou: guests,name,note,phone). Cenu pobytu uklízečky nevidí nikdy.
   cleaningChecklist  String  @default("")
   cleanerFields      String  @default("guests")
+  // Ložnice a lůžka (JSON, lib/sleeping.ts): počty ložnic, manželských postelí,
+  // jednolůžek, přistýlek a pohovek (pohovka pro 1 nebo 2 osoby)
+  sleeping           String  @default("")
 
   // Provozovatel (povinná identifikace podnikatele na webu)
   businessName     String  @default("") // jméno / obchodní firma
@@ -104,6 +107,7 @@ model Reservation {
   siteId     String
   site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   guestName  String
+  firstName  String   @default("") // křestní jméno — podle něj se hosta oslovuje
   email      String
   phone      String   @default("")
   guests     Int                          // osoby počítané do kapacity

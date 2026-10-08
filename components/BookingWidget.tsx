@@ -70,7 +70,10 @@ export function BookingWidget({
   const [booked, setBooked] = useState<BookedRange[]>(initialBooked);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [guestName, setGuestName] = useState("");
+  // Jméno a příjmení zvlášť — podle křestního jména se hosta oslovuje
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const namesOk = firstName.trim().length >= 2 && lastName.trim().length >= 2;
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
@@ -255,7 +258,8 @@ export function BookingWidget({
           startDate,
           endDate,
           guests: counts,
-          guestName,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           email,
           phone,
           note,
@@ -424,19 +428,32 @@ export function BookingWidget({
             <div
               className="space-y-4"
               onKeyDown={submitOnEnter(() => {
-                if (guestName.trim().length >= 3 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) setStep("potvrzeni");
+                if (namesOk && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) setStep("potvrzeni");
               })}
             >
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Jméno a příjmení</span>
-                <input
-                  className="field"
-                  autoFocus
-                  placeholder="Jana Veselá"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                />
-              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium">Jméno</span>
+                  <input
+                    className="field"
+                    autoFocus
+                    autoComplete="given-name"
+                    placeholder="Jana"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium">Příjmení</span>
+                  <input
+                    className="field"
+                    autoComplete="family-name"
+                    placeholder="Veselá"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </label>
+              </div>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">E-mail</span>
                 <input
@@ -482,7 +499,7 @@ export function BookingWidget({
                 <button
                   type="button"
                   className="btn-primary flex-1"
-                  disabled={guestName.trim().length < 3 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)}
+                  disabled={!namesOk || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)}
                   onClick={() => setStep("potvrzeni")}
                 >
                   Pokračovat →

@@ -4,6 +4,7 @@ import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
 import { parseCategories, serializeCategories } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
 import { parseCleanerFields } from "@/lib/cleaning";
+import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
 
 const TEXT_FIELDS = [
@@ -159,6 +160,11 @@ export async function PATCH(
 
   if (body.guestMode !== undefined) {
     data.guestMode = body.guestMode === "split" ? "split" : "total";
+  }
+  // Ložnice a lůžka: jen známé počty v rozumném rozsahu
+  if (body.sleeping !== undefined && body.sleeping !== null) {
+    const raw = typeof body.sleeping === "string" ? body.sleeping : JSON.stringify(body.sleeping);
+    data.sleeping = serializeSleeping(parseSleeping(raw));
   }
   // Katalog kategorií projde stejným parserem jako při čtení, takže se
   // do databáze nikdy nedostane cizí klíč ani nesmyslná hodnota.
