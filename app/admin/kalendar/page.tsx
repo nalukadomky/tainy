@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import Link from "next/link";
 import {
   useAdminData,
@@ -62,6 +63,7 @@ export default function CalendarPage() {
   const today = todayISO();
   const [cursor, setCursor] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
   const toast = useToast();
+  const confirmDlg = useConfirm();
 
   // Blokace se v kalendáři ukáže hned, uloží se na pozadí. Když termín mezitím
   // obsadila rezervace (server vrátí 409), blokace zmizí a ozve se proč.
@@ -180,6 +182,7 @@ export default function CalendarPage() {
   return (
     <div className="space-y-5">
       {toast.node}
+      {confirmDlg.node}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Kalendář</h1>
@@ -404,10 +407,17 @@ export default function CalendarPage() {
           ) : (
             <BlockDetail
               b={detail.b}
-              onDelete={() => {
-                if (!confirm("Zrušit tuhle blokaci? Termín bude znovu k rezervaci.")) return;
+              onDelete={async () => {
+                const b = detail.b;
+                const ok = await confirmDlg.ask({
+                  title: "Zrušit blokaci?",
+                  message: "Termín bude znovu k rezervaci.",
+                  confirmLabel: "Zrušit blokaci",
+                  cancelLabel: "Ponechat",
+                });
+                if (!ok) return;
                 setDetail(null);
-                deleteBlackout(detail.b);
+                deleteBlackout(b);
               }}
             />
           )}

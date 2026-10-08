@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import Image from "next/image";
 import { parsePhotoLines, serializePhotos, type Photo } from "@/lib/photos";
 import { uploadSitePhoto } from "@/lib/image";
@@ -29,6 +30,7 @@ export function PhotoManager({
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropOver, setDropOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const confirmDlg = useConfirm();
   // Nahrávání běží souběžně; poslední známý stav držíme mimo render.
   const latest = useRef(photos);
   latest.current = photos;
@@ -80,7 +82,8 @@ export function PhotoManager({
 
   async function remove(i: number) {
     const photo = photos[i];
-    if (!confirm("Smazat tuhle fotku z galerie?")) return;
+    if (!(await confirmDlg.ask({ title: "Smazat fotku?", message: "Fotka zmizí z galerie webu.", confirmLabel: "Smazat fotku" })))
+      return;
     setDetail(null);
     await save(photos.filter((_, j) => j !== i));
     fetch(`/api/sites/${slug}/photos?src=${encodeURIComponent(photo.src)}`, { method: "DELETE" });
@@ -89,6 +92,8 @@ export function PhotoManager({
   const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
   return (
+    <>
+      {confirmDlg.node}
     <div
       onDragOver={(e) => {
         if (!isFileDrag(e)) return;
@@ -256,6 +261,7 @@ export function PhotoManager({
         />
       )}
     </div>
+    </>
   );
 }
 

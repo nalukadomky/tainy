@@ -1,13 +1,17 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useAdminData, fmtStay } from "@/lib/admin";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAdminData, fmtDate, fmtStay, type Reservation, type Site } from "@/lib/admin";
+import { AccessCode, accessCodeSavedMessage } from "@/components/AccessCode";
+import { accessCodeSendAt } from "@/lib/access-code";
+import { useToast } from "@/components/Toast";
 import { StatusMenu } from "@/components/StatusMenu";
 import { Dropdown } from "@/components/Dropdown";
 import { spentToDate } from "@/lib/costs";
-import { czk, nightsBetween } from "@/lib/pricing";
+import { czk, nightsBetween, plural } from "@/lib/pricing";
+import { stayTimes, todayISO } from "@/lib/stay";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { hasDoc } from "@/lib/legal";
 
@@ -30,8 +34,28 @@ const RANGE_LABEL: Record<Range, string> = {
 function Dashboard() {
   const params = useSearchParams();
   const welcome = params.get("vitej") === "1";
-  const { site, reservations, costs, loading, error, setStatus } = useAdminData();
+  const { site, reservations, costs, loading, error, setStatus, setAccessCode } = useAdminData();
+  const toast = useToast();
+  function saveAccessCode(r: Reservation, code: string) {
+    toast.show(accessCodeSavedMessage(r, code), "success");
+    setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));
+  }
   const [range, setRange] = useState<Range>("6");
+  // Graf tržeb jde sbalit — pamatuje si to prohlížeč (jen pohodlí, žádná data)
+  const [chartOpen, setChartOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("tainy.chart-collapsed") === "1") setChartOpen(false);
+    } catch {}
+  }, []);
+  function toggleChart() {
+    setChartOpen((open) => {
+      try {
+        localStorage.setItem("tainy.chart-collapsed", open ? "1" : "0");
+      } catch {}
+      return !open;
+    });
+  }
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -58,13 +82,21 @@ function Dashboard() {
     const upcoming = reservations
       .filter((r) => r.status !== "cancelled" && new Date(r.endDate) >= now)
       .sort((a, b) => +new Date(a.startDate) - +new Date(b.startDate))
-      .slice(0, 4);
+      .slice(0, 5);
+
+    // Všechny nezaplacené (stejně jako filtr „Čekající“ v Rezervacích); kolik je po lhůtě
+    const waiting = reservations.filter((r) => r.status === "pending");
+    const pending = {
+      count: waiting.length,
+      total: waiting.reduce((sum, r) => sum + r.totalPrice, 0),
+      overdue: waiting.filter((r) => r.expiresAt && new Date(r.expiresAt) <= now).length,
+    };
 
     const totalRevenue = paid.reduce((sum, r) => sum + r.totalPrice, 0);
     // Opakované náklady se počítají jen za platby, které už nastaly.
     const totalCosts = spentToDate(costs);
 
-    return { revenueThisMonth, occupancy, upcoming, totalRevenue, totalCosts };
+    return { revenueThisMonth, occupancy, upcoming, pending, totalRevenue, totalCosts };
   }, [reservations, costs]);
 
   // Graf tržeb po měsících (podle data příjezdu) pro zvolené období.
@@ -132,6 +164,7 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {toast.node}
       {welcome && (
         <div className="rise rounded-2xl border border-pine/20 bg-pine/5 p-5">
           <h2 className="font-display text-xl font-semibold">🎉 Tvůj web je na světě!</h2>
@@ -194,15 +227,72 @@ function Dashboard() {
         ))}
       </div>
 
+      {/* Nejbližší pobyt a platby, které čekají */}
+      {(stats.upcoming.length > 0 || stats.pending.count > 0) && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {stats.upcoming[0] && (
+            <div className={stats.pending.count > 0 ? "sm:col-span-2" : "sm:col-span-3"}>
+              <NextStay
+                r={stats.upcoming[0]}
+                site={site}
+                onStatus={(s) => setStatus(stats.upcoming[0].id, s)}
+                onAccessCode={(code) => saveAccessCode(stats.upcoming[0], code)}
+              />
+            </div>
+          )}
+          {stats.pending.count > 0 && (
+            <Link
+              href="/admin/rezervace?stav=pending"
+              className={`group flex flex-col rounded-2xl border border-line bg-surface p-5 transition hover:border-amber ${
+                stats.upcoming[0] ? "" : "sm:col-span-3"
+              }`}
+            >
+              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-soft">
+                <span className="h-2 w-2 rounded-full bg-amber" aria-hidden />
+                Čeká na platbu
+              </span>
+              <span className="mt-3 flex items-baseline gap-2">
+                <span className="font-display text-4xl font-semibold leading-none">{stats.pending.count}</span>
+                <span className="text-sm text-soft">{plural(stats.pending.count, "rezervace", "rezervace", "rezervací")}</span>
+              </span>
+              <span className="mt-2 text-sm font-semibold">{czk(stats.pending.total)}</span>
+              {stats.pending.overdue > 0 && (
+                <span className="text-xs text-coral">
+                  {stats.pending.overdue === stats.pending.count ? "všechny" : stats.pending.overdue} po lhůtě na zaplacení
+                </span>
+              )}
+              <span className="mt-auto pt-3 text-sm font-medium text-pine group-hover:underline">Zobrazit →</span>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Graf tržeb */}
       <div className="rounded-2xl border border-line bg-surface p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-display text-lg font-semibold">Tržby</h2>
-            <p className="text-sm text-soft">
-              {RANGE_LABEL[range]}: <strong className="font-semibold text-ink">{czk(chart.total)}</strong>
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={toggleChart}
+            aria-expanded={chartOpen}
+            className="group flex items-start gap-2 text-left"
+          >
+            <span>
+              <span className="flex items-center gap-2 font-display text-lg font-semibold">
+                Tržby
+                <span
+                  aria-hidden
+                  className="text-sm text-soft transition-transform group-hover:text-ink"
+                  style={{ transform: chartOpen ? "rotate(180deg)" : "none", display: "inline-block" }}
+                >
+                  ▾
+                </span>
+              </span>
+              <span className="block text-sm text-soft">
+                {RANGE_LABEL[range]}: <strong className="font-semibold text-ink">{czk(chart.total)}</strong>
+              </span>
+            </span>
+          </button>
+          {chartOpen && (
           <Dropdown
             label="Období grafu"
             value={range}
@@ -210,7 +300,10 @@ function Dashboard() {
             align="right"
             items={(Object.keys(RANGE_LABEL) as Range[]).map((r) => ({ value: r, label: RANGE_LABEL[r] }))}
           />
+          )}
         </div>
+        {chartOpen && (
+        <>
         <div className={`mt-5 flex h-44 items-end border-b border-line ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
           {chart.months.map((m) => (
             <div
@@ -241,6 +334,8 @@ function Dashboard() {
             </span>
           ))}
         </div>
+        </>
+        )}
       </div>
 
       {/* Nadcházející rezervace */}
@@ -260,7 +355,10 @@ function Dashboard() {
           {stats.upcoming.length === 0 && (
             <p className="py-4 text-sm text-soft">Žádné nadcházející pobyty. Pošli hostům odkaz na svůj web!</p>
           )}
-          {stats.upcoming.map((r) => (
+          {stats.upcoming.length === 1 && (
+            <p className="py-4 text-sm text-soft">Další pobyty zatím nejsou — nejbližší je nahoře.</p>
+          )}
+          {stats.upcoming.slice(1).map((r) => (
             <div key={r.id} className="flex items-center justify-between gap-3 py-3">
               <div>
                 <p className="font-medium">{r.guestName}</p>
@@ -276,6 +374,88 @@ function Dashboard() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Kolik dní zbývá do příjezdu, nebo že pobyt právě probíhá. */
+function countdown(r: Reservation): { label: string; now: boolean } {
+  const today = todayISO();
+  const start = r.startDate.slice(0, 10);
+  const end = r.endDate.slice(0, 10);
+  if (start <= today && today < end) return { label: "Právě probíhá", now: true };
+  const days = Math.round((Date.parse(start) - Date.parse(today)) / 86_400_000);
+  if (days <= 0) return { label: "Dnes přijíždí", now: true };
+  if (days === 1) return { label: "Zítra přijíždí", now: true };
+  return { label: `Za ${days} ${plural(days, "den", "dny", "dní")}`, now: false };
+}
+
+/** Krátký rozsah termínu: „20.–22. 10. 2026“. */
+function shortRange(startIso: string, endIso: string): string {
+  const [sy, sm, sd] = startIso.slice(0, 10).split("-").map(Number);
+  const [ey, em, ed] = endIso.slice(0, 10).split("-").map(Number);
+  if (sy === ey && sm === em) return `${sd}.–${ed}. ${em}. ${ey}`;
+  if (sy === ey) return `${sd}. ${sm}. – ${ed}. ${em}. ${ey}`;
+  return `${sd}. ${sm}. ${sy} – ${ed}. ${em}. ${ey}`;
+}
+
+/** Karta s nejbližším (nebo právě probíhajícím) pobytem — klik otevře detail rezervace. */
+function NextStay({
+  r,
+  site,
+  onStatus,
+  onAccessCode,
+}: {
+  r: Reservation;
+  site: Site | null;
+  onStatus: (status: Reservation["status"]) => Promise<void>;
+  onAccessCode: (code: string) => void;
+}) {
+  const router = useRouter();
+  const c = countdown(r);
+  const times = site ? stayTimes(r, site) : r;
+  return (
+    <div
+      // Klik na kartu otevře detail rezervace v Rezervacích (kromě tlačítek a oken)
+      onClick={(e) => {
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        if ((e.target as HTMLElement).closest("button, a, input, [role=menu], [role=dialog]")) return;
+        router.push(`/admin/rezervace?detail=${r.id}`);
+      }}
+      className="group flex h-full cursor-pointer flex-col rounded-2xl border border-line bg-surface p-5 transition hover:border-pine/40"
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-soft">
+        Nejbližší pobyt · <span className={c.now ? "text-pine" : "text-ink"}>{c.label.toLowerCase()}</span>
+      </p>
+      <div className="mt-2 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="truncate font-display text-2xl font-semibold leading-tight">{r.guestName}</p>
+          <p className="mt-1 text-sm text-soft">
+            {shortRange(r.startDate, r.endDate)}
+            {times.checkInTime && times.checkOutTime && ` · ${times.checkInTime} → ${times.checkOutTime}`} · {r.guests}{" "}
+            {plural(r.guests, "host", "hosté", "hostů")}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-display text-xl font-semibold">{czk(r.totalPrice)}</p>
+          <StatusMenu status={r.status} guestName={r.guestName} onChange={onStatus} />
+        </div>
+      </div>
+      <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+        {r.status !== "cancelled" ? (
+          <AccessCode
+            compact
+            key={r.accessCode}
+            code={r.accessCode}
+            sendAt={accessCodeSendAt(r)}
+            context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
+            onSave={onAccessCode}
+          />
+        ) : (
+          <span />
+        )}
+        <span className="shrink-0 text-sm font-medium text-pine group-hover:underline">Detail →</span>
       </div>
     </div>
   );

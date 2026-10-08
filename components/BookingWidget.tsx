@@ -19,6 +19,7 @@ import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { GuestPicker } from "@/components/GuestPicker";
 import { useToast } from "@/components/Toast";
 import { submitOnEnter } from "@/lib/enter";
+import { PhoneInput, isPhoneComplete } from "@/components/PhoneInput";
 import { vatNote, vatOfQuote } from "@/lib/vat";
 import { LEGAL_PATH, type LegalKind } from "@/lib/legal";
 
@@ -79,6 +80,8 @@ export function BookingWidget({
   const namesOk = firstName.trim().length >= 2 && lastName.trim().length >= 2;
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  // Údaje hosta jsou kompletní: jméno, příjmení, e-mail a telefon (povinný)
+  const contactOk = namesOk && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) && isPhoneComplete(phone);
   const [note, setNote] = useState("");
   const [consent, setConsent] = useState(false);
   // Zaškrtnutí je potřeba, jen když je s čím souhlasit (obchodní/storno podmínky).
@@ -434,7 +437,7 @@ export function BookingWidget({
             <div
               className="space-y-4"
               onKeyDown={submitOnEnter(() => {
-                if (namesOk && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) setStep("potvrzeni");
+                if (contactOk) setStep("potvrzeni");
               })}
             >
               <div className="grid gap-4 sm:grid-cols-2">
@@ -472,19 +475,11 @@ export function BookingWidget({
                 />
                 <span className="mt-1 block text-xs text-soft">Pošleme sem potvrzení rezervace.</span>
               </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">
-                  Telefon <span className="text-soft">(nepovinné)</span>
-                </span>
-                <input
-                  className="field"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="+420 …"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </label>
+              <div>
+                <span className="mb-1.5 block text-sm font-medium">Telefon</span>
+                <PhoneInput value={phone} onChange={setPhone} />
+                <span className="mt-1 block text-xs text-soft">Kdyby bylo potřeba něco domluvit před příjezdem.</span>
+              </div>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">
                   Poznámka pro majitele <span className="text-soft">(nepovinné)</span>
@@ -505,7 +500,7 @@ export function BookingWidget({
                 <button
                   type="button"
                   className="btn-primary flex-1"
-                  disabled={!namesOk || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)}
+                  disabled={!contactOk}
                   onClick={() => setStep("potvrzeni")}
                 >
                   Pokračovat →

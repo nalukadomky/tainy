@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // Potvrzení nevratné akce (např. odebrání úvodní fotky). Výchozí fokus je na
@@ -11,6 +11,7 @@ export function ConfirmDialog({
   children,
   confirmLabel,
   cancelLabel = "Zrušit",
+  tone = "danger",
   onConfirm,
   onCancel,
 }: {
@@ -18,6 +19,8 @@ export function ConfirmDialog({
   children?: React.ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
+  /** danger = červené potvrzení (mazání, rušení), primary = běžné. */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -51,7 +54,7 @@ export function ConfirmDialog({
           </button>
           <button
             type="button"
-            className="btn-primary flex-1 !bg-coral !py-2.5 hover:!bg-coral/90"
+            className={`btn-primary flex-1 !py-2.5 ${tone === "danger" ? "!bg-coral hover:!bg-coral/90" : ""}`}
             onClick={onConfirm}
           >
             {confirmLabel}
@@ -61,4 +64,43 @@ export function ConfirmDialog({
     </div>,
     document.body
   );
+}
+
+export type ConfirmOptions = {
+  title: string;
+  message?: React.ReactNode;
+  confirmLabel: string;
+  cancelLabel?: string;
+  tone?: "danger" | "primary";
+};
+
+/**
+ * Náhrada za `window.confirm` v designu aplikace:
+ *   const confirm = useConfirm();
+ *   if (!(await confirm.ask({ title: "Smazat?", confirmLabel: "Smazat" }))) return;
+ *   … {confirm.node}
+ */
+export function useConfirm() {
+  const [state, setState] = useState<{ opts: ConfirmOptions; resolve: (ok: boolean) => void } | null>(null);
+  const ask = useCallback(
+    (opts: ConfirmOptions) => new Promise<boolean>((resolve) => setState({ opts, resolve })),
+    []
+  );
+  const close = (ok: boolean) => {
+    state?.resolve(ok);
+    setState(null);
+  };
+  const node = state && (
+    <ConfirmDialog
+      title={state.opts.title}
+      confirmLabel={state.opts.confirmLabel}
+      cancelLabel={state.opts.cancelLabel}
+      tone={state.opts.tone}
+      onConfirm={() => close(true)}
+      onCancel={() => close(false)}
+    >
+      {state.opts.message}
+    </ConfirmDialog>
+  );
+  return { ask, node };
 }

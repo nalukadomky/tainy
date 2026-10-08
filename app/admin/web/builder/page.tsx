@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAdminData, type Site } from "@/lib/admin";
@@ -41,6 +42,7 @@ export default function BuilderPage() {
   const [save, setSave] = useState<SaveState>("idle");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const confirmDlg = useConfirm();
   const router = useRouter();
   const [hint, setHint] = useState(false);
   const [ready, setReady] = useState(0);
@@ -145,7 +147,15 @@ export default function BuilderPage() {
     if (leaving) return;
     setLeaving(true);
     const ok = await flush();
-    if (!ok && !confirm("Některé změny se nepodařilo uložit. Odejít i tak? Neuložené úpravy se ztratí.")) {
+    if (
+      !ok &&
+      !(await confirmDlg.ask({
+        title: "Některé změny se neuložily",
+        message: "Když teď odejdeš, neuložené úpravy se ztratí.",
+        confirmLabel: "Odejít i tak",
+        cancelLabel: "Zůstat",
+      }))
+    ) {
       setLeaving(false);
       return;
     }
@@ -209,6 +219,7 @@ export default function BuilderPage() {
   // Do <body>: předek s CSS transformací by jinak rozbil `fixed` přes celé okno.
   return createPortal(
     <div className="fixed inset-0 z-[60] flex flex-col bg-bg">
+      {confirmDlg.node}
       {/* Horní lišta */}
       <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2.5 sm:px-4">
         <button

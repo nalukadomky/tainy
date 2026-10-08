@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { submitOnEnter } from "@/lib/enter";
 import { useAdminData, fmtDate, type Cost } from "@/lib/admin";
 import { czk } from "@/lib/pricing";
@@ -22,6 +23,7 @@ export default function CostsPage() {
   const [repeat, setRepeat] = useState<Repeat>("once");
   const [date, setDate] = useState(todayISO());
   const toast = useToast();
+  const confirmDlg = useConfirm();
 
   const totals = useMemo(() => {
     const revenue = reservations.filter((r) => r.status === "paid").reduce((s, r) => s + r.totalPrice, 0);
@@ -58,7 +60,16 @@ export default function CostsPage() {
 
   async function setEnd(c: Cost, endDate: string | null) {
     if (c.id.startsWith("tmp-")) return; // ještě se ukládá
-    if (endDate && !confirm(`Ukončit „${c.label}"? Od zítřka se přestane započítávat, dosavadní platby zůstanou.`)) return;
+    if (
+      endDate &&
+      !(await confirmDlg.ask({
+        title: `Ukončit „${c.label}“?`,
+        message: "Od zítřka se přestane započítávat, dosavadní platby zůstanou.",
+        confirmLabel: "Ukončit",
+        tone: "primary",
+      }))
+    )
+      return;
     setCosts((list) => list.map((x) => (x.id === c.id ? { ...x, endDate } : x)));
     const res = await fetch(`/api/costs/${c.id}`, {
       method: "PATCH",
@@ -75,11 +86,16 @@ export default function CostsPage() {
 
   async function remove(c: Cost) {
     if (c.id.startsWith("tmp-")) return; // ještě se ukládá
-    const warn =
+    const ok = await confirmDlg.ask(
       c.repeat === "once"
-        ? `Smazat náklad „${c.label}"?`
-        : `Smazat „${c.label}" i s celou historií plateb? Pokud ho jen už neplatíš, použij raději Ukončit.`;
-    if (!confirm(warn)) return;
+        ? { title: `Smazat náklad „${c.label}“?`, confirmLabel: "Smazat" }
+        : {
+            title: `Smazat „${c.label}“ i s historií plateb?`,
+            message: "Pokud ho jen už neplatíš, použij raději Ukončit — dosavadní platby zůstanou ve statistikách.",
+            confirmLabel: "Smazat i historii",
+          }
+    );
+    if (!ok) return;
     setCosts((list) => list.filter((x) => x.id !== c.id));
     const res = await fetch(`/api/costs/${c.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
@@ -94,6 +110,7 @@ export default function CostsPage() {
   return (
     <div className="space-y-5">
       {toast.node}
+      {confirmDlg.node}
       <h1 className="font-display text-3xl font-semibold tracking-tight">Náklady</h1>
 
       {/* Bilance */}

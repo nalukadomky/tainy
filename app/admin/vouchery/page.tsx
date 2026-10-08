@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { submitOnEnter } from "@/lib/enter";
 import Link from "next/link";
 import { useAdminData, fmtDate, norm } from "@/lib/admin";
@@ -81,6 +82,7 @@ export default function VouchersPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [invalid, setInvalid] = useState<"code" | "value" | "uses" | null>(null);
   const toast = useToast();
+  const confirmDlg = useConfirm();
   const today = todayISO();
 
   const load = useCallback(async () => {
@@ -233,7 +235,7 @@ export default function VouchersPage() {
 
   async function remove(v: Voucher) {
     if (v.id.startsWith("tmp-")) return; // ještě se ukládá
-    if (!confirm(`Smazat voucher ${v.code}?`)) return;
+    if (!(await confirmDlg.ask({ title: `Smazat voucher ${v.code}?`, message: "Kód přestane platit. Už uplatněné slevy v rezervacích zůstanou.", confirmLabel: "Smazat voucher" }))) return;
     setVouchers((list) => list?.filter((x) => x.id !== v.id) ?? list);
     const res = await fetch(`/api/vouchers/${v.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
@@ -260,6 +262,7 @@ export default function VouchersPage() {
   return (
     <div className="space-y-5">
       {toast.node}
+      {confirmDlg.node}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Vouchery</h1>

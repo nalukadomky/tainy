@@ -80,6 +80,12 @@ export async function POST(req: NextRequest) {
   if (!namesOk || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "Chybí jméno, příjmení nebo platný e-mail hosta." }, { status: 400 });
   }
+  // Telefon je povinný: s předvolbou a 8–15 číslicemi celkem (mezinárodní formát)
+  const phone = String(body.phone ?? "").trim().slice(0, 30);
+  const phoneDigits = phone.replace(/\D/g, "").length;
+  if (!phone.startsWith("+") || phoneDigits < 8 || phoneDigits > 15) {
+    return NextResponse.json({ error: "Doplň telefon i s předvolbou." }, { status: 400 });
+  }
   // Souhlas s obchodními podmínkami (a storno podmínkami), pokud je web má.
   // Zpracování osobních údajů pro rezervaci souhlas nepotřebuje — host je jen informovaný.
   const hasTerms = hasDoc(site, "terms");
@@ -141,7 +147,7 @@ export async function POST(req: NextRequest) {
           guestName,
           firstName,
           email,
-          phone: String(body.phone ?? "").trim(),
+          phone,
           guests: capacityCount(counts, categories),
           guestBreakdown: JSON.stringify(counts),
           startDate: fromISO(startIso),

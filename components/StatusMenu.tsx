@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useConfirm, type ConfirmOptions } from "@/components/ConfirmDialog";
 import { STATUS_LABEL, STATUS_STYLE, type Reservation } from "@/lib/admin";
 
 // Štítek stavu rezervace, který jde rovnou přepnout: klik otevře nabídku stavů.
@@ -41,10 +42,12 @@ export function StatusMenu({
     };
   }, [open]);
 
+  const confirmDlg = useConfirm();
+
   async function pick(next: Status) {
     setOpen(false);
     if (next === status) return;
-    if (next === "cancelled" && !confirm(`Opravdu zrušit rezervaci hosta ${guestName}? Termín se uvolní.`)) return;
+    if (next === "cancelled" && !(await confirmDlg.ask(cancelReservationConfirm(guestName)))) return;
     // Nový stav se ukáže hned (rodič ho mění optimisticky), ukládá se na pozadí.
     setError("");
     onChange(next).catch((e) => setError(e instanceof Error ? e.message : "Změna selhala."));
@@ -52,6 +55,7 @@ export function StatusMenu({
 
   return (
     <div ref={ref} className="relative inline-block text-left">
+      {confirmDlg.node}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -86,4 +90,14 @@ export function StatusMenu({
       {error && <p className="mt-1 text-[11px] font-medium text-coral">{error}</p>}
     </div>
   );
+}
+
+/** Potvrzení zrušení rezervace — stejné v Přehledu, Kalendáři i Rezervacích. */
+export function cancelReservationConfirm(guestName: string): ConfirmOptions {
+  return {
+    title: `Zrušit rezervaci hosta ${guestName}?`,
+    message: "Termín se uvolní pro další hosty. Úklid po pobytu, který ještě nebyl zaplacený, se zruší taky.",
+    confirmLabel: "Zrušit rezervaci",
+    cancelLabel: "Ponechat",
+  };
 }

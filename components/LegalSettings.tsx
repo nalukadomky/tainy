@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { createPortal } from "react-dom";
 import type { Site } from "@/lib/admin";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -531,6 +532,7 @@ function LegalDocCard({
   const [uploading, setUploading] = useState<string | null>(null);
   const [converted, setConverted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const confirmDlg = useConfirm();
   const title = LEGAL_TITLE[kind];
   // Bez vlastního textu ukazuje editor výchozí znění (pokud ho dokument má)
   const usingDefault = !!defaultText && !text.trim();
@@ -570,7 +572,16 @@ function LegalDocCard({
   }
 
   async function convertWord(file: File) {
-    if (text.trim() && !confirm("Převedený Word nahradí současný text. Pokračovat?")) return;
+    if (
+      text.trim() &&
+      !(await confirmDlg.ask({
+        title: "Nahradit text Wordem?",
+        message: "Převedený dokument nahradí současný text. Pak ho zkontroluj a ulož.",
+        confirmLabel: "Nahradit",
+        tone: "primary",
+      }))
+    )
+      return;
     try {
       const mammoth = await import("mammoth");
       const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
@@ -585,7 +596,15 @@ function LegalDocCard({
   }
 
   async function removePdf() {
-    if (!pdf || !confirm(`Odebrat PDF s dokumentem ${title.toLowerCase()} z webu?`)) return;
+    if (
+      !pdf ||
+      !(await confirmDlg.ask({
+        title: "Odebrat PDF?",
+        message: `PDF s dokumentem ${title.toLowerCase()} zmizí z webu. Platit bude napsaný text, nebo výchozí znění.`,
+        confirmLabel: "Odebrat PDF",
+      }))
+    )
+      return;
     setDoc(kind, null);
     const res = await fetch(`/api/sites/${form.slug}/documents?kind=${kind}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
@@ -596,6 +615,7 @@ function LegalDocCard({
 
   return (
     <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+      {confirmDlg.node}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold">{title}</h2>
@@ -724,8 +744,13 @@ function LegalDocCard({
               <button
                 type="button"
                 className="font-medium text-pine hover:underline"
-                onClick={() => {
-                  if (!confirm("Tvoje úpravy se zahodí a použije se výchozí znění. Pokračovat?")) return;
+                onClick={async () => {
+                  const ok = await confirmDlg.ask({
+                    title: "Obnovit výchozí znění?",
+                    message: "Tvoje úpravy se zahodí a použije se výchozí znění podle údajů webu.",
+                    confirmLabel: "Obnovit",
+                  });
+                  if (!ok) return;
                   onText("");
                   setConverted(false);
                 }}
