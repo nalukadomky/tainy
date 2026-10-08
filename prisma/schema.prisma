@@ -49,6 +49,9 @@ model Site {
   // Platba
   paymentMode        String  @default("qr") // qr | stripe | both
   bankAccount        String  @default("")   // IBAN pro QR platbu
+  // DPH: plátce/neplátce a sazba (ceny v ceníku jsou vždy včetně DPH)
+  vatPayer           Boolean @default(false)
+  vatRate            Int     @default(12)
   cancellationPolicy String  @default("")
   // Úklid: výchozí úkoly (jeden na řádek) a co uklízečky uvidí o hostech
   // (čárkou: guests,name,note,phone). Cenu pobytu uklízečky nevidí nikdy.
@@ -128,6 +131,9 @@ model Reservation {
   voucherKind  String  @default("")   // pct | czk
   voucherValue Int     @default(0)
   discount     Int     @default(0)    // sleva v Kč
+  // DPH v době rezervace (0 = ubytovatel nebyl plátce); obsažené v ceně
+  vatRate      Int     @default(0)
+  vatAmount    Int     @default(0)
 
   note       String   @default("")
   source     String   @default("web") // web | manual | airbnb | booking

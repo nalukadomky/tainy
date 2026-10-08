@@ -10,6 +10,7 @@ import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
 import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
+import { vatOfQuote, vatRateOf } from "@/lib/vat";
 import { appUrl, sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
 
 // Jak dlouho držíme nezaplacenou rezervaci, než termín zase uvolní.
@@ -149,6 +150,9 @@ export async function POST(req: NextRequest) {
           feesTotal: quote.feesTotal,
           totalPrice: quote.total - voucher.discount,
           ...voucher,
+          // DPH v době rezervace (pozdější změna plátcovství rezervaci nemění)
+          vatRate: vatRateOf(site),
+          vatAmount: vatOfQuote(quote, voucher.discount, vatRateOf(site)),
           note: String(body.note ?? "").trim().slice(0, 500),
           source: demo ? "demo" : "web",
           status: demo ? "paid" : "pending",
@@ -182,6 +186,8 @@ export async function POST(req: NextRequest) {
     nights: nightsOf(startIso, endIso),
     total: created.totalPrice,
     discount: created.discount,
+    vatRate: created.vatRate,
+    vatAmount: created.vatAmount,
     voucherCode: created.voucherCode,
     paid: created.status === "paid",
     demo,

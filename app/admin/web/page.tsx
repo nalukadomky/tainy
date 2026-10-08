@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
 import { applyAdjust, czk } from "@/lib/pricing";
-import { toIBAN, formatIBAN } from "@/lib/payment";
 import { PhotoManager } from "@/components/PhotoManager";
 import { HeroPicker } from "@/components/HeroPicker";
 import { parsePhotoLines } from "@/lib/photos";
@@ -26,17 +25,11 @@ import {
 } from "@/components/LegalSettings";
 import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 
-// Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
-function ibanPreview(account: string): string {
-  const iban = toIBAN(account);
-  return iban ? `Uloží se jako ${formatIBAN(iban)}` : "Tohle číslo účtu neumím přečíst — zkontroluj ho.";
-}
-
 type Tab = "vzhled" | "cenik" | "pravni";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   vzhled: { label: "Vzhled a obsah", short: "Vzhled", hint: "Úvod, fotky, texty a kontakt" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
-  pravni: { label: "Provozovatel a podmínky", short: "Podmínky", hint: "IČ, obchodní podmínky, GDPR" },
+  pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
 };
 const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 
@@ -122,12 +115,17 @@ export default function SiteEditPage() {
     }
     if (form.businessId.trim() && !isValidIco(form.businessId)) {
       switchTab("pravni");
-      toast.show("IČ není platné — zkontroluj ho (Provozovatel a podmínky).");
+      toast.show("IČ není platné — zkontroluj ho (Firma a platby).");
       return;
     }
     if (form.vatId.trim() && !isValidVatId(form.vatId)) {
       switchTab("pravni");
-      toast.show("DIČ má tvar CZ a 8–10 číslic (Provozovatel a podmínky).");
+      toast.show("DIČ má tvar CZ a 8–10 číslic (Firma a platby).");
+      return;
+    }
+    if (form.vatPayer && !form.vatId.trim()) {
+      switchTab("pravni");
+      toast.show("Plátce DPH musí mít vyplněné DIČ (Firma a platby).");
       return;
     }
     // „Uloženo" hned, ukládá se na pozadí. Při chybě se změny označí jako
@@ -727,21 +725,6 @@ export default function SiteEditPage() {
                 <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
               </label>
             </div>
-
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Číslo účtu pro QR platbu</span>
-              <input
-                className="field"
-                placeholder="19-2000145399/0800"
-                value={form.bankAccount}
-                onChange={(e) => set("bankAccount", e.target.value)}
-              />
-              <span className="mt-1 block text-xs text-soft">
-                {form.bankAccount
-                  ? ibanPreview(form.bankAccount)
-                  : "Bez čísla účtu se hostům nabídne jen domluva s tebou."}
-              </span>
-            </label>
 
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium">Storno podmínky</span>

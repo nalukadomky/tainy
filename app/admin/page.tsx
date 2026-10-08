@@ -115,6 +115,13 @@ function Dashboard() {
   }, [reservations, range]);
 
   if (loading) return <DashboardSkeleton />;
+  const missing = site
+    ? ([
+        (!site.businessName.trim() || !site.businessId.trim()) && "jméno a IČ provozovatele",
+        !hasDoc(site, "terms") && "obchodní podmínky",
+        !site.bankAccount.trim() && "číslo účtu pro QR platbu",
+      ].filter(Boolean) as string[])
+    : [];
   if (error || !site)
     return (
       <div className="py-16 text-center">
@@ -153,23 +160,16 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Chybějící povinné údaje webu */}
-      {(!site.businessName.trim() || !site.businessId.trim() || !hasDoc(site, "terms")) && (
+      {/* Chybějící údaje webu (provozovatel, podmínky, účet pro platby) */}
+      {missing.length > 0 && (
         <Link
           href="/admin/web?sekce=pravni"
           className="flex items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber/10 p-4 transition hover:bg-amber/15"
         >
           <span>
-            <span className="block text-sm font-semibold text-ink">Doplň provozovatele a obchodní podmínky</span>
+            <span className="block text-sm font-semibold text-ink">Doplň údaje pro rezervace</span>
             <span className="block text-sm text-soft">
-              {[
-                (!site.businessName.trim() || !site.businessId.trim()) && "jméno a IČ provozovatele",
-                !hasDoc(site, "terms") && "obchodní podmínky",
-              ]
-                .filter(Boolean)
-                .join(" a ")
-                .replace(/^./, (c) => c.toUpperCase())}{" "}
-              — hosté je mají vidět na webu a odsouhlasit u rezervace.
+              Chybí {missing.length > 1 ? `${missing.slice(0, -1).join(", ")} a ${missing.at(-1)}` : missing[0]}.
             </span>
           </span>
           <span className="shrink-0 text-sm font-semibold text-pine">Doplnit →</span>

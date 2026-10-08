@@ -47,6 +47,8 @@ export type SiteViewData = {
   touristTax?: number;
   paymentMode?: string;
   cancellationPolicy?: string;
+  /** Sazba DPH (0 = neplátce). */
+  vatRate?: number;
   /** Ložnice a lůžka (počty). */
   sleeping?: Sleeping;
   /** Identifikace provozovatele do patičky. */
@@ -368,6 +370,7 @@ export function SiteView({
                 paymentMode: site.paymentMode ?? "qr",
                 cancellationPolicy: site.cancellationPolicy ?? "",
                 hasTerms: !!site.hasTerms,
+                vatRate: site.vatRate ?? 0,
                 hasPrivacy: !!site.hasPrivacy,
                 guestMode: site.guestMode ?? "total",
                 categories: site.categories ?? defaultCategories(site.pricingMode),
@@ -388,6 +391,7 @@ export function SiteView({
                 vatId: site.provider.vatId,
                 businessAddress: site.provider.address,
               })}
+              {!site.vatRate && " · neplátce DPH"}
             </p>
           )}
           {(site.hasTerms || site.hasPrivacy) && site.slug && (

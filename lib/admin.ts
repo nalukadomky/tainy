@@ -58,6 +58,9 @@ export type Site = {
   vatId: string;
   businessAddress: string;
   businessRegister: string;
+  /** DPH: plátce a sazba (12 / 21 %); ceny v ceníku jsou včetně DPH. */
+  vatPayer: boolean;
+  vatRate: number;
   /** Platby: qr | stripe | both (Stripe zatím jen v nastavení). */
   paymentMode: string;
   /** Obchodní podmínky a zásady: text nebo PDF (PDF má přednost). */

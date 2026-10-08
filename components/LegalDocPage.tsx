@@ -37,6 +37,8 @@ export async function LegalDocPage({ slug, kind }: { slug: string; kind: LegalKi
       guestMode: true,
       guestCategories: true,
       pricingMode: true,
+      vatPayer: true,
+      vatRate: true,
       termsText: true,
       termsPdf: true,
       termsUpdatedAt: true,

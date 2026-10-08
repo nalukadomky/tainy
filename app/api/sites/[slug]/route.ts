@@ -5,6 +5,7 @@ import { parseCategories, serializeCategories } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
 import { parseCleanerFields } from "@/lib/cleaning";
 import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
+import { cleanVatRate } from "@/lib/vat";
 import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
 
 const TEXT_FIELDS = [
@@ -83,13 +84,14 @@ export async function PATCH(
       select: {
         termsText: true,
         privacyText: true,
+        vatId: true,
         priceRules: { select: { label: true, startDate: true, endDate: true, value: true, unit: true } },
       },
     }),
     req.json(),
   ]);
   if (!guard.ok || !current) return deny(guard.ok ? 404 : guard.status);
-  const data: Record<string, string | number | Date> = {};
+  const data: Record<string, string | number | boolean | Date> = {};
   for (const key of TEXT_FIELDS) {
     if (body[key] === undefined || body[key] === null) continue;
     data[key] = String(body[key]).slice(0, 5000);
@@ -105,6 +107,15 @@ export async function PATCH(
     if (dic && !isValidVatId(dic)) return NextResponse.json({ error: "DIČ má tvar CZ a 8–10 číslic." }, { status: 400 });
     data.vatId = dic;
   }
+  // DPH: plátce musí mít DIČ (nové z požadavku, jinak uložené)
+  if (typeof body.vatPayer === "boolean") {
+    if (body.vatPayer) {
+      const dic = typeof body.vatId === "string" ? normalizeVatId(body.vatId) : current.vatId;
+      if (!dic) return NextResponse.json({ error: "Plátce DPH musí mít vyplněné DIČ." }, { status: 400 });
+    }
+    data.vatPayer = body.vatPayer;
+  }
+  if (body.vatRate !== undefined) data.vatRate = cleanVatRate(body.vatRate);
   // Texty dokumentů: při změně se posune verze (datum, se kterým host souhlasí)
   const legalKeys = (Object.keys(LEGAL_TEXT_FIELDS) as (keyof typeof LEGAL_TEXT_FIELDS)[]).filter(
     (k) => typeof body[k] === "string"

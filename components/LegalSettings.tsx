@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import type { Site } from "@/lib/admin";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { htmlToRichText } from "@/lib/richtext";
+import { toIBAN, formatIBAN } from "@/lib/payment";
+import { DEFAULT_VAT_RATE, cleanVatRate } from "@/lib/vat";
 import {
   LEGAL_PATH,
   LEGAL_TITLE,
@@ -45,6 +47,7 @@ export function LegalSettings({
   return (
     <>
       <ProviderCard form={form} set={set} requestSave={requestSave} />
+      <PaymentCard form={form} set={set} />
       <LegalDocCard
         kind="terms"
         form={form}
@@ -88,6 +91,9 @@ function ProviderCard({
   const ico = form.businessId.replace(/\s/g, "");
   const icoInvalid = ico.length >= 8 && !isValidIco(ico);
   const dicInvalid = !!form.vatId.trim() && !isValidVatId(form.vatId);
+  // Načítání z ARES: kolečko v tlačítku a pulzující pole, kam se údaje doplní
+  const loading = ares.state === "loading";
+  const filling = loading ? "animate-pulse !bg-line/40" : "";
 
   async function fromAres(): Promise<boolean> {
     if (!isValidIco(ico)) {
@@ -137,9 +143,9 @@ function ProviderCard({
         <div className="flex items-center gap-2">
           <input
             id="business-id"
-            className={`field shrink-0 tabular-nums ${icoInvalid ? "!border-coral" : ""}`}
-            // .field má šířku 100 % — IČ má jen 8 číslic, stačí úzké pole
-            style={{ width: "8.5rem" }}
+            className={`field tabular-nums ${icoInvalid ? "!border-coral" : ""}`}
+            // IČ má jen 8 číslic — úzké pole, na malém telefonu se ještě zmenší
+            style={{ flex: "0 1 8.5rem", minWidth: "6.5rem" }}
             maxLength={10}
             inputMode="numeric"
             enterKeyHint="done"
@@ -153,11 +159,22 @@ function ProviderCard({
           />
           <button
             type="button"
-            className="btn-ghost shrink-0 whitespace-nowrap !px-4 text-sm"
+            className="btn-ghost relative shrink-0 whitespace-nowrap !px-4 text-sm disabled:!opacity-100"
             onClick={fromAres}
-            disabled={ares.state === "loading"}
+            disabled={loading}
+            aria-busy={loading}
           >
-            {ares.state === "loading" ? "Hledám v ARES…" : "Doplnit z ARES"}
+            {/* Neviditelný text drží šířku, ať tlačítko při načítání neposkočí */}
+            <span className={loading ? "invisible" : ""}>Doplnit z ARES</span>
+            {loading && (
+              <span className="absolute inset-0 flex items-center justify-center gap-2 text-pine">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                Hledám…
+              </span>
+            )}
           </button>
         </div>
         <p className={`mt-1 text-xs ${icoInvalid || ares.state === "error" ? "text-coral" : "text-soft"}`}>
@@ -170,7 +187,7 @@ function ProviderCard({
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium">Jméno nebo obchodní firma</span>
         <input
-          className="field"
+          className={`field ${filling}`}
           placeholder="Jan Novák / Chaty Novák s.r.o."
           value={form.businessName}
           onChange={(e) => set("businessName", e.target.value)}
@@ -179,7 +196,7 @@ function ProviderCard({
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium">Sídlo / místo podnikání</span>
         <input
-          className="field"
+          className={`field ${filling}`}
           placeholder="Ulice 12, 123 45 Město"
           value={form.businessAddress}
           onChange={(e) => set("businessAddress", e.target.value)}
@@ -191,7 +208,7 @@ function ProviderCard({
             DIČ <span className="font-normal text-soft">(jen plátci DPH)</span>
           </span>
           <input
-            className={`field ${dicInvalid ? "!border-coral" : ""}`}
+            className={`field ${dicInvalid ? "!border-coral" : ""} ${filling}`}
             placeholder="CZ12345678"
             value={form.vatId}
             onChange={(e) => set("vatId", e.target.value)}
@@ -211,6 +228,217 @@ function ProviderCard({
         </label>
       </div>
     </div>
+  );
+}
+
+/* ---- Platby a DPH ---- */
+
+// Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
+function ibanPreview(account: string): string {
+  const iban = toIBAN(account);
+  return iban ? `Uloží se jako ${formatIBAN(iban)}` : "Tohle číslo účtu neumím přečíst — zkontroluj ho.";
+}
+
+function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(key: K, value: Site[K]) => void }) {
+  const [lawOpen, setLawOpen] = useState(false);
+  const segment = (on: boolean) =>
+    `flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition ${on ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"}`;
+  return (
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+      {lawOpen && <VatLawDialog onClose={() => setLawOpen(false)} />}
+      <div>
+        <h2 className="font-display text-lg font-semibold">Platby a DPH</h2>
+        <p className="text-sm text-soft">Kam ti hosté pošlou peníze a jak se u ceny uvádí DPH.</p>
+      </div>
+
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium">Číslo účtu pro QR platbu</span>
+        <input
+          className="field"
+          placeholder="19-2000145399/0800"
+          value={form.bankAccount}
+          onChange={(e) => set("bankAccount", e.target.value)}
+        />
+        <span className="mt-1 block text-xs text-soft">
+          {form.bankAccount
+            ? ibanPreview(form.bankAccount)
+            : "Z čísla účtu se hostům u rezervace vytvoří QR kód pro platbu. Bez něj se nabídne jen domluva s tebou."}
+        </span>
+      </label>
+
+      <div>
+        <span className="mb-1.5 block text-sm font-medium">DPH</span>
+        <div className="flex max-w-sm rounded-xl border border-line bg-bg p-1" role="radiogroup" aria-label="Plátce DPH">
+          {(
+            [
+              [false, "Neplátce DPH"],
+              [true, "Plátce DPH"],
+            ] as const
+          ).map(([payer, label]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={form.vatPayer === payer}
+              onClick={() => set("vatPayer", payer)}
+              className={segment(form.vatPayer === payer)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {form.vatPayer ? (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-soft">Sazba</span>
+              <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg p-1">
+                <button
+                  type="button"
+                  aria-pressed={form.vatRate === DEFAULT_VAT_RATE}
+                  onClick={() => set("vatRate", DEFAULT_VAT_RATE)}
+                  className={`${segment(form.vatRate === DEFAULT_VAT_RATE)} !flex-none !px-4`}
+                >
+                  {DEFAULT_VAT_RATE} %
+                </button>
+                {/* Vlastní sazba — libovolné celé procento */}
+                <label className="relative">
+                  <span className="sr-only">Jiná sazba DPH v procentech</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={50}
+                    placeholder="jiná"
+                    value={form.vatRate === DEFAULT_VAT_RATE ? "" : form.vatRate || ""}
+                    onChange={(e) => set("vatRate", e.target.value ? Number(e.target.value) : DEFAULT_VAT_RATE)}
+                    onBlur={() => set("vatRate", cleanVatRate(form.vatRate))}
+                    className={`h-8 w-20 appearance-none rounded-lg border bg-surface pl-3 pr-7 text-sm tabular-nums outline-none transition [-moz-appearance:textfield] focus:border-pine/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                      form.vatRate !== DEFAULT_VAT_RATE ? "border-pine/40 font-medium text-ink" : "border-transparent text-soft"
+                    }`}
+                  />
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-soft">%</span>
+                </label>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLawOpen(true)}
+              className="text-sm font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine"
+            >
+              Proč 12 %? Znění zákona
+            </button>
+            <p className="text-xs text-soft">
+              Ubytování má sníženou sazbu 12 %, jinou sazbu napiš do pole vedle. Ceny v ceníku zadávej{" "}
+              <strong>včetně DPH</strong> — host vždy vidí konečnou cenu a pod ní „včetně DPH {form.vatRate} %“ s částkou.
+            </p>
+            {!form.vatId.trim() && (
+              <p className="rounded-xl bg-amber/15 px-4 py-2.5 text-sm text-[#92600a]">
+                Plátce DPH musí mít vyplněné DIČ — doplň ho výše u provozovatele.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-soft">Hosté u ceny uvidí „Nejsme plátci DPH.“</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Výňatek ze zákona o DPH ke snížené sazbě 12 % pro ubytovací služby. */
+function VatLawDialog({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const quote = "border-l-2 border-pine/40 bg-bg py-2 pl-4 pr-3 text-sm text-ink";
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sazba DPH u ubytování"
+        className="rise flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+          <div>
+            <h2 className="font-display text-xl font-semibold">Sazba DPH u ubytování</h2>
+            <p className="mt-0.5 text-xs text-soft">Zákon č. 235/2004 Sb., o dani z přidané hodnoty — znění od 1. 1. 2024</p>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-soft outline-none transition hover:bg-bg hover:text-ink focus-visible:ring-2 focus-visible:ring-pine/40"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-4 overflow-y-auto px-5 py-5 text-sm text-soft">
+          <p>
+            Krátkodobé ubytování hostů (chata, apartmán, pokoj) je <strong className="text-ink">ubytovací služba</strong>.
+            Pro ubytovací služby platí <strong className="text-ink">snížená sazba DPH 12 %</strong>.
+          </p>
+
+          <div className="space-y-1.5">
+            <p className="font-semibold text-ink">§ 47 odst. 1 — sazby daně</p>
+            <p className={quote}>
+              U zdanitelného plnění nebo přijaté úplaty, ze které vznikne povinnost přiznat daň, se uplatňuje
+              <br />a) základní sazba daně ve výši 21 %,
+              <br />b) snížená sazba daně ve výši 12 %.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="font-semibold text-ink">§ 47 odst. 3 — služby se sníženou sazbou</p>
+            <p className={quote}>
+              U poskytnutí služby se uplatňuje základní sazba daně, pokud není v tomto zákoně stanoveno jinak. U služeb
+              uvedených v příloze č. 2 k tomuto zákonu se uplatňuje snížená sazba daně.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="font-semibold text-ink">Příloha č. 2 — seznam služeb se sníženou sazbou</p>
+            <p className={quote}>Ubytovací služby (kód klasifikace CZ-CPA 55)</p>
+          </div>
+
+          <p>
+            Od 1. 1. 2024 platí jediná snížená sazba 12 % (dřívější dvě snížené sazby se sloučily). Pokud
+            k ubytování prodáváš i jiné služby (např. stravování s alkoholem, wellness), mohou mít jinou sazbu.
+          </p>
+
+          <p className="rounded-xl bg-amber/15 px-4 py-3 text-xs text-[#92600a]">
+            Informace je orientační. V konkrétním případě se poraď s daňovým poradcem nebo účetní.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
+          <a
+            href="https://www.zakonyprolidi.cz/cs/2004-235"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-soft underline-offset-2 hover:text-ink hover:underline"
+          >
+            Celé znění zákona ↗
+          </a>
+          <button type="button" onClick={onClose} className="btn-ghost !px-5 !py-2 text-sm">
+            Zavřít
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

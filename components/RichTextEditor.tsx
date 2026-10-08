@@ -176,7 +176,12 @@ export function RichTextEditor({
       {editor ? (
         <EditorContent
           editor={editor}
-          className={collapsed ? "pointer-events-none max-h-32 overflow-hidden" : "max-h-[70vh] overflow-y-auto"}
+          // Výška a ořez přímo ve stylu — nezávisí na vygenerovaných třídách CSS
+          style={
+            collapsed
+              ? { maxHeight: "8rem", overflow: "hidden", pointerEvents: "none" }
+              : { maxHeight: "70vh", overflowY: "auto" }
+          }
         />
       ) : (
         <div className="min-h-32 space-y-2.5 px-4 py-4" aria-hidden>
@@ -193,7 +198,10 @@ export function RichTextEditor({
             setExpanded(true);
             requestAnimationFrame(() => editor?.commands.focus("start"));
           }}
-          className="absolute inset-0 flex items-end justify-center bg-gradient-to-b from-transparent via-surface/70 to-surface pb-3"
+          className="absolute inset-0 flex items-end justify-center pb-3"
+          style={{
+            background: "linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--surface) 70%, transparent) 45%, var(--surface) 100%)",
+          }}
         >
           <span className="rounded-full border border-line bg-surface px-4 py-1.5 text-sm font-semibold text-ink shadow-sm transition hover:border-pine/40">
             Rozbalit a upravit ▾

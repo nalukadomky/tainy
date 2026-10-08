@@ -19,6 +19,7 @@ import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { GuestPicker } from "@/components/GuestPicker";
 import { useToast } from "@/components/Toast";
 import { submitOnEnter } from "@/lib/enter";
+import { vatNote, vatOfQuote } from "@/lib/vat";
 import { LEGAL_PATH, type LegalKind } from "@/lib/legal";
 
 export type BookingSite = {
@@ -40,6 +41,8 @@ export type BookingSite = {
   /** Má web obchodní podmínky / zásady ochrany osobních údajů? */
   hasTerms?: boolean;
   hasPrivacy?: boolean;
+  /** Sazba DPH (0 = neplátce); ceny jsou včetně DPH. */
+  vatRate?: number;
   guestMode: string;
   categories: GuestCategory[];
 };
@@ -344,6 +347,9 @@ export function BookingWidget({
         <span>Celkem</span>
         <span>{czk(total)}</span>
       </div>
+      <p className="mt-0.5 text-right text-xs text-soft">
+        {vatNote(site.vatRate ?? 0, vatOfQuote(price, voucher?.discount ?? 0, site.vatRate ?? 0))}
+      </p>
     </div>
   );
 

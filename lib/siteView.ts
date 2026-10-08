@@ -5,6 +5,7 @@
 import type { SiteViewData } from "@/components/SiteView";
 import { parseCategories } from "@/lib/guests";
 import { parseSleeping } from "@/lib/sleeping";
+import { vatRateOf } from "@/lib/vat";
 import { hasDoc, privacyTextOf, termsTextOf, type LegalSource } from "@/lib/legal";
 import type { LegalDocData } from "@/components/LegalModal";
 
@@ -36,6 +37,8 @@ export type SiteSource = {
   bankAccount: string;
   cancellationPolicy: string;
   sleeping?: string;
+  vatPayer?: boolean;
+  vatRate?: number;
   // Provozovatel a dokumenty — v průvodci zakládání webu ještě nejsou.
   businessName?: string;
   businessId?: string;
@@ -83,6 +86,7 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
     paymentMode: site.bankAccount ? "qr" : "onsite",
     cancellationPolicy: site.cancellationPolicy,
     sleeping: parseSleeping(site.sleeping),
+    vatRate: vatRateOf(site),
     provider: {
       name: site.businessName ?? "",
       id: site.businessId ?? "",

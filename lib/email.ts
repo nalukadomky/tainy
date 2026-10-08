@@ -4,6 +4,7 @@
 import { Resend } from "resend";
 import { czk, plural } from "@/lib/pricing";
 import { greetingName } from "@/lib/vocative";
+import { vatNote } from "@/lib/vat";
 
 const FROM = process.env.RESEND_FROM ?? "tainy <rezervace@resend.dev>";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -54,6 +55,7 @@ function stayBlock(r: StayMail): string {
     <tr><td style="padding:6px 0;color:#5a6557">Hosté</td><td style="padding:6px 0;text-align:right">${r.guestSummary || r.guests}</td></tr>
     ${r.discount ? `<tr><td style="padding:6px 0;color:#5a6557">Sleva (voucher ${r.voucherCode})</td><td style="padding:6px 0;text-align:right;color:#2c5e3f">−${czk(r.discount)}</td></tr>` : ""}
     <tr><td style="padding:10px 0 0;border-top:1px solid #e4ddcf;font-weight:600">Celkem</td><td style="padding:10px 0 0;border-top:1px solid #e4ddcf;text-align:right;font-weight:700">${czk(r.total)}</td></tr>
+    ${r.vatRate !== undefined ? `<tr><td colspan="2" style="padding:2px 0 0;text-align:right;font-size:12px;color:#5a6557">${vatNote(r.vatRate, r.vatAmount ?? 0)}</td></tr>` : ""}
   </table>`;
 }
 
@@ -75,6 +77,9 @@ export type StayMail = {
   /** Sleva z voucheru v Kč (0 = bez voucheru). */
   discount?: number;
   voucherCode?: string;
+  /** DPH obsažené v ceně (vatRate 0 = ubytovatel není plátce). */
+  vatRate?: number;
+  vatAmount?: number;
   paid: boolean;
   /** Zaplaceno ukázkovou platbou — nesmí se splést se skutečnou. */
   demo: boolean;

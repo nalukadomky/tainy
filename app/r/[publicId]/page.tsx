@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { vatNote } from "@/lib/vat";
 import { LEGAL_PATH, hasDoc, providerLine } from "@/lib/legal";
 import { prisma } from "@/lib/prisma";
 import { czk, plural } from "@/lib/pricing";
@@ -174,6 +175,7 @@ export default async function ReservationPage({
               <dt>Celkem</dt>
               <dd>{czk(reservation.totalPrice)}</dd>
             </div>
+            <p className="text-right text-xs text-soft">{vatNote(reservation.vatRate, reservation.vatAmount)}</p>
           </dl>
         </div>
 

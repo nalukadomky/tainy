@@ -1,6 +1,7 @@
 // Provozovatel webu, obchodní podmínky a zásady ochrany osobních údajů.
 
 import { activeCategories, parseCategories } from "@/lib/guests";
+import { vatRateOf } from "@/lib/vat";
 
 export type LegalKind = "terms" | "privacy";
 
@@ -40,6 +41,8 @@ export type LegalSource = {
   guestMode?: string;
   guestCategories?: string;
   pricingMode?: string;
+  vatPayer?: boolean;
+  vatRate?: number;
 };
 
 /** Výchozí obchodní podmínky z údajů provozovatele a pravidel pobytu (prázdné bez provozovatele). */
@@ -247,7 +250,9 @@ Smlouva o ubytování se řídí § 2326 a násl. občanského zákoníku a těm
 
 ## 3. Cena a platba
 
-Cena pobytu se zobrazí před odesláním rezervace a je konečná.${fees.length ? ` Obsahuje:\n\n${fees.join("\n")}` : ""}
+Cena pobytu se zobrazí před odesláním rezervace a je konečná${
+    vatRateOf(site) ? ` včetně DPH ${vatRateOf(site)} %` : " — ubytovatel není plátcem DPH"
+  }.${fees.length ? ` Obsahuje:\n\n${fees.join("\n")}` : ""}
 
 ${site.bankAccount ? "Platí se převodem podle údajů a QR kódu na stránce rezervace. " : ""}Nezaplacená rezervace se po uplynutí lhůty uvedené v potvrzení automaticky zruší a termín se uvolní.
 
@@ -327,5 +332,36 @@ export function replaceProvider(text: string, before: ProviderFields, after: Pro
   let out = text;
   pairs.forEach(([from], i) => (out = out.split(from).join(`\u0002${i}\u0002`)));
   pairs.forEach(([, to], i) => (out = out.split(`\u0002${i}\u0002`).join(to)));
+  return replaceProviderMentions(out, after);
+}
+
+/**
+ * Údaje provozovatele podle jejich místa v textu (vzory podmínek a zásad) — opraví
+ * i starší údaje, které už nejsou „předchozí hodnotou" (např. po dvou změnách IČ).
+ */
+function replaceProviderMentions(text: string, p: ProviderFields): string {
+  const name = p.businessName.trim();
+  const ico = p.businessId.trim();
+  const dic = p.vatId.trim();
+  const address = p.businessAddress.trim();
+  // Náhrada přes funkci — hodnota s „$“ by se jinak vyložila jako odkaz na skupinu
+  const keep = (value: string) => (_: string, before: string) => before + value;
+  const wrap = (value: string) => (_: string, before: string, after: string) => before + value + after;
+  let out = text;
+  // „IČ“ nesmí být konec „DIČ“ — před ním nesmí stát písmeno (u = české znaky)
+  if (ico) out = out.replace(/(?<!\p{L})(IČO?:?(?:\*\*)?:?\s*)\d{8}(?!\d)/gu, keep(ico));
+  if (dic) out = out.replace(/(?<!\p{L})(DIČ:?(?:\*\*)?:?\s*)CZ\d{8,10}(?!\d)/gu, keep(dic));
+  // Nový provozovatel bez DIČ — staré DIČ z textu pryč (řádek seznamu i zmínka ve větě)
+  else out = out.replace(/^- \*\*DIČ:\*\*[^\n]*\n?/gmu, "").replace(/,\s*DIČ CZ\d{8,10}(?!\d)/gu, "");
+  if (name) {
+    out = out
+      .replace(/((?:Správcem je|Ubytování poskytuje) \*\*)[^*\n]+(\*\*)/gu, wrap(name))
+      .replace(/(\*\*Správce:\*\*\s*)[^\n]+/gu, keep(name));
+  }
+  if (address) {
+    out = out
+      .replace(/(se sídlem )[^\n]+?(?=\s\(dále|\. Kontakt|\.\s*$)/gmu, keep(address))
+      .replace(/(\*\*Sídlo:\*\*\s*)[^\n]+/gu, keep(address));
+  }
   return out;
 }
