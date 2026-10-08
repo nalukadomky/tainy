@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Site } from "@/lib/admin";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { htmlToRichText } from "@/lib/richtext";
@@ -11,6 +12,7 @@ import {
   isValidIco,
   isValidVatId,
   normalizeIco,
+  replaceProvider,
   defaultPrivacyText,
   defaultTermsText,
   type LegalKind,
@@ -28,6 +30,7 @@ export function LegalSettings({
   set,
   setDoc,
   toast,
+  requestSave,
 }: {
   form: Site;
   /** Uložená verze webu — odkaz „Zobrazit na webu" jen u dokumentu, který už na webu je. */
@@ -36,10 +39,12 @@ export function LegalSettings({
   /** PDF se ukládá hned (mimo „Uložit změny") — změnu propíše do formuláře i uložených dat. */
   setDoc: (kind: LegalKind, doc: Doc | null) => void;
   toast: Toast;
+  /** Uložit formulář, až se propíšou právě nastavené hodnoty (Enter v poli IČ). */
+  requestSave: () => void;
 }) {
   return (
     <>
-      <ProviderCard form={form} set={set} />
+      <ProviderCard form={form} set={set} requestSave={requestSave} />
       <LegalDocCard
         kind="terms"
         form={form}
@@ -70,29 +75,50 @@ export function LegalSettings({
 
 /* ---- Provozovatel ---- */
 
-function ProviderCard({ form, set }: { form: Site; set: <K extends keyof Site>(key: K, value: Site[K]) => void }) {
+function ProviderCard({
+  form,
+  set,
+  requestSave,
+}: {
+  form: Site;
+  set: <K extends keyof Site>(key: K, value: Site[K]) => void;
+  requestSave: () => void;
+}) {
   const [ares, setAres] = useState<{ state: "idle" | "loading" | "done" | "error"; text?: string }>({ state: "idle" });
   const ico = form.businessId.replace(/\s/g, "");
   const icoInvalid = ico.length >= 8 && !isValidIco(ico);
   const dicInvalid = !!form.vatId.trim() && !isValidVatId(form.vatId);
 
-  async function fromAres() {
+  async function fromAres(): Promise<boolean> {
     if (!isValidIco(ico)) {
       setAres({ state: "error", text: "Nejdřív vyplň platné IČ (8 číslic)." });
-      return;
+      return false;
     }
     setAres({ state: "loading" });
     const res = await fetch(`/api/ares/${normalizeIco(ico)}`).catch(() => null);
     const data = await res?.json().catch(() => null);
     if (!res?.ok || !data) {
       setAres({ state: "error", text: data?.error ?? "ARES teď neodpovídá — vyplň údaje ručně." });
-      return;
+      return false;
     }
     set("businessId", data.ico);
     if (data.name) set("businessName", data.name);
     if (data.address) set("businessAddress", data.address);
     set("vatId", data.vatId ?? "");
     setAres({ state: "done", text: "Doplněno z ARES — zkontroluj a ulož." });
+    return true;
+  }
+
+  // Enter v poli IČ = doplnit z ARES a rovnou uložit
+  async function confirmIco(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    if (!isValidIco(ico)) {
+      setAres({ state: "error", text: "Tohle IČ není platné — zkontroluj ho." });
+      return;
+    }
+    if (await fromAres()) setAres({ state: "done", text: "Doplněno z ARES a uloženo." });
+    requestSave();
   }
 
   return (
@@ -108,11 +134,16 @@ function ProviderCard({ form, set }: { form: Site; set: <K extends keyof Site>(k
         <label htmlFor="business-id" className="mb-1.5 block text-sm font-medium">
           IČ
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2">
           <input
             id="business-id"
-            className={`field max-w-48 ${icoInvalid ? "!border-coral" : ""}`}
+            className={`field shrink-0 tabular-nums ${icoInvalid ? "!border-coral" : ""}`}
+            // .field má šířku 100 % — IČ má jen 8 číslic, stačí úzké pole
+            style={{ width: "8.5rem" }}
+            maxLength={10}
             inputMode="numeric"
+            enterKeyHint="done"
+            onKeyDown={confirmIco}
             placeholder="12345678"
             value={form.businessId}
             onChange={(e) => {
@@ -120,7 +151,12 @@ function ProviderCard({ form, set }: { form: Site; set: <K extends keyof Site>(k
               setAres({ state: "idle" });
             }}
           />
-          <button type="button" className="btn-ghost !px-4 text-sm" onClick={fromAres} disabled={ares.state === "loading"}>
+          <button
+            type="button"
+            className="btn-ghost shrink-0 whitespace-nowrap !px-4 text-sm"
+            onClick={fromAres}
+            disabled={ares.state === "loading"}
+          >
             {ares.state === "loading" ? "Hledám v ARES…" : "Doplnit z ARES"}
           </button>
         </div>
@@ -376,10 +412,9 @@ function LegalDocCard({
             </p>
           )}
           {usingDefault && (
-            <p className="rounded-xl bg-pine/10 px-4 py-3 text-sm text-pine">
-              <strong>Výchozí znění</strong> — připravili jsme ho z údajů provozovatele a nastavení webu a samo se podle
-              nich aktualizuje.
-              Na webu platí hned, jak uložíš provozovatele. Když text upravíš, uloží se tvoje vlastní verze.
+            <p className="text-xs text-soft">
+              <strong className="text-pine">Výchozí znění</strong> — aktualizuje se samo podle údajů webu. Když ho
+              upravíš, uloží se tvoje verze.
             </p>
           )}
           {defaultText === "" && !text.trim() && (
@@ -387,7 +422,13 @@ function LegalDocCard({
               Vyplň výše provozovatele (jméno a IČ) — zásady se podle něj připraví samy.
             </p>
           )}
-          <RichTextEditor value={shown} onChange={onText} placeholder={`Sem napiš ${title.toLowerCase()}…`} />
+          <RichTextEditor
+            value={shown}
+            onChange={onText}
+            placeholder={`Sem napiš ${title.toLowerCase()}…`}
+            collapsible
+            forceExpanded={converted}
+          />
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
             <button type="button" className="font-medium text-pine hover:underline" onClick={() => fileRef.current?.click()}>
               Převést z Wordu (.docx)
@@ -414,5 +455,111 @@ function LegalDocCard({
         </div>
       )}
     </div>
+  );
+}
+
+/* ---- Potvrzení po změně IČ ---- */
+
+/** Co se po změně IČ propsalo samo a co je potřeba upravit ručně. */
+export type ProviderChange = {
+  ico: string;
+  name: string;
+  /** Dokument nahraný jako PDF — do souboru se zapisovat nedá. */
+  termsPdf: boolean;
+  privacyPdf: boolean;
+  /** Platby přes Stripe — faktury vystavuje Stripe s vlastními firemními údaji. */
+  stripe: boolean;
+};
+
+export function providerChangeOf(before: Site, after: Site): ProviderChange | null {
+  const ico = normalizeIco(after.businessId.trim());
+  if (!ico || ico === normalizeIco(before.businessId.trim())) return null;
+  return {
+    ico,
+    name: after.businessName.trim(),
+    termsPdf: !!after.termsPdf,
+    privacyPdf: !!after.privacyPdf,
+    stripe: after.paymentMode === "stripe" || after.paymentMode === "both",
+  };
+}
+
+/** Nové údaje provozovatele se propíšou i do vlastního znění podmínek a zásad. */
+export function withProviderInDocs(before: Site, after: Site): Site {
+  return {
+    ...after,
+    termsText: after.termsText && replaceProvider(after.termsText, before, after),
+    privacyText: after.privacyText && replaceProvider(after.privacyText, before, after),
+  };
+}
+
+export function ProviderSavedDialog({ change, onClose }: { change: ProviderChange; onClose: () => void }) {
+  const okRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    okRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const updated = [
+    "patička webu (údaje o provozovateli)",
+    !change.termsPdf && "obchodní podmínky",
+    !change.privacyPdf && "zásady ochrany osobních údajů",
+    "stránky rezervací a potvrzovací e-maily hostům",
+  ].filter(Boolean) as string[];
+  const manual = [
+    change.termsPdf && "Obchodní podmínky máš nahrané jako PDF — do souboru zapsat nejde, nahraj novou verzi.",
+    change.privacyPdf && "Zásady ochrany osobních údajů máš nahrané jako PDF — do souboru zapsat nejde, nahraj novou verzi.",
+    change.stripe &&
+      "Faktury posílá Stripe s vlastními firemními údaji — nové IČ uprav i ve Stripe (Nastavení → Údaje o firmě).",
+  ].filter(Boolean) as string[];
+
+  // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nové IČ je uložené"
+        className="rise w-full max-w-md rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-center rounded-full bg-pine/10 text-xl text-pine"
+          style={{ width: 44, height: 44 }}
+          aria-hidden
+        >
+          ✓
+        </div>
+        <h2 className="mt-3 font-display text-xl font-semibold">Nové IČ je uložené</h2>
+        <p className="mt-1 text-sm text-soft">
+          IČ <strong className="text-ink">{change.ico}</strong>
+          {change.name && <> ({change.name})</>} se propsalo do:
+        </p>
+        <ul className="mt-3 space-y-1.5 text-sm">
+          {updated.map((u) => (
+            <li key={u} className="flex gap-2">
+              <span className="text-pine">✓</span>
+              {u}
+            </li>
+          ))}
+        </ul>
+        {manual.length > 0 && (
+          <div className="mt-4 space-y-2 rounded-xl bg-amber/15 px-4 py-3 text-sm text-[#92600a]">
+            <p className="font-semibold">Uprav ještě ručně:</p>
+            {manual.map((m) => (
+              <p key={m}>• {m}</p>
+            ))}
+          </div>
+        )}
+        <button ref={okRef} type="button" className="btn-primary mt-5 w-full !py-2.5" onClick={onClose}>
+          Rozumím
+        </button>
+      </div>
+    </div>,
+    document.body
   );
 }

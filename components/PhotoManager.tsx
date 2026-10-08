@@ -340,7 +340,11 @@ function PhotoDetail({
                 value={alt}
                 maxLength={120}
                 onChange={(e) => setAlt(e.target.value.replace(/[|\n]/g, " "))}
-                onKeyDown={(e) => e.key === "Enter" && dirty && onCaption(alt.trim())}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault(); // jen popisek fotky, ne celý formulář webu
+                  if (dirty) onCaption(alt.trim());
+                }}
               />
               <button
                 type="button"

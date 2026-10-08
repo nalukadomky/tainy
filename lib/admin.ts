@@ -56,6 +56,8 @@ export type Site = {
   vatId: string;
   businessAddress: string;
   businessRegister: string;
+  /** Platby: qr | stripe | both (Stripe zatím jen v nastavení). */
+  paymentMode: string;
   /** Obchodní podmínky a zásady: text nebo PDF (PDF má přednost). */
   termsText: string;
   termsPdf: string;

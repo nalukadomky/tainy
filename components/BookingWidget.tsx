@@ -18,6 +18,7 @@ import { demoPaymentsEnabled } from "@/lib/demo";
 import { DayPicker, type BookedRange } from "@/components/DayPicker";
 import { GuestPicker } from "@/components/GuestPicker";
 import { useToast } from "@/components/Toast";
+import { submitOnEnter } from "@/lib/enter";
 import { LEGAL_PATH, type LegalKind } from "@/lib/legal";
 
 export type BookingSite = {
@@ -420,7 +421,12 @@ export function BookingWidget({
           )}
 
           {step === "udaje" && (
-            <div className="space-y-4">
+            <div
+              className="space-y-4"
+              onKeyDown={submitOnEnter(() => {
+                if (guestName.trim().length >= 3 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) setStep("potvrzeni");
+              })}
+            >
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Jméno a příjmení</span>
                 <input
@@ -516,7 +522,11 @@ export function BookingWidget({
                         setVoucherInput(e.target.value);
                         setVoucherError("");
                       }}
-                      onKeyDown={(e) => e.key === "Enter" && applyVoucher()}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        applyVoucher();
+                      }}
                     />
                     <button
                       type="button"

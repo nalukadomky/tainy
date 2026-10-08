@@ -73,11 +73,21 @@ export async function PATCH(
 ) {
   const { slug } = await params;
 
-  // Editovat web smí jen jeho vlastník
-  const guard = await requireSiteOwnerBySlug(slug);
-  if (!guard.ok) return deny(guard.status);
-
-  const body = await req.json();
+  // Editovat web smí jen jeho vlastník. Současný stav (texty dokumentů, sezóny)
+  // se načítá souběžně s ověřením — databáze je pomalá, dotazy po sobě by trvaly.
+  const [guard, current, body] = await Promise.all([
+    requireSiteOwnerBySlug(slug),
+    prisma.site.findUnique({
+      where: { slug },
+      select: {
+        termsText: true,
+        privacyText: true,
+        priceRules: { select: { label: true, startDate: true, endDate: true, value: true, unit: true } },
+      },
+    }),
+    req.json(),
+  ]);
+  if (!guard.ok || !current) return deny(guard.ok ? 404 : guard.status);
   const data: Record<string, string | number | Date> = {};
   for (const key of TEXT_FIELDS) {
     if (body[key] === undefined || body[key] === null) continue;
@@ -99,10 +109,6 @@ export async function PATCH(
     (k) => typeof body[k] === "string"
   );
   if (legalKeys.length) {
-    const current = await prisma.site.findUniqueOrThrow({
-      where: { id: guard.site.id },
-      select: { termsText: true, privacyText: true },
-    });
     for (const key of legalKeys) {
       const text = String(body[key]).slice(0, MAX_LEGAL_TEXT);
       if (text === current[key]) continue;
@@ -182,20 +188,27 @@ export async function PATCH(
         (r: { startDate: Date; endDate: Date }) =>
           !isNaN(r.startDate.getTime()) && !isNaN(r.endDate.getTime()) && r.endDate >= r.startDate
       );
-    rulesOps = [
-      prisma.priceRule.deleteMany({ where: { siteId: existing.id } }),
-      prisma.priceRule.createMany({ data: cleaned }),
-    ] as never[];
+    // Přepisovat jen při skutečné změně — formulář posílá sezóny při každém uložení
+    const key = (rules: { label: string; startDate: Date; endDate: Date; value: number; unit: string }[]) =>
+      JSON.stringify(
+        rules
+          .map((r) => [r.label, r.startDate.toISOString().slice(0, 10), r.endDate.toISOString().slice(0, 10), r.value, r.unit])
+          .sort()
+      );
+    if (key(cleaned) !== key(current.priceRules)) {
+      rulesOps = [
+        prisma.priceRule.deleteMany({ where: { siteId: existing.id } }),
+        prisma.priceRule.createMany({ data: cleaned }),
+      ] as never[];
+    }
   }
 
-  await prisma.$transaction([
-    prisma.site.update({ where: { slug }, data }),
-    ...rulesOps,
-  ]);
-
-  const site = await prisma.site.findUnique({
+  // Uložení rovnou vrátí aktuální web (bez dalšího dotazu)
+  const update = prisma.site.update({
     where: { slug },
+    data,
     include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
+  const site = rulesOps.length ? (await prisma.$transaction([...rulesOps, update])).at(-1) : await update;
   return NextResponse.json(site);
 }

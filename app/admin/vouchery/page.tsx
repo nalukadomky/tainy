@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { submitOnEnter } from "@/lib/enter";
 import Link from "next/link";
 import { useAdminData, fmtDate, norm } from "@/lib/admin";
 import { czk } from "@/lib/pricing";
@@ -285,7 +286,7 @@ export default function VouchersPage() {
       </div>
 
       {editing !== null && (
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" onKeyDown={submitOnEnter(save)}>
           <h2 className="font-display text-lg font-semibold">
             {editing === "new" ? "Nový voucher" : `Upravit ${draft.code}`}
           </h2>

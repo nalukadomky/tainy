@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extensions";
@@ -19,11 +19,22 @@ export function RichTextEditor({
   value,
   onChange,
   placeholder,
+  collapsible = false,
+  forceExpanded = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  /** Sbalený náhled začátku textu (dlouhé dokumenty nezabírají místo), rozbalí se klikem. */
+  collapsible?: boolean;
+  /** Rozbalit (např. po převodu z Wordu, ať majitel text zkontroluje). */
+  forceExpanded?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(!collapsible || !value.trim());
+  useEffect(() => {
+    if (forceExpanded) setExpanded(true);
+  }, [forceExpanded]);
+  const collapsed = collapsible && !expanded;
   // Poslední hodnota, kterou editor sám odeslal — změnu zvenku (vzor, převod
   // z Wordu) do editoru propíšeme, vlastní psaní ne (jinak by skákal kurzor).
   const emitted = useRef(value);
@@ -46,7 +57,14 @@ export function RichTextEditor({
       Placeholder.configure({ placeholder }),
     ],
     content: richTextToHtml(value),
-    editorProps: { attributes: { class: CONTENT, "aria-label": placeholder, role: "textbox", "aria-multiline": "true" } },
+    editorProps: {
+      attributes: {
+        class: CONTENT,
+        "aria-label": placeholder,
+        role: "textbox",
+        "aria-multiline": "true",
+      },
+    },
     onUpdate: ({ editor }) => {
       const next = editor.isEmpty ? "" : htmlToRichText(editor.getHTML());
       emitted.current = next;
@@ -75,44 +93,112 @@ export function RichTextEditor({
         : null,
   });
 
-  const buttons: { label: React.ReactNode; title: string; on?: boolean; run: () => void }[] = editor
+  const buttons: {
+    label: React.ReactNode;
+    title: string;
+    on?: boolean;
+    run: () => void;
+  }[] = editor
     ? [
-        { label: "Nadpis", title: "Nadpis", on: active?.h1, run: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
-        { label: "Podnadpis", title: "Podnadpis", on: active?.h2, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-        { label: <span className="font-bold">B</span>, title: "Tučně", on: active?.bold, run: () => editor.chain().focus().toggleBold().run() },
-        { label: <span className="font-serif italic">I</span>, title: "Kurzíva", on: active?.italic, run: () => editor.chain().focus().toggleItalic().run() },
-        { label: "• Odrážky", title: "Seznam s odrážkami", on: active?.bullet, run: () => editor.chain().focus().toggleBulletList().run() },
-        { label: "1. Číslování", title: "Číslovaný seznam", on: active?.ordered, run: () => editor.chain().focus().toggleOrderedList().run() },
+        {
+          label: "Nadpis",
+          title: "Nadpis",
+          on: active?.h1,
+          run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+        },
+        {
+          label: "Podnadpis",
+          title: "Podnadpis",
+          on: active?.h2,
+          run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        },
+        {
+          label: <span className="font-bold">B</span>,
+          title: "Tučně",
+          on: active?.bold,
+          run: () => editor.chain().focus().toggleBold().run(),
+        },
+        {
+          label: <span className="font-serif italic">I</span>,
+          title: "Kurzíva",
+          on: active?.italic,
+          run: () => editor.chain().focus().toggleItalic().run(),
+        },
+        {
+          label: "• Odrážky",
+          title: "Seznam s odrážkami",
+          on: active?.bullet,
+          run: () => editor.chain().focus().toggleBulletList().run(),
+        },
+        {
+          label: "1. Číslování",
+          title: "Číslovaný seznam",
+          on: active?.ordered,
+          run: () => editor.chain().focus().toggleOrderedList().run(),
+        },
       ]
     : [];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface focus-within:border-pine/50">
-      <div className="flex flex-wrap items-center gap-1 border-b border-line bg-bg px-2 py-1.5" role="toolbar" aria-label="Formátování textu">
-        {buttons.map((b) => (
-          <button
-            key={b.title}
-            type="button"
-            title={b.title}
-            aria-pressed={!!b.on}
-            onMouseDown={(e) => e.preventDefault()} // neztratit kurzor v textu
-            onClick={b.run}
-            className={`rounded-lg px-2.5 py-1 text-sm font-medium transition ${
-              b.on ? "bg-ink text-white" : "text-ink hover:bg-surface"
-            }`}
-          >
-            {b.label}
-          </button>
-        ))}
-      </div>
+    <div className="relative overflow-hidden rounded-xl border border-line bg-surface focus-within:border-pine/50">
+      {!collapsed && (
+        <div
+          className="flex flex-wrap items-center gap-1 border-b border-line bg-bg px-2 py-1.5"
+          role="toolbar"
+          aria-label="Formátování textu"
+        >
+          {buttons.map((b) => (
+            <button
+              key={b.title}
+              type="button"
+              title={b.title}
+              aria-pressed={!!b.on}
+              onMouseDown={(e) => e.preventDefault()} // neztratit kurzor v textu
+              onClick={b.run}
+              className={`rounded-lg px-2.5 py-1 text-sm font-medium transition ${
+                b.on ? "bg-ink text-white" : "text-ink hover:bg-surface"
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+          {collapsible && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="ml-auto rounded-lg px-2.5 py-1 text-sm font-medium text-soft transition hover:bg-surface hover:text-ink"
+            >
+              Sbalit ▴
+            </button>
+          )}
+        </div>
+      )}
       {editor ? (
-        <EditorContent editor={editor} className="max-h-[70vh] overflow-y-auto" />
+        <EditorContent
+          editor={editor}
+          className={collapsed ? "pointer-events-none max-h-32 overflow-hidden" : "max-h-[70vh] overflow-y-auto"}
+        />
       ) : (
-        <div className="min-h-64 space-y-2.5 px-4 py-4" aria-hidden>
+        <div className="min-h-32 space-y-2.5 px-4 py-4" aria-hidden>
           <Skeleton className="h-6 w-1/2" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
         </div>
+      )}
+      {collapsed && (
+        // Celý sbalený náhled je tlačítko — klik rozbalí editor a dá kurzor na začátek
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(true);
+            requestAnimationFrame(() => editor?.commands.focus("start"));
+          }}
+          className="absolute inset-0 flex items-end justify-center bg-gradient-to-b from-transparent via-surface/70 to-surface pb-3"
+        >
+          <span className="rounded-full border border-line bg-surface px-4 py-1.5 text-sm font-semibold text-ink shadow-sm transition hover:border-pine/40">
+            Rozbalit a upravit ▾
+          </span>
+        </button>
       )}
     </div>
   );

@@ -15,7 +15,14 @@ import { LivePreview, type PreviewSection } from "@/components/LivePreview";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { useToast } from "@/components/Toast";
 import { FormPageSkeleton } from "@/components/Skeleton";
-import { LegalSettings } from "@/components/LegalSettings";
+import { submitOnEnter } from "@/lib/enter";
+import {
+  LegalSettings,
+  ProviderSavedDialog,
+  providerChangeOf,
+  withProviderInDocs,
+  type ProviderChange,
+} from "@/components/LegalSettings";
 import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 
 // Kontrola pro majitele, že jsme jeho číslo účtu přečetli správně.
@@ -37,6 +44,10 @@ export default function SiteEditPage() {
   const [form, setForm] = useState<Site | null>(null);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Uložit až po dalším vykreslení — hodnoty právě doplněné z ARES už budou ve formuláři
+  const [saveRequested, setSaveRequested] = useState(false);
+  // Potvrzení po změně IČ — co se propsalo samo a co upravit ručně
+  const [icoSaved, setIcoSaved] = useState<ProviderChange | null>(null);
 
   // Formulář převezme data ze serveru — ale nepřepíše, co majitel mezitím
   // napsal po kliknutí na „Uložit" (ukládá se na pozadí).
@@ -120,12 +131,18 @@ export default function SiteEditPage() {
     }
     // „Uloženo" hned, ukládá se na pozadí. Při chybě se změny označí jako
     // neuložené (zůstanou ve formuláři) a ozve se toast.
-    const sent = form;
+    // Nové IČ / jméno / sídlo se propíše i do vlastního znění podmínek a zásad
+    const providerChange = site ? providerChangeOf(site, form) : null;
+    const withDocs = site ? withProviderInDocs(site, form) : form;
+    const sent = withDocs.termsText === form.termsText && withDocs.privacyText === form.privacyText ? form : withDocs;
+    if (sent !== form) setForm(sent);
     sentRef.current = JSON.stringify(sent);
     setFailed(false);
     setSite(sent);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+    // Potvrzení o novém IČ hned (ukládá se na pozadí); při chybě zmizí
+    if (providerChange) setIcoSaved(providerChange);
     const res = await fetch(`/api/sites/${slug}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -133,6 +150,7 @@ export default function SiteEditPage() {
     }).catch(() => null);
     if (!res?.ok) {
       const data = await res?.json().catch(() => null);
+      setIcoSaved(null);
       setSaved(false);
       setFailed(true);
       toast.show(data?.error ?? "Změny se nepodařilo uložit — zkus to znovu.");
@@ -141,6 +159,13 @@ export default function SiteEditPage() {
     window.dispatchEvent(new Event(SITES_CHANGED));
     reload(); // potichu doplní data ze serveru (např. ID nových sezón)
   }
+
+  useEffect(() => {
+    if (!saveRequested) return;
+    setSaveRequested(false);
+    save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveRequested]);
 
   const categories = parseCategories(form?.guestCategories ?? "", form?.pricingMode);
   // Náhled víkendové ceny počítá stejnou funkcí jako ostrý ceník.
@@ -198,8 +223,9 @@ export default function SiteEditPage() {
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" onKeyDown={submitOnEnter(save)}>
       {toast.node}
+      {icoSaved && <ProviderSavedDialog change={icoSaved} onClose={() => setIcoSaved(null)} />}
       <LivePreview site={form} dirty={dirty} focus={focus} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -243,7 +269,14 @@ export default function SiteEditPage() {
 
       {tab === "pravni" ? (
         <>
-          <LegalSettings form={form} saved={site ?? form} set={set} setDoc={setDoc} toast={toast} />
+          <LegalSettings
+            form={form}
+            saved={site ?? form}
+            set={set}
+            setDoc={setDoc}
+            toast={toast}
+            requestSave={() => setSaveRequested(true)}
+          />
           <div className="flex items-center gap-3">
             <button className="btn-primary" onClick={save}>
               Uložit změny

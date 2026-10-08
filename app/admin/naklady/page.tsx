@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { submitOnEnter } from "@/lib/enter";
 import { useAdminData, fmtDate, type Cost } from "@/lib/admin";
 import { czk } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
@@ -114,7 +115,7 @@ export default function CostsPage() {
       </div>
 
       {/* Přidání nákladu */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="rounded-2xl border border-line bg-surface p-5" onKeyDown={submitOnEnter(addCost)}>
         <h2 className="font-display text-lg font-semibold">Přidat náklad</h2>
 
         <div className="mt-3 inline-flex rounded-xl border border-line bg-bg p-1" role="radiogroup" aria-label="Opakování">

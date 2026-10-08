@@ -298,3 +298,34 @@ S osobními údaji hostů zacházíme podle zásad ochrany osobních údajů zve
 Tyto podmínky platí ve znění zveřejněném v okamžiku rezervace. Vztahy jimi neupravené se řídí právem České republiky.
 `;
 }
+
+/* ---- Změna provozovatele ve vlastních textech dokumentů ---- */
+
+type ProviderFields = Pick<Provider, "businessName" | "businessId" | "vatId" | "businessAddress">;
+
+// Místa ze vzorů, která čekají na doplnění
+const PLACEHOLDERS: [keyof ProviderFields, string][] = [
+  ["businessName", "[doplň jméno nebo firmu]"],
+  ["businessId", "[doplň IČ]"],
+  ["businessAddress", "[doplň adresu sídla]"],
+];
+
+/**
+ * Nahradí v textu staré údaje provozovatele novými (a doplní „[doplň …]" ze vzorů).
+ * Nahrazuje se přes dočasné značky od nejdelší hodnoty — IČ je obsažené v DIČ
+ * („CZ06716610"), takže změna IČ nesmí omylem přepsat nezměněné DIČ.
+ */
+export function replaceProvider(text: string, before: ProviderFields, after: ProviderFields): string {
+  const pairs: [string, string][] = [];
+  for (const key of ["businessName", "businessId", "vatId", "businessAddress"] as const) {
+    const from = before[key].trim();
+    if (from) pairs.push([from, after[key].trim()]);
+  }
+  for (const [key, mark] of PLACEHOLDERS) if (after[key].trim()) pairs.push([mark, after[key].trim()]);
+  pairs.sort((a, b) => b[0].length - a[0].length);
+
+  let out = text;
+  pairs.forEach(([from], i) => (out = out.split(from).join(`\u0002${i}\u0002`)));
+  pairs.forEach(([, to], i) => (out = out.split(`\u0002${i}\u0002`).join(to)));
+  return out;
+}
