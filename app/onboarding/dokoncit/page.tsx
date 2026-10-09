@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/lib/supabase/client";
+import { DRAFT_KEY, FORM_KEY } from "@/lib/onboarding";
 
 // Jediné místo „vytvoř web po přihlášení" — funguje pro e-mail i OAuth.
 // Nepřihlášeného pošle na registraci, přihlášenému vytvoří web z draftu.
@@ -27,7 +28,7 @@ export default function FinalizePage() {
         return;
       }
 
-      const raw = localStorage.getItem("tainy.draft");
+      const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) {
         router.replace("/admin");
         return;
@@ -45,7 +46,8 @@ export default function FinalizePage() {
           return;
         }
         localStorage.setItem("tainy.site", data.slug);
-        localStorage.removeItem("tainy.draft");
+        localStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(FORM_KEY);
         router.replace("/admin?vitej=1");
       } catch {
         setMsg("Web se nepodařilo vytvořit. Zkontroluj připojení a zkus to znovu.");

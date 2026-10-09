@@ -1,138 +1,56 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { AmenityPicker } from "@/components/AmenityPicker";
-import { SiteView, type SiteViewData } from "@/components/SiteView";
-import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
+import { OnboardingEditor, PriceFields } from "@/components/OnboardingEditor";
+import { PROPERTY_TYPES } from "@/lib/listing";
+import { EMPTY_FORM, FORM_KEY, withSuggestedTexts, type OnboardingForm } from "@/lib/onboarding";
 
-type Form = {
-  name: string;
-  propertyType: string;
-  tagline: string;
-  description: string;
-  maxGuests: number;
-  pricePerNight: string;
-  weekendPrice: string;
-  pricingMode: "unit" | "person";
-  amenities: string[];
-  contactEmail: string;
-  contactPhone: string;
-};
-
-// Víkendová cena (Pá–Ne) se ukládá rovnou jako pevná částka — dřív se
-// přepočítávala na procenta a zaokrouhlením se rozcházela se zadanou cenou.
-function weekendAdjust(form: Form): { value: number; unit: "pct" | "czk" } {
-  const cena = Number(form.weekendPrice);
-  return cena > 0 ? { value: Math.round(cena), unit: "czk" } : { value: 0, unit: "pct" };
-}
-
-// Tělo pro POST /api/sites (uloží se jako draft do localStorage).
-function buildDraft(form: Form) {
-  return {
-    name: form.name,
-    propertyType: form.propertyType,
-    tagline: form.tagline,
-    description: form.description,
-    maxGuests: form.maxGuests,
-    pricingMode: form.pricingMode,
-    contactEmail: form.contactEmail,
-    contactPhone: form.contactPhone,
-    pricePerNight: Number(form.pricePerNight),
-    weekendValue: weekendAdjust(form).value,
-    weekendUnit: weekendAdjust(form).unit,
-    amenities: form.amenities.join(", "),
-  };
-}
-
-// Data pro živý náhled webu.
-function draftToSiteView(form: Form): SiteViewData {
-  return {
-    name: form.name,
-    tagline: form.tagline,
-    description: form.description,
-    propertyType: form.propertyType,
-    pricePerNight: Number(form.pricePerNight) || 0,
-    pricingMode: form.pricingMode,
-    weekend: weekendAdjust(form),
-    maxGuests: form.maxGuests,
-    amenities: form.amenities.join(", "),
-    contactEmail: form.contactEmail,
-    contactPhone: form.contactPhone,
-    priceRules: [],
-  };
-}
+// Onboarding: dvě krátké otázky (název a typ, kapacita a ceny), pak se web
+// dotváří přímo v sobě (OnboardingEditor) a „Chci tento web" otevře registraci.
+// Rozpracovaný web se drží v prohlížeči, obnovení stránky o nic nepřipraví.
 
 function Wizard() {
-  const router = useRouter();
+  // 0–1 = otázky, 2 = editor ve webu
   const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [form, setForm] = useState<Form>({
-    name: "",
-    propertyType: "chata",
-    tagline: "",
-    description: "",
-    maxGuests: 4,
-    pricePerNight: "",
-    weekendPrice: "",
-    pricingMode: "unit",
-    amenities: [],
-    contactEmail: "",
-    contactPhone: "",
-  });
+  const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
+  const [loaded, setLoaded] = useState(false);
 
-  const set = <K extends keyof Form>(key: K, value: Form[K]) =>
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FORM_KEY) ?? "null");
+      if (saved?.form) {
+        setForm({ ...EMPTY_FORM, ...saved.form });
+        if (typeof saved.step === "number") setStep(Math.min(2, Math.max(0, saved.step)));
+      }
+    } catch {}
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(FORM_KEY, JSON.stringify({ form, step }));
+    } catch {}
+  }, [form, step, loaded]);
+
+  const set = <K extends keyof OnboardingForm>(key: K, value: OnboardingForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const steps = [
     { title: "Jak se tvoje místo jmenuje?", valid: form.name.trim().length >= 2 },
-    { title: "Řekni hostům, proč přijet", valid: true },
     { title: "Kapacita a ceny", valid: Number(form.pricePerNight) > 0 },
-    { title: "Vybavení a kontakt", valid: true },
-    { title: "Náhled tvého webu", valid: true },
   ];
-  const PREVIEW_STEP = steps.length - 1;
+  const EDITOR_STEP = steps.length;
 
-  // Web se zatím nevytváří — draft se drží v prohlížeči a vznikne až po přihlášení.
-  function claim() {
-    setSaving(true);
-    localStorage.setItem("tainy.draft", JSON.stringify(buildDraft(form)));
-    router.push("/onboarding/dokoncit");
+  function openEditor() {
+    setForm(withSuggestedTexts);
+    setStep(EDITOR_STEP);
   }
 
-  // Krok „Náhled" = plnohodnotný živý web přes celou obrazovku + lišta s CTA.
-  if (step === PREVIEW_STEP) {
-    return (
-      <div className="min-h-dvh bg-cream">
-        <div className="sticky top-0 z-50 border-b border-line bg-cream/90 backdrop-blur">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-5 py-3">
-            <button
-              type="button"
-              onClick={() => setStep(PREVIEW_STEP - 1)}
-              className="text-sm text-soft transition hover:text-ink"
-            >
-              ← Upravit
-            </button>
-            <span className="hidden text-xs font-semibold uppercase tracking-wider text-soft sm:block">
-              Náhled tvého webu
-            </span>
-            <button
-              type="button"
-              onClick={claim}
-              disabled={saving}
-              className="btn-primary !px-5 !py-2 text-sm"
-            >
-              {saving ? "Moment…" : "Chci tento web →"}
-            </button>
-          </div>
-        </div>
-        <SiteView site={draftToSiteView(form)} preview />
-      </div>
-    );
-  }
+  if (!loaded) return null;
+  if (step === EDITOR_STEP) return <OnboardingEditor form={form} set={set} onBack={() => setStep(EDITOR_STEP - 1)} />;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-10">
@@ -196,155 +114,14 @@ function Wizard() {
 
         {step === 1 && (
           <>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Slogan (jedna věta)</span>
-              <input
-                className="field"
-                placeholder="např. Tiny house na kraji lesa, kde čas plyne pomaleji"
-                value={form.tagline}
-                onChange={(e) => set("tagline", e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Popis pro hosty</span>
-              <textarea
-                className="field min-h-36"
-                placeholder="Co dělá tvoje místo výjimečným? Výhled, klid, sauna, snídaně…"
-                value={form.description}
-                onChange={(e) => set("description", e.target.value)}
-              />
-            </label>
+            <PriceFields form={form} set={set} />
             <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
-              💡 Netrap se formulacemi — texty můžeš kdykoli upravit v administraci.
+              💰 Víkend necháš prázdný = stejná cena jako ve všední dny. Texty, vybavení a kontakt doplníš za chvíli
+              přímo ve webu.
             </p>
           </>
-        )}
-
-        {step === 2 && (
-          <>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium">Maximální počet hostů</span>
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  className="btn-ghost !px-5 !py-2"
-                  onClick={() => set("maxGuests", Math.max(1, form.maxGuests - 1))}
-                >
-                  −
-                </button>
-                <span className="w-10 text-center font-display text-2xl font-semibold">
-                  {form.maxGuests}
-                </span>
-                <button
-                  type="button"
-                  className="btn-ghost !px-5 !py-2"
-                  onClick={() => set("maxGuests", Math.min(20, form.maxGuests + 1))}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium">Jak účtuješ cenu?</span>
-              <div className="flex gap-2">
-                {(
-                  [
-                    ["unit", "Za celou nemovitost / noc"],
-                    ["person", "Za osobu / noc"],
-                  ] as const
-                ).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => set("pricingMode", mode)}
-                    className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
-                      form.pricingMode === mode
-                        ? "border-pine bg-pine/5 text-ink ring-2 ring-pine/20"
-                        : "border-line bg-surface text-soft hover:border-pine/40"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium">
-                Cena za noc (Kč{form.pricingMode === "person" && " za osobu"})
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs text-soft">Všední dny (Po–Čt)</span>
-                  <input
-                    className="field"
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="2900"
-                    value={form.pricePerNight}
-                    onChange={(e) => set("pricePerNight", e.target.value)}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs text-soft">Víkend (Pá–Ne)</span>
-                  <input
-                    className="field"
-                    type="number"
-                    inputMode="numeric"
-                    placeholder={form.pricePerNight || "3400"}
-                    value={form.weekendPrice}
-                    onChange={(e) => set("weekendPrice", e.target.value)}
-                  />
-                </label>
-              </div>
-            </div>
-            <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
-              💰 Víkend necháš prázdný = stejná cena jako ve všední dny. Sezónní ceny (± %) doladíš
-              po vytvoření webu v administraci.
-            </p>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium">
-                Vybavení <span className="text-soft">(klikni na nabídku nebo napiš vlastní)</span>
-              </span>
-              <AmenityPicker
-                value={form.amenities}
-                onChange={(next) => set("amenities", next)}
-                suggestions={AMENITY_SUGGESTIONS}
-                placeholder="Napiš vybavení a stiskni Enter…"
-              />
-            </div>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Kontaktní e-mail</span>
-              <input
-                className="field"
-                type="email"
-                placeholder="ahoj@moje-chata.cz"
-                value={form.contactEmail}
-                onChange={(e) => set("contactEmail", e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Telefon</span>
-              <input
-                className="field"
-                type="tel"
-                placeholder="+420 777 123 456"
-                value={form.contactPhone}
-                onChange={(e) => set("contactPhone", e.target.value)}
-              />
-            </label>
-          </>
-        )}
-
-        {error && (
-          <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error}</p>
         )}
       </div>
-
       <div className="mt-8 flex gap-3">
         {step > 0 && (
           <button type="button" className="btn-ghost flex-1" onClick={() => setStep(step - 1)}>
@@ -355,9 +132,9 @@ function Wizard() {
           type="button"
           className="btn-primary flex-1"
           disabled={!steps[step].valid}
-          onClick={() => setStep(step + 1)}
+          onClick={() => (step === EDITOR_STEP - 1 ? openEditor() : setStep(step + 1))}
         >
-          {step === PREVIEW_STEP - 1 ? "Zobrazit náhled →" : "Pokračovat →"}
+          {step === EDITOR_STEP - 1 ? "Vytvořit web →" : "Pokračovat →"}
         </button>
       </div>
     </div>

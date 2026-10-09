@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,8 @@ import { toSiteViewData } from "@/lib/siteView";
 import { parsePhotoLines } from "@/lib/photos";
 import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
 import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage";
-import type { PreviewMessage } from "@/components/LivePreview";
+import { usePreviewFrame } from "@/components/LivePreview";
+import { BuilderHint, BuilderPanel } from "@/components/BuilderPanel";
 import type { EditableField, EditableSection } from "@/components/EditableText";
 import { HeroPicker } from "@/components/HeroPicker";
 import { PhotoManager } from "@/components/PhotoManager";
@@ -45,9 +46,7 @@ export default function BuilderPage() {
   const confirmDlg = useConfirm();
   const router = useRouter();
   const [hint, setHint] = useState(false);
-  const [ready, setReady] = useState(0);
   const [booked, setBooked] = useState<BookedRange[]>([]);
-  const frameRef = useRef<HTMLIFrameElement>(null);
   const pending = useRef<Partial<Site>>({});
   const timer = useRef<number | null>(null);
   // Právě běžící uložení — při odchodu na něj počkáme. Vrací, jestli se povedlo.
@@ -60,6 +59,9 @@ export default function BuilderPage() {
   useEffect(() => {
     setMounted(true);
     if (!window.matchMedia("(min-width: 1024px)").matches) setDevice("mobile");
+    // ?panel=galerie — rovnou otevřená sekce (např. „Přidat fotky“ po založení webu)
+    const initial = new URLSearchParams(window.location.search).get("panel");
+    if (initial && initial in PANEL_TITLE) setPanel(initial as EditableSection);
     try {
       setHint(localStorage.getItem("tainy.builder.hint") !== "0");
     } catch {}
@@ -174,37 +176,17 @@ export default function BuilderPage() {
       .catch(() => {});
   }, [slug]);
 
-  useEffect(() => {
-    function onMessage(e: MessageEvent<PreviewMessage>) {
-      if (e.origin !== window.location.origin || e.source !== frameRef.current?.contentWindow) return;
-      const msg = e.data;
-      if (msg?.type === "ready") setReady((n) => n + 1);
-      if (msg?.type === "edit") update({ [msg.field]: msg.value } as Pick<Site, EditableField>);
-      if (msg?.type === "select") setPanel(msg.section);
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [update]);
+  const siteView = useMemo(() => (form ? toSiteViewData(form) : null), [form]);
+  const frameRef = usePreviewFrame({
+    site: siteView,
+    booked,
+    editable: true,
+    focus: panel,
+    onEdit: (field, value) => update({ [field]: value } as Pick<Site, EditableField>),
+    onSelect: setPanel,
+  });
 
-  const send = (msg: PreviewMessage) => frameRef.current?.contentWindow?.postMessage(msg, window.location.origin);
-
-  useEffect(() => {
-    if (!ready || !form) return;
-    const t = window.setTimeout(() => send({ type: "site", site: toSiteViewData(form), booked, editable: true }), 60);
-    return () => window.clearTimeout(t);
-  }, [ready, form, booked]);
-
-  // Otevřený panel → web sjede na sekci, kterou upravuješ.
-  useEffect(() => {
-    if (ready && panel) send({ type: "focus", section: panel });
-  }, [ready, panel]);
-
-  useEffect(() => {
-    if (!panel) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPanel(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [panel]);
+  const closePanel = useCallback(() => setPanel(null), []);
 
   function dismissHint() {
     setHint(false);
@@ -250,18 +232,9 @@ export default function BuilderPage() {
         <div className="relative flex min-w-0 flex-1 flex-col">
           {/* Nápověda je v toku stránky, ne nad iframe — jinak ji některé prohlížeče schovají pod web */}
           {hint && (
-            <div className="flex items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
-              <span>
-                ✍️ Klikni na text a piš. Fotky a další nastavení sekce otevřeš tlačítkem <strong>Upravit</strong>.
-              </span>
-              <button
-                type="button"
-                onClick={dismissHint}
-                className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25"
-              >
-                Rozumím
-              </button>
-            </div>
+            <BuilderHint onDismiss={dismissHint}>
+              ✍️ Klikni na text a piš. Fotky a další nastavení sekce otevřeš tlačítkem <strong>Upravit</strong>.
+            </BuilderHint>
           )}
           {loading || !form ? (
             <div className="paper flex flex-1 items-start justify-center p-6" role="status" aria-label="Načítám web">
@@ -274,25 +247,9 @@ export default function BuilderPage() {
 
         {/* Boční panel sekce (na mobilu spodní sheet) */}
         {panel && form && (
-          <aside
-            aria-label={PANEL_TITLE[panel]}
-            className="preview-in absolute inset-x-0 bottom-0 z-20 flex max-h-[75%] flex-col rounded-t-3xl border-t border-line bg-surface shadow-2xl lg:static lg:max-h-none lg:w-[400px] lg:rounded-none lg:border-l lg:border-t-0 lg:shadow-none"
-          >
-            <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-              <h2 className="font-display text-lg font-semibold">{PANEL_TITLE[panel]}</h2>
-              <button
-                type="button"
-                onClick={() => setPanel(null)}
-                aria-label="Zavřít panel"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-soft hover:bg-line/60 hover:text-ink"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 space-y-4 overflow-y-auto p-5">
-              <SectionPanel section={panel} form={form} update={update} onLeave={leave} />
-            </div>
-          </aside>
+          <BuilderPanel title={PANEL_TITLE[panel]} onClose={closePanel}>
+            <SectionPanel section={panel} form={form} update={update} onLeave={leave} />
+          </BuilderPanel>
         )}
       </div>
     </div>,

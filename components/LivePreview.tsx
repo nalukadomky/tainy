@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { SiteViewData } from "@/components/SiteView";
 import type { BookedRange } from "@/components/DayPicker";
@@ -21,6 +21,63 @@ export type PreviewMessage =
   // Builder: úprava textu přímo ve webu a klik na „Upravit" u sekce
   | { type: "edit"; field: EditableField; value: string }
   | { type: "select"; section: EditableSection };
+
+/**
+ * Komunikace s webem v iframe (/nahled) pro editory přímo ve webu (builder,
+ * onboarding): pošle data webu, přijímá úpravy textu a klik na „Upravit" u sekce
+ * a umí web odscrollovat na sekci. Při přepnutí zařízení se iframe načte znovu
+ * a data dostane i podruhé.
+ */
+export function usePreviewFrame({
+  site,
+  booked,
+  editable,
+  focus,
+  onEdit,
+  onSelect,
+}: {
+  site: SiteViewData | null;
+  booked: BookedRange[];
+  editable: boolean;
+  /** Otevřená sekce — web na ni sjede. */
+  focus: PreviewSection | null;
+  onEdit?: (field: EditableField, value: string) => void;
+  onSelect?: (section: EditableSection) => void;
+}) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [ready, setReady] = useState(0);
+  const handlers = useRef({ onEdit, onSelect });
+  handlers.current = { onEdit, onSelect };
+
+  useEffect(() => {
+    function onMessage(e: MessageEvent<PreviewMessage>) {
+      if (e.origin !== window.location.origin || e.source !== frameRef.current?.contentWindow) return;
+      const msg = e.data;
+      if (msg?.type === "ready") setReady((n) => n + 1);
+      if (msg?.type === "edit") handlers.current.onEdit?.(msg.field, msg.value);
+      if (msg?.type === "select") handlers.current.onSelect?.(msg.section);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const send = useCallback(
+    (msg: PreviewMessage) => frameRef.current?.contentWindow?.postMessage(msg, window.location.origin),
+    []
+  );
+
+  useEffect(() => {
+    if (!ready || !site) return;
+    const t = window.setTimeout(() => send({ type: "site", site, booked, editable }), 60);
+    return () => window.clearTimeout(t);
+  }, [ready, site, booked, editable, send]);
+
+  useEffect(() => {
+    if (ready && focus) send({ type: "focus", section: focus });
+  }, [ready, focus, send]);
+
+  return frameRef;
+}
 
 // Šířka panelu na počítači; editor o ni uhne (viz .admin-shell v globals.css).
 const PANEL_W = "min(46vw, 820px)";

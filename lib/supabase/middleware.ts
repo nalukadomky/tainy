@@ -34,9 +34,11 @@ export async function updateSession(request: NextRequest) {
   const devUser = devLoginEnabled() && request.cookies.has(DEV_LOGIN_COOKIE);
 
   if (!user && !devUser && request.nextUrl.pathname.startsWith("/admin")) {
+    // Po přihlášení zpět na stejnou stránku i s parametry (např. ?panel=galerie)
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
+    url.search = "";
+    url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 

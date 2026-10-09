@@ -17,10 +17,21 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+export function AuthForm({
+  mode,
+  next: nextProp,
+  onSwitchMode,
+}: {
+  mode: "login" | "register";
+  /** Kam po přihlášení (jinak ?next= z adresy, výchozí /admin). */
+  next?: string;
+  /** Přepnutí registrace ↔ přihlášení bez odchodu ze stránky (okno v onboardingu). */
+  onSwitchMode?: () => void;
+}) {
   const router = useRouter();
   const isRegister = mode === "register";
-  const next = useSearchParams().get("next") || "/admin";
+  const fromUrl = useSearchParams().get("next");
+  const next = nextProp || fromUrl || "/admin";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -160,12 +171,18 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
       <p className="text-center text-sm text-soft">
         {isRegister ? "Už máš účet? " : "Nemáš účet? "}
-        <Link
-          href={`${isRegister ? "/login" : "/register"}?next=${encodeURIComponent(next)}`}
-          className="font-semibold text-pine hover:underline"
-        >
-          {isRegister ? "Přihlas se" : "Zaregistruj se"}
-        </Link>
+        {onSwitchMode ? (
+          <button type="button" onClick={onSwitchMode} className="font-semibold text-pine hover:underline">
+            {isRegister ? "Přihlas se" : "Zaregistruj se"}
+          </button>
+        ) : (
+          <Link
+            href={`${isRegister ? "/login" : "/register"}?next=${encodeURIComponent(next)}`}
+            className="font-semibold text-pine hover:underline"
+          >
+            {isRegister ? "Přihlas se" : "Zaregistruj se"}
+          </Link>
+        )}
       </p>
     </div>
   );
