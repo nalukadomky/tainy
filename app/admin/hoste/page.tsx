@@ -15,6 +15,8 @@ import {
 } from "@/lib/admin";
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
+import { ListMore, usePaged } from "@/components/ListMore";
+import { SortHeader } from "@/components/SortHeader";
 import { Dropdown } from "@/components/Dropdown";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { ListPageSkeleton } from "@/components/Skeleton";
@@ -122,6 +124,9 @@ export default function GuestsPage() {
   }, [guests, query, show, sort]);
 
   const returning = guests.filter((g) => g.count > 1).length;
+  // Postupné načítání po 20
+  const paged = usePaged(`${query}|${show}|${sort}`);
+  const visibleGuests = shown.slice(0, paged.limit);
   const filtered = query !== "" || show !== "all";
 
   async function exportXlsx() {
@@ -272,7 +277,7 @@ export default function GuestsPage() {
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {shown.length === 0 && (
           <p className="rounded-2xl border border-line bg-surface p-6 text-center text-sm text-soft">
             {guests.length === 0
@@ -280,15 +285,38 @@ export default function GuestsPage() {
               : "Tomuhle filtru neodpovídá žádný host."}
           </p>
         )}
-        {shown.map((g) => {
+        {/* Hlavička tabulky (počítač) — klik na sloupec řadí */}
+        {shown.length > 0 && (
+          <div className="hidden items-center gap-4 px-4 sm:flex">
+            <SortHeader label="Host" active={sort === "name"} dir="asc" onClick={() => setSort("name")} className="min-w-0 flex-1 pl-[3.75rem]" />
+            <SortHeader label="Pobyty" active={sort === "stays"} dir="desc" onClick={() => setSort("stays")} align="right" className="w-20" />
+            <SortHeader label="Naposledy" active={sort === "last"} dir="desc" onClick={() => setSort("last")} align="right" className="w-28" />
+            <SortHeader label="Útrata" active={sort === "spent"} dir="desc" onClick={() => setSort("spent")} align="right" className="w-28" />
+            <span className="w-4" aria-hidden />
+          </div>
+        )}
+        {visibleGuests.length > 0 && (
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
+        {visibleGuests.map((g, gi) => {
           const expanded = open === g.key;
+          const first = gi === 0;
+          const last = gi === visibleGuests.length - 1;
           return (
-            <div key={g.key} className="overflow-hidden rounded-2xl border border-line bg-surface">
+            <div
+              key={g.key}
+              className="overflow-hidden"
+              style={{
+                borderTopLeftRadius: first ? 15 : 0,
+                borderTopRightRadius: first ? 15 : 0,
+                borderBottomLeftRadius: last ? 15 : 0,
+                borderBottomRightRadius: last ? 15 : 0,
+              }}
+            >
               <button
                 type="button"
                 onClick={() => setOpen(expanded ? null : g.key)}
                 aria-expanded={expanded}
-                className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-bg/60 sm:gap-4"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg/60 sm:gap-4"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pine/10 font-display text-base font-semibold text-pine sm:h-11 sm:w-11 sm:text-lg">
                   {g.name.charAt(0).toUpperCase()}
@@ -311,15 +339,12 @@ export default function GuestsPage() {
                     {g.count}× pobyt · <span className="whitespace-nowrap">naposledy {fmtDate(g.last)}</span>
                   </p>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-semibold">{czk(g.spent)}</p>
-                  <p className="hidden text-xs text-soft sm:block">
-                    {g.count}× pobyt · naposledy {fmtDate(g.last)}
-                  </p>
-                </div>
+                <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums sm:block">{g.count}×</span>
+                <span className="hidden w-28 shrink-0 text-right text-sm text-soft sm:block">{fmtDate(g.last)}</span>
+                <p className="shrink-0 text-right font-semibold tabular-nums sm:w-28">{czk(g.spent)}</p>
                 <span
                   aria-hidden
-                  className={`shrink-0 text-base leading-none text-soft transition-transform ${expanded ? "rotate-180" : ""}`}
+                  className={`w-4 shrink-0 text-center text-base leading-none text-soft transition-transform ${expanded ? "rotate-180" : ""}`}
                 >
                   ▾
                 </span>
@@ -392,6 +417,9 @@ export default function GuestsPage() {
             </div>
           );
         })}
+        </div>
+        )}
+        <ListMore shown={visibleGuests.length} total={shown.length} onMore={paged.more} />
       </div>
     </div>
   );

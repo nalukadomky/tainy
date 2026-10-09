@@ -79,7 +79,7 @@ export function SwipeToPay({
 
   return (
     // Ořez jen během tažení — jinak by uřízl nabídku „⋯“, která přesahuje kartu
-    <div id={id} className={`relative rounded-2xl ${className ?? ""}`} style={{ overflow: dx ? "hidden" : undefined }}>
+    <div id={id} className={`relative ${className ?? "rounded-2xl"}`} style={{ overflow: dx ? "hidden" : undefined }}>
       {enabled && dx < 0 && (
         <div
           aria-hidden
