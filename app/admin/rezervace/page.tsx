@@ -57,6 +57,24 @@ export default function ReservationsPage() {
     setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));
   }
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
+  // Rezervace z portálu: doplnění jména, kontaktu a ceny
+  const [editing, setEditing] = useState<Reservation | null>(null);
+  async function saveDetails(r: Reservation, patch: GuestDetails) {
+    setEditing(null);
+    replaceReservation({ ...r, ...patch, firstName: patch.guestName.split(" ")[0] });
+    const res = await fetch(`/api/reservations/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => null);
+      replaceReservation(r);
+      toast.show(data?.error ?? "Údaje se nepodařilo uložit.");
+      return;
+    }
+    toast.show("Údaje jsou uložené.", "success");
+  }
   // Mobil: detail rezervace v okně zespodu a kód k zámku z nabídky „⋯“
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [codeFor, setCodeFor] = useState<Reservation | null>(null);
@@ -329,8 +347,8 @@ export default function ReservationsPage() {
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-soft">
                     <span>
                       {fmtDate(r.startDate)} – {fmtDate(r.endDate)} · {nightsOf(r)}{" "}
-                      {plural(nightsOf(r), "noc", "noci", "nocí")} · {r.guests}{" "}
-                      {plural(r.guests, "host", "hosté", "hostů")}
+                      {plural(nightsOf(r), "noc", "noci", "nocí")}
+                      {r.guests > 0 && ` · ${r.guests} ${plural(r.guests, "host", "hosté", "hostů")}`}
                     </span>
                     <button
                       type="button"
@@ -360,7 +378,9 @@ export default function ReservationsPage() {
                           toast.show(`${r.guestName}: vráceno na nezaplaceno`, "success");
                         },
                       },
-                      r.status !== "cancelled" && { label: "Změnit termín", run: () => setRescheduling(r) },
+                      editable(r) && { label: "✎ Doplnit údaje", run: () => setEditing(r) },
+                      r.status !== "cancelled" &&
+                        !r.feedId && { label: "Změnit termín", run: () => setRescheduling(r) },
                       r.status !== "cancelled" &&
                         r.endDate.slice(0, 10) >= todayISO() && {
                           label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
@@ -388,7 +408,12 @@ export default function ReservationsPage() {
                     ✓ Označit zaplaceno
                   </button>
                 )}
-                {r.status !== "cancelled" && (
+                {editable(r) && (
+                  <button className="btn-ghost !px-4 !py-1.5 text-xs" onClick={() => setEditing(r)}>
+                    ✎ Doplnit údaje
+                  </button>
+                )}
+                {r.status !== "cancelled" && !r.feedId && (
                   <button className="btn-ghost !px-4 !py-1.5 text-xs" onClick={() => setRescheduling(r)}>
                     Změnit termín
                   </button>
@@ -443,6 +468,7 @@ export default function ReservationsPage() {
           }}
         />
       )}
+      {editing && <DetailsDialog r={editing} onClose={() => setEditing(null)} onSave={(patch) => saveDetails(editing, patch)} />}
       {rescheduling && (
         <RescheduleDialog
           reservation={rescheduling}
@@ -705,4 +731,108 @@ function matchesFilter(r: Reservation, f: Filter): boolean {
   if (f === "all") return true;
   if (f === "active") return r.status !== "cancelled" && r.endDate.slice(0, 10) >= todayISO();
   return r.status === f;
+}
+
+/** Údaje jde doplnit u rezervací z portálů a ručních — u webových je zadal host. */
+const editable = (r: Reservation) => r.source !== "web" && r.source !== "demo" && !r.anonymized;
+
+type GuestDetails = { guestName: string; phone: string; email: string; guests: number; totalPrice: number };
+
+function DetailsDialog({
+  r,
+  onClose,
+  onSave,
+}: {
+  r: Reservation;
+  onClose: () => void;
+  onSave: (patch: GuestDetails) => void;
+}) {
+  const [name, setName] = useState(r.guestName.startsWith("Host z ") ? "" : r.guestName);
+  const [phone, setPhone] = useState(r.phone);
+  const [email, setEmail] = useState(r.email);
+  const [guests, setGuests] = useState(r.guests ? String(r.guests) : "");
+  const [price, setPrice] = useState(r.totalPrice ? String(r.totalPrice) : "");
+  const nameOk = name.trim().length >= 2;
+  const emailOk = !email.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-label="Doplnit údaje rezervace"
+        className="rise w-full max-w-md space-y-4 rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!nameOk || !emailOk) return;
+          onSave({
+            guestName: name.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            guests: Number(guests) || 0,
+            totalPrice: Number(price) || 0,
+          });
+        }}
+      >
+        <div>
+          <h2 className="font-display text-xl font-semibold">Doplnit údaje</h2>
+          <p className="mt-0.5 text-sm text-soft">
+            {SOURCE_LABEL[r.source] ?? r.source} · {fmtDate(r.startDate)} – {fmtDate(r.endDate)}. Cena se započítá do
+            tržeb.
+          </p>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">Jméno hosta</span>
+          <input className="field" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Jan Novák" />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Počet hostů</span>
+            <input
+              className="field"
+              inputMode="numeric"
+              value={guests}
+              onChange={(e) => setGuests(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Cena celkem (Kč)</span>
+            <input
+              className="field"
+              inputMode="numeric"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            />
+          </label>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">Telefon</span>
+          <input className="field" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">E-mail</span>
+          <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          {!emailOk && <span className="mt-1 block text-xs text-coral">E-mail nemá správný tvar.</span>}
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button type="button" className="btn-ghost flex-1" onClick={onClose}>
+            Zrušit
+          </button>
+          <button type="submit" className="btn-primary flex-1" disabled={!nameOk || !emailOk}>
+            Uložit
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.body
+  );
 }

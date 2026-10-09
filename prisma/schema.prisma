@@ -86,6 +86,12 @@ model Site {
   arrivalInfo    String @default("")
   wifiName       String @default("")
   wifiPassword   String @default("")
+  // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
+  // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
+  locationMode   String @default("area")
+  geo            String @default("")
+  // Externí rezervace: tajný odkaz na kalendář webu pro portály (/api/ical/<token>.ics)
+  icalToken      String? @unique
 
   createdAt    DateTime      @default(now())
   reservations Reservation[]
@@ -95,6 +101,7 @@ model Site {
   vouchers     Voucher[]
   cleaners     Cleaner[]
   cleanings    Cleaning[]
+  feeds        CalendarFeed[]
 
   @@index([ownerId])
 }
@@ -159,7 +166,12 @@ model Reservation {
   termsVersion    String   @default("")
   createdAt  DateTime @default(now())
   cleaning   Cleaning?
+  // Stažené z kalendáře portálu (iCal): kalendář a UID události v něm
+  feedId      String?
+  feed        CalendarFeed? @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  externalUid String?
 
+  @@unique([feedId, externalUid])
   @@index([siteId, startDate, endDate])
 }
 
@@ -172,8 +184,32 @@ model Blackout {
   endDate   DateTime @db.Date
   reason    String   @default("")
   createdAt DateTime @default(now())
+  // Stažené z kalendáře portálu (iCal)
+  feedId      String?
+  feed        CalendarFeed? @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  externalUid String?
 
+  @@unique([feedId, externalUid])
   @@index([siteId, startDate, endDate])
+}
+
+// Kalendář z portálu (Airbnb, Booking.com…) stahovaný přes iCal — obsazené
+// termíny z něj se zapíšou jako rezervace nebo blokace (lib/ical-sync.ts).
+model CalendarFeed {
+  id           String        @id @default(cuid())
+  siteId       String
+  site         Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  source       String        @default("other") // airbnb | booking | other
+  name         String        @default("")
+  url          String
+  lastSyncAt   DateTime?
+  lastError    String        @default("")
+  eventCount   Int           @default(0)
+  createdAt    DateTime      @default(now())
+  reservations Reservation[]
+  blackouts    Blackout[]
+
+  @@index([siteId])
 }
 
 model Cost {

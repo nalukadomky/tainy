@@ -155,8 +155,8 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
             <span key={w} className="py-1">{w}</span>
           ))}
         </div>
-        {/* Den zabírá nejvýš 88 % sloupce — mezera mezi čtverečky zůstane při jakékoli šířce */}
-        <div className="grid grid-cols-7 gap-y-1.5">
+        {/* Den vyplní sloupec (s malou mezerou) — na mobilu co největší dotyková plocha */}
+        <div className="grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
             if (!day) return <span key={`x${i}`} />;
             const h = halves(day);
@@ -175,7 +175,7 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
                 disabled={disabled}
                 onClick={() => clickDay(day)}
                 aria-label={day}
-                className={`relative mx-auto flex aspect-square w-[88%] max-w-10 flex-col items-center justify-center rounded-lg leading-none transition sm:max-w-[43px] sm:rounded-xl ${
+                className={`relative mx-auto flex aspect-square w-full max-w-[56px] flex-col items-center justify-center rounded-lg leading-none transition sm:rounded-xl ${
                   past ? "text-line" : fullyBooked ? "text-soft/50" : "text-ink hover:ring-2 hover:ring-pine/25"
                 } ${isEdgeSelected ? "font-semibold" : ""} ${
                   day === today ? "ring-1 ring-line" : ""
@@ -188,7 +188,7 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
                 }}
               >
                 <span
-                  className={`text-sm ${
+                  className={`text-[15px] tabular-nums ${
                     cisloNaTmave
                       ? "text-white drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]"
                       : isEdgeSelected
@@ -200,10 +200,10 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
                 </span>
                 {price !== null && (
                   <span
-                    className={`mt-0.5 text-[9px] ${
+                    className={`mt-1 text-[11px] font-medium tabular-nums tracking-tight ${
                       cenaNaTmave
-                        ? "text-white/85 drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]"
-                        : "text-soft"
+                        ? "text-white drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]"
+                        : "text-ink/60"
                     }`}
                   >
                     {shortPrice(price)}

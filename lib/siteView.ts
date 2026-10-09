@@ -6,6 +6,7 @@ import type { SiteViewData } from "@/components/SiteView";
 import { parseCategories } from "@/lib/guests";
 import { parseSleeping } from "@/lib/sleeping";
 import { vatRateOf } from "@/lib/vat";
+import { publicLocation } from "@/lib/location";
 import { hasDoc, privacyTextOf, termsTextOf, type LegalSource } from "@/lib/legal";
 import type { LegalDocData } from "@/components/LegalModal";
 
@@ -51,6 +52,11 @@ export type SiteSource = {
   privacyText?: string;
   privacyPdf?: string;
   privacyUpdatedAt?: Date | string | null;
+  // Poloha na webu (adresa z Automatizace, souřadnice z lib/geocode)
+  locationMode?: string;
+  themeColor?: string;
+  geo?: string;
+  arrivalAddress?: string;
   /** Data jako ISO „YYYY-MM-DD". */
   priceRules: { label: string; startDate: string; endDate: string; value: number; unit: string }[];
 };
@@ -86,6 +92,8 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
     paymentMode: site.bankAccount ? "qr" : "onsite",
     cancellationPolicy: site.cancellationPolicy,
     sleeping: parseSleeping(site.sleeping),
+    location: publicLocation(site),
+    themeColor: site.themeColor,
     vatRate: vatRateOf(site),
     provider: {
       name: site.businessName ?? "",

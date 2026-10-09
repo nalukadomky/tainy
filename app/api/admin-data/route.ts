@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureGeo } from "@/lib/geocode";
 import { getUser, deny } from "@/lib/auth";
 
 // Všechna data administrace jedním požadavkem: web, rezervace, náklady a blokace.
@@ -17,10 +18,11 @@ export async function GET(req: NextRequest) {
   if (!site) return deny(404);
   if (site.ownerId !== user.id) return deny(403);
 
-  const [reservations, costs, blackouts] = await Promise.all([
+  const [geo, reservations, costs, blackouts] = await Promise.all([
+    ensureGeo(site),
     prisma.reservation.findMany({ where: { siteId: site.id }, orderBy: { startDate: "desc" } }),
     prisma.cost.findMany({ where: { siteId: site.id }, orderBy: { date: "desc" } }),
     prisma.blackout.findMany({ where: { siteId: site.id }, orderBy: { startDate: "asc" } }),
   ]);
-  return NextResponse.json({ site, reservations, costs, blackouts });
+  return NextResponse.json({ site: { ...site, geo }, reservations, costs, blackouts });
 }

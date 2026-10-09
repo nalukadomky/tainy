@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   czk,
   nightPrice,
@@ -48,7 +48,14 @@ export type BookingSite = {
   categories: GuestCategory[];
 };
 
-type Step = "termin" | "udaje" | "potvrzeni";
+type Step = "termin" | "hoste" | "udaje" | "potvrzeni";
+
+const STEPS: [Step, string][] = [
+  ["termin", "Termín"],
+  ["hoste", "Hosté"],
+  ["udaje", "Údaje"],
+  ["potvrzeni", "Potvrzení"],
+];
 type Payment = "qr" | "onsite" | "demo";
 
 const PAYMENT_OPTIONS = [
@@ -71,6 +78,18 @@ export function BookingWidget({
   initialBooked?: BookedRange[];
 }) {
   const [step, setStep] = useState<Step>("termin");
+  // Při přechodu mezi kroky srolovat na začátek formuláře (na mobilu by jinak
+  // host zůstal dole u tlačítka a nový krok neviděl)
+  const boxRef = useRef<HTMLDivElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const el = boxRef.current;
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step]);
   const [booked, setBooked] = useState<BookedRange[]>(initialBooked);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -157,11 +176,11 @@ export function BookingWidget({
     if (startDate && endDate && !isRangeFree(booked, startDate, endDate)) dateTaken();
   }, [booked, startDate, endDate, dateTaken]);
 
-  // Před přechodem k údajům ověřit termín proti čerstvé obsazenosti.
-  async function continueToDetails() {
-    const fresh = await refreshBooked();
-    if (fresh && startDate && endDate && !isRangeFree(fresh, startDate, endDate)) return;
-    setStep("udaje");
+  // Potvrzení termínu: hned na výběr hostů, čerstvá obsazenost se ověří na pozadí
+  // (obsazený termín vrátí hosta do kalendáře — efekt výše).
+  function confirmDates() {
+    setStep("hoste");
+    refreshBooked();
   }
 
   const pricingCfg = useMemo(
@@ -361,23 +380,33 @@ export function BookingWidget({
   return (
     <>
       {toastNode}
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-        {/* Krokovací lišta */}
-        <div className="flex border-b border-line text-center text-xs font-semibold uppercase tracking-wider">
-          {(
-            [
-              ["termin", "1 · Termín"],
-              ["udaje", "2 · Údaje"],
-              ["potvrzeni", "3 · Potvrzení"],
-            ] as const
-          ).map(([id, label]) => (
-            <div key={id} className={`flex-1 py-3 ${step === id ? "bg-pine text-white" : "text-soft"}`}>
-              {label}
-            </div>
-          ))}
-        </div>
+      <div ref={boxRef} className="scroll-mt-20 overflow-hidden rounded-2xl border border-line bg-surface">
+        {/* Krokovací lišta — hotové kroky jdou rozkliknout zpět */}
+        <ol className="flex border-b border-line text-center text-xs font-semibold uppercase tracking-wider">
+          {STEPS.map(([id, label], i) => {
+            const current = STEPS.findIndex(([s]) => s === step);
+            const done = i < current;
+            return (
+              <li key={id} className="flex-1">
+                <button
+                  type="button"
+                  disabled={!done || sending}
+                  onClick={() => setStep(id)}
+                  aria-current={step === id ? "step" : undefined}
+                  className={`w-full py-3 transition ${
+                    step === id ? "bg-pine text-white" : done ? "text-pine hover:bg-pine/5" : "text-soft"
+                  }`}
+                >
+                  {done ? "✓" : i + 1}
+                  {/* Na mobilu jen číslo, název u aktuálního kroku */}
+                  <span className={step === id ? "" : "max-sm:hidden"}> · {label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
 
-        <div className="p-5 sm:p-7">
+        <div className="p-4 sm:p-7">
           {step === "termin" && (
             <div className="space-y-5">
               <DayPicker
@@ -402,6 +431,52 @@ export function BookingWidget({
                   ` Nejkratší pobyt je ${site.minNights} ${plural(site.minNights, "noc", "noci", "nocí")}.`}
               </p>
 
+              {startDate && endDate && price && (
+                <div className="flex items-end justify-between gap-3 rounded-xl bg-bg px-4 py-3 text-sm">
+                  <span>
+                    <strong className="block font-semibold">
+                      {fmtDay(startDate)} – {fmtDay(endDate)}
+                    </strong>
+                    <span className="text-soft">
+                      {price.nights} {plural(price.nights, "noc", "noci", "nocí")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right text-soft">
+                    <span className="block text-xs">celkem od</span>
+                    <strong className="font-semibold text-ink">{czk(price.total)}</strong>
+                  </span>
+                </div>
+              )}
+              {(error || stayError) && (
+                <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error || stayError}</p>
+              )}
+              <button
+                type="button"
+                className="btn-primary w-full"
+                disabled={!price || !!stayError}
+                onClick={confirmDates}
+              >
+                {!startDate ? "Vyber den příjezdu" : !endDate ? "Vyber den odjezdu" : "Potvrdit termín →"}
+              </button>
+            </div>
+          )}
+
+          {step === "hoste" && (
+            <div className="space-y-5">
+              {startDate && endDate && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 text-sm">
+                  <span>
+                    <span className="block text-xs text-soft">Termín</span>
+                    <strong className="font-semibold">
+                      {fmtDay(startDate)} – {fmtDay(endDate)}
+                    </strong>
+                  </span>
+                  <button type="button" className="font-medium text-pine hover:underline" onClick={() => setStep("termin")}>
+                    Změnit
+                  </button>
+                </div>
+              )}
+
               <GuestPicker
                 categories={categories}
                 counts={counts}
@@ -412,23 +487,26 @@ export function BookingWidget({
 
               {summary}
               {(error || stayError) && (
-                <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">
-                  {error || stayError}
-                </p>
+                <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error || stayError}</p>
               )}
               {preview ? (
                 <p className="rounded-xl bg-bg px-4 py-3 text-center text-sm text-soft">
                   👀 Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou dokončit.
                 </p>
               ) : (
-                <button
-                  type="button"
-                  className="btn-primary w-full"
-                  disabled={!price || !!stayError}
-                  onClick={continueToDetails}
-                >
-                  {price ? "Pokračovat →" : "Vyber termín v kalendáři"}
-                </button>
+                <div className="flex gap-3">
+                  <button type="button" className="btn-ghost" onClick={() => setStep("termin")}>
+                    ← Zpět
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    disabled={!price || !!stayError}
+                    onClick={() => setStep("udaje")}
+                  >
+                    Pokračovat →
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -494,7 +572,7 @@ export function BookingWidget({
               </label>
               {summary}
               <div className="flex gap-3">
-                <button type="button" className="btn-ghost" onClick={() => setStep("termin")}>
+                <button type="button" className="btn-ghost" onClick={() => setStep("hoste")}>
                   ← Zpět
                 </button>
                 <button
@@ -709,4 +787,10 @@ function DocLink({
       {children}
     </a>
   );
+}
+
+/** „12. 10.“ — krátké datum do souhrnu termínu. */
+function fmtDay(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
 }

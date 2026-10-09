@@ -199,3 +199,46 @@ body {
   color: var(--soft);
   pointer-events: none;
 }
+
+/* Mapy (Leaflet) ve vzhledu webu: tlačítka přiblížení jako zaoblená dvojice se stínem */
+.tainy-map .leaflet-bar.leaflet-control {
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(30, 42, 32, 0.08), 0 6px 18px -6px rgba(30, 42, 32, 0.25);
+}
+.tainy-map .leaflet-control-zoom.leaflet-bar a {
+  width: 36px;
+  height: 36px;
+  line-height: 34px;
+  font: 400 20px/34px var(--font-instrument), system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s, color 0.15s;
+}
+.tainy-map .leaflet-control-zoom.leaflet-bar a:last-child { border-bottom: 0; }
+.tainy-map .leaflet-control-zoom.leaflet-bar a:hover { background: var(--cream); color: var(--pine); }
+.tainy-map .leaflet-control-zoom.leaflet-bar a.leaflet-disabled { color: color-mix(in srgb, var(--soft) 45%, transparent); background: var(--surface); }
+.tainy-map .leaflet-control-zoom.leaflet-bar a:focus-visible { outline: 2px solid color-mix(in srgb, var(--pine) 45%, transparent); outline-offset: -2px; }
+.tainy-map .leaflet-top.leaflet-left .leaflet-control { margin: 12px 0 0 12px; }
+.tainy-map .leaflet-control.leaflet-control-attribution {
+  font-size: 10px;
+  color: var(--soft);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border-top-left-radius: 8px;
+  padding: 1px 6px;
+  line-height: 1.6;
+}
+.tainy-map .leaflet-control-attribution a { color: var(--soft); }
+.tainy-map.leaflet-container { font-family: var(--font-instrument), system-ui, sans-serif; }
+
+/* Výběr vlastní barvy webu (react-colorful) ve vzhledu aplikace */
+.theme-picker .react-colorful { width: 100%; height: 170px; gap: 10px; }
+.theme-picker .react-colorful__saturation { border-radius: 10px; border-bottom: 0; }
+.theme-picker .react-colorful__hue { height: 12px; border-radius: 999px; }
+.theme-picker .react-colorful__pointer { width: 20px; height: 20px; border-width: 3px; box-shadow: 0 1px 4px rgba(30, 42, 32, 0.35); }
+
+/* Kontakt v patičce webu — celý řádek je dotyková plocha */
+.footer-link { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; color: color-mix(in srgb, var(--ink) 85%, transparent); }
+.footer-link:hover { color: var(--ink); }

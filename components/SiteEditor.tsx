@@ -27,14 +27,18 @@ import {
 } from "@/components/LegalSettings";
 import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 import { AutomationSettings } from "@/components/AutomationSettings";
+import { ExternalCalendars } from "@/components/ExternalCalendars";
+import { LocationSettings } from "@/components/LocationSettings";
+import { ThemePicker } from "@/components/ThemePicker";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 
-type Tab = "vzhled" | "zakladni" | "cenik" | "pravni" | "automatizace";
+type Tab = "vzhled" | "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   vzhled: { label: "Vzhled a obsah", short: "Vzhled", hint: "Úvod, fotky, texty a kontakt" },
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
   pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
+  portaly: { label: "Externí rezervace", short: "Portály", hint: "Airbnb, Booking.com a iCal" },
   automatizace: { label: "Automatizace", short: "E-maily", hint: "E-maily hostům a zámky" },
 };
 const isTab = (v: string | null): v is Tab => !!v && v in TABS;
@@ -42,7 +46,7 @@ const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 // Stejný editor slouží dvěma sekcím administrace: „Můj web" (vzhled a obsah)
 // a „Nastavení" (ceník a pobyt, firma a platby). Formulář i ukládání jsou společné.
 export type EditorArea = "web" | "settings";
-const AREA_TABS: Record<EditorArea, Tab[]> = { web: ["vzhled"], settings: ["zakladni", "cenik", "pravni", "automatizace"] };
+const AREA_TABS: Record<EditorArea, Tab[]> = { web: ["vzhled"], settings: ["zakladni", "cenik", "pravni", "portaly", "automatizace"] };
 const AREA_PATH: Record<EditorArea, string> = { web: "/admin/web", settings: "/admin/nastaveni" };
 const areaOf = (t: Tab): EditorArea => (AREA_TABS.web.includes(t) ? "web" : "settings");
 
@@ -224,6 +228,7 @@ export function SiteEditor({ area }: { area: EditorArea }) {
       privacyPdf,
       privacyName,
       privacyUpdatedAt,
+      geo, // souřadnice dohledává server z adresy
       ...rest
     }: Site) => JSON.stringify(rest);
     return failed || pick(form) !== pick(site);
@@ -313,12 +318,12 @@ export function SiteEditor({ area }: { area: EditorArea }) {
             role="tab"
             aria-selected={tab === t}
             onClick={() => switchTab(t)}
-            className={`flex-1 rounded-xl px-3 py-2.5 text-left transition sm:px-4 ${
+            className={`flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:text-center sm:px-4 ${
               tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
             }`}
           >
             <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
-              <span className="sm:hidden">{TABS[t].short}</span>
+              <span className="whitespace-nowrap sm:hidden">{TABS[t].short}</span>
               <span className="hidden sm:inline">{TABS[t].label}</span>
             </span>
             <span className="hidden text-xs text-soft sm:block">{TABS[t].hint}</span>
@@ -376,6 +381,8 @@ export function SiteEditor({ area }: { area: EditorArea }) {
             requestSave={() => setSaveRequested(true)}
           />
         </>
+      ) : tab === "portaly" ? (
+        <ExternalCalendars />
       ) : tab === "automatizace" ? (
         <AutomationSettings form={form} set={set} />
       ) : tab === "vzhled" ? (
@@ -396,6 +403,15 @@ export function SiteEditor({ area }: { area: EditorArea }) {
               gallery={parsePhotoLines(form.photos)}
               onChange={setHero}
             />
+          </div>
+
+          {/* Barva webu */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("uvod")}>
+            <div>
+              <h2 className="font-display text-lg font-semibold">Barva webu</h2>
+              <p className="text-sm text-soft">Tlačítka, výběr termínu v kalendáři, ikony a odkazy.</p>
+            </div>
+            <ThemePicker value={form.themeColor} onChange={(key) => set("themeColor", key)} />
           </div>
 
           {/* Fotky */}
@@ -433,6 +449,18 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                 onChange={(e) => set("amenities", e.target.value)}
               />
             </label>
+          </div>
+
+          {/* Kde nás najdete — adresa je stejná jako v Automatizaci (e-mail před příjezdem) */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("poloha")}>
+            <div>
+              <h2 className="font-display text-lg font-semibold">Kde nás najdete</h2>
+              <p className="text-sm text-soft">Poloha ubytování na webu — přibližně, nebo přesně.</p>
+            </div>
+            <LocationSettings
+              value={form}
+              onChange={(patch) => setForm((f) => (f ? { ...f, ...patch } : f))}
+            />
           </div>
         </>
       ) : (

@@ -8,6 +8,7 @@ import { findVoucher } from "@/lib/voucher-server";
 import { capacityCount, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
+import { syncStale } from "@/lib/ical-sync";
 import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { vatOfQuote, vatRateOf } from "@/lib/vat";
@@ -106,6 +107,9 @@ export async function POST(req: NextRequest) {
 
   // Cena se počítá vždy na serveru — noc po noci podle ceníku webu, plus poplatky.
   const quote = quoteForSite(site, startIso, endIso, counts);
+
+  // Termíny z Airbnb / Booking.com co nejčerstvější, ať se neprodá obsazený termín
+  await syncStale(site.id, 5 * 60_000);
 
   let created;
   try {

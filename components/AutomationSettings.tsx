@@ -524,7 +524,9 @@ function ArrivalCard({ form, set }: { form: Site; set: SetField }) {
     <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <div>
         <h3 className="font-semibold">Informace k příjezdu</h3>
-        <p className="text-sm text-soft">Host je dostane jen v e-mailu před příjezdem — na webu se neukazují.</p>
+        <p className="text-sm text-soft">
+          Host je dostane v e-mailu před příjezdem — Wi‑Fi a pokyny se na webu neukazují.
+        </p>
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-medium">Adresa ubytování</span>
@@ -533,7 +535,10 @@ function ArrivalCard({ form, set }: { form: Site; set: SetField }) {
           onChange={(v) => set("arrivalAddress", v)}
           placeholder="Začni psát adresu — např. Dolní Pertoltice 12"
         />
-        <span className="mt-1 block text-xs text-soft">V e-mailu bude i odkaz na mapu.</span>
+        <span className="mt-1 block text-xs text-soft">
+          V e-mailu před příjezdem bude vždy celá adresa i odkaz na mapu. Jak ji ukázat na webu, nastavíš v Můj web →
+          Kde nás najdete.
+        </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
@@ -687,3 +692,4 @@ function PreviewDialog({ kind, form, onClose }: { kind: EmailKind; form: Site; o
     document.body,
   );
 }
+

@@ -79,6 +79,9 @@ export type Site = {
   arrivalInfo: string;
   wifiName: string;
   wifiPassword: string;
+  /** Poloha na webu (none | area | exact) a souřadnice dohledané z adresy (lib/location.ts). */
+  locationMode: string;
+  geo: string;
 };
 
 /** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */
@@ -125,6 +128,8 @@ export type Reservation = {
   accessCode: string;
   /** Kdy byl kód zadaný — podle toho se počítá odeslání hostovi. */
   accessCodeSetAt: string | null;
+  /** Stažená z kalendáře portálu (iCal) — termín řídí portál, údaje jde doplnit. */
+  feedId?: string | null;
 };
 
 export type Cost = {
@@ -160,10 +165,30 @@ let cache: { slug: string; site: Site; reservations: Reservation[]; costs: Cost[
 const cached = () => (typeof window !== "undefined" && cache && cache.slug === getSiteSlug() ? cache : null);
 
 /** Blokace termínu majitelem; `endDate` je den po posledním blokovaném dni. */
-export type Blackout = { id: string; startDate: string; endDate: string; reason: string };
+export type Blackout = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  /** Stažené z kalendáře portálu (Nastavení → Externí rezervace); jinak null. */
+  feedId?: string | null;
+};
 
 // Datový hook administrace: načte web + rezervace + náklady + blokace pro web přihlášeného
 // uživatele (uložený v localStorage, jinak jeho první web).
+// Kalendáře z portálů (Airbnb, Booking.com) se stahují na pozadí po načtení
+// administrace — nanejvýš jednou za 10 minut za web, ať to nezdržuje.
+const feedSyncAt = new Map<string, number>();
+function syncFeedsInBackground(slug: string, onChange: () => void) {
+  const last = feedSyncAt.get(slug) ?? 0;
+  if (Date.now() - last < 10 * 60_000) return;
+  feedSyncAt.set(slug, Date.now());
+  fetch(`/api/sites/${encodeURIComponent(slug)}/sync`, { method: "POST" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => d?.changed && onChange())
+    .catch(() => {});
+}
+
 export function useAdminData() {
   const [slug, setSlug] = useState<string | null>(() => cached()?.slug ?? null);
   const [site, setSite] = useState<Site | null>(() => cached()?.site ?? null);
@@ -220,6 +245,7 @@ export function useAdminData() {
       setCosts(data.costs);
       // Blokace, které se teprve ukládají (tmp-…), odpověď nesmí smazat.
       setBlackouts((list) => [...data.blackouts, ...list.filter((b) => b.id.startsWith("tmp-"))]);
+      syncFeedsInBackground(useSlug, () => reload(useSlug));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Načtení dat selhalo.");
     } finally {
@@ -399,6 +425,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   airbnb: "Airbnb",
   booking: "Booking",
   manual: "Ručně",
+  other: "Jiný portál",
 };
 
 /** Hledání bez ohledu na velikost písmen a diakritiku („kral" najde „Král"). */

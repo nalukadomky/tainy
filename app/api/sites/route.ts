@@ -1,3 +1,4 @@
+import { cleanTheme } from "@/lib/theme";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUser, deny } from "@/lib/auth";
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
       weekendUnit: body.weekendUnit === "czk" ? "czk" : "pct",
       maxGuests: Number(body.maxGuests ?? 4),
       amenities: String(body.amenities ?? ""),
-      themeColor: String(body.themeColor ?? "pine"),
+      themeColor: cleanTheme(body.themeColor),
       contactEmail: String(body.contactEmail ?? ""),
       contactPhone: String(body.contactPhone ?? ""),
     },

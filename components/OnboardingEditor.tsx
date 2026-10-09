@@ -4,13 +4,15 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
+import { AMENITY_SUGGESTIONS } from "@/lib/listing";
 import { DRAFT_KEY, buildDraft, draftToSiteView, previewSlug, type OnboardingForm } from "@/lib/onboarding";
 import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage";
 import { usePreviewFrame } from "@/components/LivePreview";
 import { BuilderHint, BuilderPanel } from "@/components/BuilderPanel";
 import { AmenityPicker } from "@/components/AmenityPicker";
 import { AuthForm } from "@/components/AuthForm";
+import { ThemePicker } from "@/components/ThemePicker";
+import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { EditableSection } from "@/components/EditableText";
 
 // Onboarding, krok 2: nový web se dotváří přímo v sobě — stejně jako beta editace
@@ -24,6 +26,7 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   galerie: "Fotky",
   "o-miste": "Popis a kontakt",
   vybaveni: "Vybavení",
+  poloha: "Kde nás najdete",
   rezervace: "Kapacita a ceny",
 };
 
@@ -166,16 +169,14 @@ function SectionPanel({ section, form, set }: { section: EditableSection; form: 
             <input className="field" value={form.name} onChange={(e) => set("name", e.target.value)} />
             {form.name.trim().length < 2 && <span className="mt-1 block text-xs text-coral">Doplň název — aspoň 2 znaky.</span>}
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Typ ubytování</span>
-            <select className="field" value={form.propertyType} onChange={(e) => set("propertyType", e.target.value)}>
-              {[...new Set([form.propertyType, ...PROPERTY_TYPES])].filter(Boolean).map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <span className="mb-2 block text-sm font-medium">Typ ubytování</span>
+            <PropertyTypePicker value={form.propertyType} onChange={(t) => set("propertyType", t)} />
+          </div>
+          <div>
+            <span className="mb-2 block text-sm font-medium">Barva webu</span>
+            <ThemePicker value={form.themeColor} onChange={(key) => set("themeColor", key)} />
+          </div>
           <PhotosLater text="Úvodní fotku vybereš hned po vytvoření účtu." />
         </>
       );
@@ -222,6 +223,13 @@ function SectionPanel({ section, form, set }: { section: EditableSection; form: 
             placeholder="Další vybavení…"
           />
         </>
+      );
+    case "poloha":
+      return (
+        <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+          Adresu a to, jak přesně ji ukázat na webu (přibližně textem, přibližně na mapě, nebo přesně), nastavíš hned
+          po vytvoření účtu v úpravách webu.
+        </p>
       );
     case "rezervace":
       return (

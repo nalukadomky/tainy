@@ -10,6 +10,7 @@ import { czk, plural } from "@/lib/pricing";
 import { greetingName } from "@/lib/vocative";
 import { vatNote } from "@/lib/vat";
 import { parseRichText, type Inline } from "@/lib/richtext";
+import { parseGeo } from "@/lib/location";
 
 /* ---------- Druhy e-mailů a jejich nastavení ---------- */
 
@@ -296,6 +297,8 @@ export type EmailSite = {
   wifiPassword: string;
   locks: string;
   emailSettings: string;
+  /** Souřadnice (lib/location.ts) — ručně určený bod má v odkazu na mapu přednost před adresou. */
+  geo?: string;
 };
 
 export type EmailExtras = {
@@ -430,7 +433,11 @@ function paymentBlock(d: StayMail, x: EmailExtras, t: Tone): string {
 function arrivalBlock(d: StayMail, site: EmailSite, x: EmailExtras, t: Tone): string {
   const rows: string[] = [];
   if (site.arrivalAddress.trim()) {
-    const map = `https://maps.google.com/?q=${encodeURIComponent(site.arrivalAddress.trim())}`;
+    const g = parseGeo(site.geo);
+    const map =
+      g.manual && g.exact
+        ? `https://maps.google.com/?q=${g.exact.lat},${g.exact.lng}`
+        : `https://maps.google.com/?q=${encodeURIComponent(site.arrivalAddress.trim())}`;
     rows.push(
       `<strong>Adresa:</strong> ${esc(site.arrivalAddress.trim())} · <a href="${esc(map)}" style="color:#2c5e3f">otevřít mapu</a>`,
     );

@@ -15,6 +15,8 @@ export type OnboardingForm = {
   amenities: string[];
   contactEmail: string;
   contactPhone: string;
+  /** Primární barva webu (lib/theme.ts). */
+  themeColor: string;
 };
 
 export const EMPTY_FORM: OnboardingForm = {
@@ -29,6 +31,7 @@ export const EMPTY_FORM: OnboardingForm = {
   amenities: [],
   contactEmail: "",
   contactPhone: "",
+  themeColor: "pine",
 };
 
 /** Rozpracovaný formulář (přežije obnovení stránky) a tělo pro vytvoření webu po přihlášení. */
@@ -57,6 +60,7 @@ export function buildDraft(form: OnboardingForm) {
     weekendValue: weekendAdjust(form).value,
     weekendUnit: weekendAdjust(form).unit,
     amenities: form.amenities.join(", "),
+    themeColor: form.themeColor,
   };
 }
 
@@ -75,6 +79,7 @@ export function draftToSiteView(form: OnboardingForm): SiteViewData {
     contactEmail: form.contactEmail,
     contactPhone: form.contactPhone,
     priceRules: [],
+    themeColor: form.themeColor,
   };
 }
 

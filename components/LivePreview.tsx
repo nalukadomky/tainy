@@ -12,7 +12,7 @@ import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage
 // a editor mu posílá neuložený formulář přes postMessage.
 
 /** Sekce webu, na které umí náhled odscrollovat (id v SiteView). */
-export type PreviewSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "rezervace";
+export type PreviewSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "poloha" | "rezervace";
 
 export type PreviewMessage =
   | { type: "ready" }

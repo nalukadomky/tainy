@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ensureGeo } from "@/lib/geocode";
 import { prisma } from "@/lib/prisma";
 import { SiteView } from "@/components/SiteView";
 import { DemoBar } from "@/components/DemoBar";
@@ -22,7 +23,8 @@ export default async function SitePage({
 
   // Obsazenost se načítá spolu se stránkou, takže kalendář je vyplněný
   // hned v prvním renderu a neprobliká prázdný.
-  const booked = await blockedRanges(site.id, addDays(todayISO(), -40));
+  // Souřadnice pro „Kde nás najdete“ (u adresy zadané dřív se dohledají jednou)
+  const [booked, geo] = await Promise.all([blockedRanges(site.id, addDays(todayISO(), -40)), ensureGeo(site)]);
 
   return (
     <>
@@ -31,6 +33,7 @@ export default async function SitePage({
         booked={booked}
         site={toSiteViewData({
           ...site,
+          geo,
           priceRules: site.priceRules.map((r) => ({ ...r, startDate: toISO(r.startDate), endDate: toISO(r.endDate) })),
         })}
       />

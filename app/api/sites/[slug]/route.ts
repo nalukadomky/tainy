@@ -6,6 +6,9 @@ import { isTime } from "@/lib/stay";
 import { parseCleanerFields } from "@/lib/cleaning";
 import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { cleanVatRate } from "@/lib/vat";
+import { cleanLocationMode } from "@/lib/location";
+import { cleanTheme } from "@/lib/theme";
+import { geocodeAddress } from "@/lib/geocode";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
 
@@ -16,7 +19,6 @@ const TEXT_FIELDS = [
   "propertyType",
   "amenities",
   "photos",
-  "themeColor",
   "contactEmail",
   "contactPhone",
   "bankAccount",
@@ -80,6 +82,7 @@ export async function GET(
     arrivalInfo: _arrivalInfo,
     wifiName: _wifiName,
     wifiPassword: _wifiPassword,
+    geo: _geo,
     ...publicSite
   } = site;
   return NextResponse.json(publicSite);
@@ -100,6 +103,7 @@ export async function PATCH(
       select: {
         termsText: true,
         privacyText: true,
+        arrivalAddress: true,
         vatId: true,
         priceRules: { select: { label: true, startDate: true, endDate: true, value: true, unit: true } },
       },
@@ -163,6 +167,12 @@ export async function PATCH(
   for (const key of TIME_FIELDS) {
     if (!isTime(body[key])) continue;
     data[key] = body[key];
+  }
+  if (body.themeColor !== undefined) data.themeColor = cleanTheme(body.themeColor);
+  // Poloha na webu a souřadnice z adresy (dohledají se jen při změně adresy)
+  if (body.locationMode !== undefined) data.locationMode = cleanLocationMode(body.locationMode);
+  if (typeof body.arrivalAddress === "string" && body.arrivalAddress.trim() !== current.arrivalAddress.trim()) {
+    data.geo = body.arrivalAddress.trim() ? JSON.stringify(await geocodeAddress(body.arrivalAddress)) : "";
   }
   // Automatizace: e-maily a zámky projdou parserem (výchozí hodnoty, limity, jen http odkazy)
   if (typeof body.emailSettings === "string") data.emailSettings = serializeEmailSettings(parseEmailSettings(body.emailSettings));

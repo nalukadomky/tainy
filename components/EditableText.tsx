@@ -10,7 +10,7 @@ import { useLayoutEffect, useRef } from "react";
 export type EditableField = "name" | "tagline" | "description" | "contactEmail" | "contactPhone";
 
 /** Sekce webu (id v SiteView), které mají vlastní nastavení v bočním panelu. */
-export type EditableSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "rezervace";
+export type EditableSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "poloha" | "rezervace";
 
 export type SiteEditing = {
   text: (field: EditableField, value: string) => void;
@@ -108,6 +108,7 @@ const SECTION_LABEL: Record<EditableSection, string> = {
   galerie: "Upravit fotky",
   "o-miste": "Upravit popis a kontakt",
   vybaveni: "Upravit vybavení",
+  poloha: "Upravit polohu",
   rezervace: "Ceník a pobyt",
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { czk, type PriceRuleInput, type PricingMode } from "@/lib/pricing";
@@ -14,6 +14,9 @@ import { EditableText, EditSection, EditStyles, type SiteEditing } from "@/compo
 import { LEGAL_PATH, LEGAL_TITLE, providerLine, type LegalKind } from "@/lib/legal";
 import { bedLabels, bedroomsLabel, type Sleeping } from "@/lib/sleeping";
 import { LegalModal, type LegalDocData } from "@/components/LegalModal";
+import { AmenityList, LocationPlaceholder, LocationSection, StickyBookBar } from "@/components/SiteSections";
+import type { PublicLocation } from "@/lib/location";
+import { themeVars } from "@/lib/theme";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
 // jednak jako živý náhled v průvodci (data z draftu, preview=true).
@@ -51,6 +54,10 @@ export type SiteViewData = {
   vatRate?: number;
   /** Ložnice a lůžka (počty). */
   sleeping?: Sleeping;
+  /** Primární barva webu (klíč z lib/theme.ts). */
+  themeColor?: string;
+  /** Poloha na mapě podle volby majitele (přibližně / přesně); null = nezobrazovat. */
+  location?: PublicLocation | null;
   /** Identifikace provozovatele do patičky. */
   provider?: { name: string; id: string; vatId: string; address: string };
   /** Má web obchodní podmínky / zásady (stránky /w/[slug]/podminky, /ochrana-udaju)? */
@@ -101,8 +108,19 @@ export function SiteView({
   }
   const openedDoc = openKind ? site.docs?.[openKind] : undefined;
 
+  // Barva webu i pro okna mimo strom webu (galerie, vybavení, podmínky — portály do <body>)
+  const theme = site.themeColor;
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = themeVars(theme);
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+    return () => {
+      for (const k of Object.keys(vars)) root.style.removeProperty(k);
+    };
+  }, [theme]);
+
   return (
-    <div className="min-h-dvh bg-cream pb-24 sm:pb-0">
+    <div className="min-h-dvh bg-cream" style={themeVars(theme) as React.CSSProperties}>
       {editing && <EditStyles />}
       {openKind && openedDoc && (
         <LegalModal
@@ -151,7 +169,8 @@ export function SiteView({
             aria-hidden
             className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/80 via-ink/25 to-ink/5"
           />
-          <div className={`w-full pb-28 pt-24 text-white sm:pb-16 lg:pb-20 ${EDGE}`}>
+          {/* Text v dolní třetině, ne nalepený na spodní hranu (víc místa nad lištou na mobilu) */}
+          <div className={`w-full pt-24 text-white ${EDGE}`} style={{ paddingBottom: "clamp(8.5rem, 18vh, 12rem)" }}>
             <p className="rise text-xs font-semibold uppercase tracking-widest text-white/80">
               {site.propertyType} · až {site.maxGuests} hostů
               {site.sleeping?.bedrooms ? ` · ${bedroomsLabel(site.sleeping.bedrooms)}` : ""}
@@ -174,7 +193,8 @@ export function SiteView({
                 className="rise rise-2 mt-4 max-w-xl font-display text-xl italic text-white/90 sm:text-2xl"
               />
             )}
-            <div className="rise rise-3 mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+            {/* Na mobilu je cena a tlačítko ve spodní liště (StickyBookBar) */}
+            <div className="rise rise-3 mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 max-sm:hidden">
               <a href="#rezervace" className="btn-primary !px-6">
                 Rezervovat termín
               </a>
@@ -209,7 +229,7 @@ export function SiteView({
                 className="rise rise-2 mt-3 max-w-xl font-display text-xl italic text-soft"
               />
             )}
-            <div className="rise rise-3 mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+            <div className="rise rise-3 mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 max-sm:hidden">
               <a href="#rezervace" className="btn-primary !px-6">
                 Rezervovat termín
               </a>
@@ -223,7 +243,8 @@ export function SiteView({
       </EditSection>
 
       <EditSection editing={editing} section="galerie">
-      <section id="galerie" className="mx-auto max-w-4xl scroll-mt-20 lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 pt-8">
+      <section id="galerie" className="mx-auto max-w-4xl scroll-mt-20 lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 pt-10">
+        <h2 className="mb-4 font-display text-2xl font-semibold">Galerie</h2>
         {photos.length > 0 ? (
           <Gallery photos={photos} siteName={site.name} />
         ) : (
@@ -323,20 +344,7 @@ export function SiteView({
         <EditSection editing={editing} section="vybaveni">
         <div id="vybaveni" className="scroll-mt-20">
           <h2 className="font-display text-2xl font-semibold">Vybavení</h2>
-          <ul className="mt-3 space-y-2">
-            {amenities.length ? (
-              amenities.map((a) => (
-                <li key={a} className="flex items-center gap-2.5 text-[15px] text-soft">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-pine/10 text-xs text-pine">
-                    ✓
-                  </span>
-                  {a}
-                </li>
-              ))
-            ) : (
-              <li className="text-[15px] text-soft">Vybavení zatím není vyplněné.</li>
-            )}
-          </ul>
+          <AmenityList amenities={amenities} />
         </div>
         </EditSection>
       </section>
@@ -381,64 +389,107 @@ export function SiteView({
       </section>
       </EditSection>
 
-      <footer className="border-t border-line bg-cream">
-        <div className="mx-auto max-w-4xl space-y-3 px-5 py-6 text-sm text-soft lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
-          {(site.provider?.name || site.provider?.id) && (
-            <p>
-              Provozovatel: {providerLine({
-                businessName: site.provider.name,
-                businessId: site.provider.id,
-                vatId: site.provider.vatId,
-                businessAddress: site.provider.address,
-              })}
-              {!site.vatRate && " · neplátce DPH"}
+      {/* Poloha až pod rezervací — host se nejdřív rozhoduje o termínu */}
+      {(site.location || editing) && (
+        <EditSection editing={editing} section="poloha">
+          {site.location ? <LocationSection location={site.location} theme={site.themeColor} /> : <LocationPlaceholder />}
+        </EditSection>
+      )}
+
+      <footer className="border-t border-line bg-bg">
+        <div className="mx-auto grid max-w-4xl gap-8 px-5 py-10 sm:grid-cols-[1.4fr_1fr] lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
+          <div>
+            <p className="font-display text-xl font-semibold tracking-tight">{site.name || "Tvůj web"}</p>
+            <p className="mt-1 text-sm text-soft">
+              {site.propertyType} · až {site.maxGuests} {site.maxGuests === 1 ? "host" : site.maxGuests < 5 ? "hosté" : "hostů"}
             </p>
-          )}
+            {(site.contactEmail || site.contactPhone) && (
+              <ul className="mt-5 space-y-1">
+                {site.contactPhone && (
+                  <li>
+                    <a href={`tel:${site.contactPhone.replace(/\s/g, "")}`} className="footer-link">
+                      <FooterIcon d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
+                      {site.contactPhone}
+                    </a>
+                  </li>
+                )}
+                {site.contactEmail && (
+                  <li>
+                    <a href={`mailto:${site.contactEmail}`} className="footer-link">
+                      <FooterIcon d="M3 6h18v12H3zM3 7l9 6 9-6" />
+                      <span className="min-w-0 break-all">{site.contactEmail}</span>
+                    </a>
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
           {(site.hasTerms || site.hasPrivacy) && site.slug && (
-            <p className="flex flex-wrap gap-x-5 gap-y-1">
-              {site.hasTerms && (
-                <Link
-                  href={`/w/${site.slug}/${LEGAL_PATH.terms}`}
-                  onClick={(e) => openDocFrom(e, "terms")}
-                  className="underline-offset-2 hover:text-ink hover:underline"
-                >
-                  {LEGAL_TITLE.terms}
-                </Link>
-              )}
-              {site.hasPrivacy && (
-                <Link
-                  href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}
-                  onClick={(e) => openDocFrom(e, "privacy")}
-                  className="underline-offset-2 hover:text-ink hover:underline"
-                >
-                  {LEGAL_TITLE.privacy}
-                </Link>
-              )}
-            </p>
+            <nav aria-label="Dokumenty" className="sm:pt-1">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-soft">Dokumenty</p>
+              <ul className="divide-y divide-line border-y border-line sm:divide-y-0 sm:border-0">
+                {site.hasTerms && (
+                  <li>
+                    <Link
+                      href={`/w/${site.slug}/${LEGAL_PATH.terms}`}
+                      onClick={(e) => openDocFrom(e, "terms")}
+                      className="flex items-center justify-between py-3 text-[15px] text-ink/80 hover:text-ink sm:py-1.5"
+                    >
+                      {LEGAL_TITLE.terms}
+                      <span aria-hidden className="text-soft sm:hidden">›</span>
+                    </Link>
+                  </li>
+                )}
+                {site.hasPrivacy && (
+                  <li>
+                    <Link
+                      href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}
+                      onClick={(e) => openDocFrom(e, "privacy")}
+                      className="flex items-center justify-between py-3 text-[15px] text-ink/80 hover:text-ink sm:py-1.5"
+                    >
+                      {LEGAL_TITLE.privacy}
+                      <span aria-hidden className="text-soft sm:hidden">›</span>
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </nav>
           )}
-          <div className="flex items-center justify-between gap-4">
-            <span>© {new Date().getFullYear()} {site.name || "Tvůj web"}</span>
-            <Link href="/" className="inline-flex items-center gap-1.5 hover:text-ink">
-              vytvořeno s <Wordmark className="text-base" />
+        </div>
+        <div className="border-t border-line">
+          {/* Na mobilu místo pod spodní lištou s cenou — pozadí patičky sahá až dolů */}
+          <div className="mx-auto flex max-w-4xl flex-col gap-3 px-5 pb-28 pt-5 text-xs leading-relaxed text-soft sm:flex-row sm:items-center sm:justify-between sm:pb-5 lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
+            <div>
+              {(site.provider?.name || site.provider?.id) && (
+                <p>
+                  Provozovatel: {providerLine({
+                    businessName: site.provider.name,
+                    businessId: site.provider.id,
+                    vatId: site.provider.vatId,
+                    businessAddress: site.provider.address,
+                  })}
+                  {!site.vatRate && " · neplátce DPH"}
+                </p>
+              )}
+              <p>© {new Date().getFullYear()} {site.name || "Tvůj web"}</p>
+            </div>
+            <Link href="/" className="inline-flex shrink-0 items-center gap-1.5 hover:text-ink">
+              vytvořeno s <Wordmark className="text-sm" />
             </Link>
           </div>
         </div>
       </footer>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur sm:hidden">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs text-soft">od</p>
-            <p className="font-display text-lg font-semibold leading-none">
-              {czk(site.pricePerNight)}{" "}
-              <span className="text-xs font-normal text-soft">{priceSuffix}</span>
-            </p>
-          </div>
-          <a href="#rezervace" className="btn-primary flex-1 !py-3 text-sm">
-            Rezervovat termín
-          </a>
-        </div>
-      </div>
+      <StickyBookBar price={czk(site.pricePerNight)} suffix={priceSuffix} />
     </div>
+  );
+}
+
+/** Tenká ikona do patičky (stejný styl čar jako ikony vybavení). */
+function FooterIcon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 text-pine">
+      <path d={d} />
+    </svg>
   );
 }

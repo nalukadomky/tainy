@@ -18,6 +18,7 @@ import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { CalendarPageSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
+import { useRouter } from "next/navigation";
 
 // Kalendář obsazenosti: měsíční mřížka Po–Ne, pobyty jako pruhy přes dny.
 // Pruh začíná v polovině dne příjezdu a končí v polovině dne odjezdu (jako
@@ -57,8 +58,9 @@ const HATCH = {
 };
 
 export default function CalendarPage() {
-  const { slug, site, reservations, blackouts, setBlackouts, loading, error, setStatus, setTimes, replaceReservation } =
+  const { slug, site, reservations, blackouts, setBlackouts, loading, error, setStatus, setTimes, replaceReservation, reload } =
     useAdminData();
+  const router = useRouter();
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const today = todayISO();
   const [cursor, setCursor] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
@@ -407,6 +409,21 @@ export default function CalendarPage() {
           ) : (
             <BlockDetail
               b={detail.b}
+              onConvert={async () => {
+                const b = detail.b;
+                setDetail(null);
+                setBlackouts((list) => list.filter((x) => x.id !== b.id));
+                const res = await fetch(`/api/blackouts/${b.id}/convert`, { method: "POST" }).catch(() => null);
+                if (!res?.ok) {
+                  setBlackouts((list) => [...list, b]);
+                  toast.show("Převod se nepovedl, zkus to znovu.");
+                  return;
+                }
+                const created = await res.json();
+                toast.show("Hotovo — v Rezervacích jí doplň jméno a cenu.", "success");
+                reload();
+                router.push(`/admin/rezervace?detail=${created.id}`);
+              }}
               onDelete={async () => {
                 const b = detail.b;
                 const ok = await confirmDlg.ask({
@@ -689,7 +706,7 @@ function StayTimes({
   );
 }
 
-function BlockDetail({ b, onDelete }: { b: Blackout; onDelete: () => void }) {
+function BlockDetail({ b, onDelete, onConvert }: { b: Blackout; onDelete: () => void; onConvert: () => void }) {
   const start = iso(b.startDate);
   const end = iso(b.endDate);
   const days = nightsOf(start, end);
@@ -702,9 +719,21 @@ function BlockDetail({ b, onDelete }: { b: Blackout; onDelete: () => void }) {
         </p>
       </div>
       <p className="text-sm text-soft">V těchhle dnech si hosté nemůžou udělat rezervaci.</p>
-      <button type="button" className="btn-ghost !px-4 !py-2 text-sm !text-coral" onClick={onDelete}>
-        Zrušit blokaci
-      </button>
+      {b.feedId ? (
+        <>
+          <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+            Staženo z kalendáře portálu (Nastavení → Externí rezervace). Termín řídí portál — když ho tam zrušíš, zmizí
+            i tady. Je to rezervace hosta? Převeď ji a doplň jméno a cenu.
+          </p>
+          <button type="button" className="btn-primary !px-4 !py-2 text-sm" onClick={onConvert}>
+            Je to rezervace →
+          </button>
+        </>
+      ) : (
+        <button type="button" className="btn-ghost !px-4 !py-2 text-sm !text-coral" onClick={onDelete}>
+          Zrušit blokaci
+        </button>
+      )}
     </div>
   );
 }

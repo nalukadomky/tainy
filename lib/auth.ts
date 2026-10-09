@@ -76,6 +76,19 @@ export async function requireOwnerByCostId(id: string) {
   return { ok: true as const, user, cost };
 }
 
+// Ověří vlastnictví přes ID kalendáře z portálu (přes navázaný web).
+export async function requireOwnerByFeedId(id: string) {
+  const user = await getUser();
+  if (!user) return { ok: false as const, status: 401 as const };
+  const feed = await prisma.calendarFeed.findUnique({
+    where: { id },
+    include: { site: { select: { ownerId: true } } },
+  });
+  if (!feed) return { ok: false as const, status: 404 as const };
+  if (feed.site.ownerId !== user.id) return { ok: false as const, status: 403 as const };
+  return { ok: true as const, user, feed };
+}
+
 // Ověří vlastnictví přes ID blokace termínu (přes navázaný web).
 export async function requireOwnerByBlackoutId(id: string) {
   const user = await getUser();

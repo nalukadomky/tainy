@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAdminData, type Site } from "@/lib/admin";
 import { toSiteViewData } from "@/lib/siteView";
 import { parsePhotoLines } from "@/lib/photos";
-import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
+import { AMENITY_SUGGESTIONS } from "@/lib/listing";
 import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage";
 import { usePreviewFrame } from "@/components/LivePreview";
 import { BuilderHint, BuilderPanel } from "@/components/BuilderPanel";
@@ -15,6 +15,9 @@ import type { EditableField, EditableSection } from "@/components/EditableText";
 import { HeroPicker } from "@/components/HeroPicker";
 import { PhotoManager } from "@/components/PhotoManager";
 import { AmenityPicker } from "@/components/AmenityPicker";
+import { LocationSettings } from "@/components/LocationSettings";
+import { ThemePicker } from "@/components/ThemePicker";
+import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { FLASH_KEY } from "@/components/Toast";
@@ -31,6 +34,7 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   galerie: "Fotky",
   "o-miste": "Popis a kontakt",
   vybaveni: "Vybavení",
+  poloha: "Kde nás najdete",
   rezervace: "Ceník a pobyt",
 };
 
@@ -90,6 +94,11 @@ export default function BuilderPage() {
           body: JSON.stringify(patch),
         });
         if (!res.ok) throw new Error();
+        // Nová adresa: server dohledal souřadnice — mapa ve webu se hned překreslí
+        if ("arrivalAddress" in patch) {
+          const saved = await res.json().catch(() => null);
+          if (saved && typeof saved.geo === "string") setForm((f) => (f ? { ...f, geo: saved.geo } : f));
+        }
         setSave("saved");
         setSavedAt(new Date());
         if ("name" in patch) window.dispatchEvent(new Event(SITES_CHANGED));
@@ -309,16 +318,14 @@ function SectionPanel({
       return (
         <>
           <p className="text-sm text-soft">Název a slogan přepíšeš kliknutím přímo do webu.</p>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Typ ubytování</span>
-            <select className="field" value={form.propertyType} onChange={(e) => update({ propertyType: e.target.value })}>
-              {[...new Set([form.propertyType, ...PROPERTY_TYPES])].filter(Boolean).map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <span className="mb-2 block text-sm font-medium">Typ ubytování</span>
+            <PropertyTypePicker value={form.propertyType} onChange={(t) => update({ propertyType: t })} />
+          </div>
+          <div>
+            <span className="mb-2 block text-sm font-medium">Barva webu</span>
+            <ThemePicker value={form.themeColor} onChange={(key) => update({ themeColor: key })} />
+          </div>
           {/* HeroPicker si změny ukládá sám — do formuláře je jen propíšeme */}
           <HeroPicker
             slug={form.slug}
@@ -383,6 +390,9 @@ function SectionPanel({
           />
         </>
       );
+    case "poloha":
+      // Souřadnice (ručně určené) ukládá okno se špendlíkem samo — do formuláře je jen propíšeme
+      return <LocationSettings value={form} onChange={(patch) => update(patch, !("geo" in patch))} compact />;
     case "rezervace":
       return (
         <>
