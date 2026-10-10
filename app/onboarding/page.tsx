@@ -17,8 +17,15 @@ function Wizard() {
   const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
   const [loaded, setLoaded] = useState(false);
 
+  // ?nova=1 = další nemovitost z administrace: začít načisto, „Zavřít“ vede zpět do administrace
+  const [fromAdmin, setFromAdmin] = useState(false);
   useEffect(() => {
     try {
+      if (new URLSearchParams(window.location.search).get("nova") === "1") {
+        setFromAdmin(true);
+        localStorage.removeItem(FORM_KEY);
+        window.history.replaceState(null, "", "/onboarding");
+      }
       const saved = JSON.parse(localStorage.getItem(FORM_KEY) ?? "null");
       if (saved?.form) {
         setForm({ ...EMPTY_FORM, ...saved.form });
@@ -56,7 +63,7 @@ function Wizard() {
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-10">
       <header className="flex items-center justify-between py-5">
         <Logo className="text-xl" />
-        <Link href="/" className="text-sm text-soft hover:text-ink">
+        <Link href={fromAdmin ? "/admin/nastaveni/nemovitosti" : "/"} className="text-sm text-soft hover:text-ink">
           Zavřít ✕
         </Link>
       </header>

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
 import { parseCategories, serializeCategories } from "@/lib/guests";
@@ -8,6 +8,8 @@ import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { cleanVatRate } from "@/lib/vat";
 import { cleanLocationMode } from "@/lib/location";
 import { cleanTheme } from "@/lib/theme";
+import { slugProblem } from "@/lib/site-slug";
+import { PHOTO_BUCKET, DOCUMENT_BUCKET, supabaseAdmin } from "@/lib/supabase/admin";
 import { cleanAboutLayout, cleanPhotoShape } from "@/lib/about";
 import { parseCrop, serializeCrop } from "@/lib/crop";
 import { geocodeAddress } from "@/lib/geocode";
@@ -260,6 +262,16 @@ export async function PATCH(
     }
   }
 
+  // Nová adresa webu (/w/[slug]) — tvar, rezervovaná slova, nesmí být obsazená
+  if (typeof body.newSlug === "string" && body.newSlug.trim() !== slug) {
+    const next = body.newSlug.trim().toLowerCase();
+    const problem = slugProblem(next);
+    if (problem) return NextResponse.json({ error: problem, field: "slug" }, { status: 400 });
+    if (await prisma.site.findUnique({ where: { slug: next }, select: { id: true } }))
+      return NextResponse.json({ error: "Tahle adresa už je obsazená — zvol jinou.", field: "slug" }, { status: 409 });
+    data.slug = next;
+  }
+
   // Uložení rovnou vrátí aktuální web (bez dalšího dotazu)
   const update = prisma.site.update({
     where: { slug },
@@ -268,4 +280,48 @@ export async function PATCH(
   });
   const site = rulesOps.length ? (await prisma.$transaction([...rulesOps, update])).at(-1) : await update;
   return NextResponse.json(site);
+}
+
+// Smazání nemovitosti: jen vlastník, s potvrzením názvem, a nikdy poslední web
+// účtu. Rezervace, náklady, úklidy… smaže databáze kaskádou, soubory
+// (fotky, PDF dokumenty) se uklidí z úložiště po odpovědi.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const guard = await requireSiteOwnerBySlug(slug);
+  if (!guard.ok) return deny(guard.status);
+  const body = await req.json().catch(() => ({}));
+  const site = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id }, select: { id: true, name: true } });
+  if (String(body.confirmName ?? "").trim() !== site.name.trim())
+    return NextResponse.json({ error: "Název nesouhlasí — opiš ho přesně." }, { status: 400 });
+  const count = await prisma.site.count({ where: { ownerId: guard.user.id } });
+  if (count <= 1) return NextResponse.json({ error: "Poslední nemovitost účtu smazat nejde." }, { status: 400 });
+
+  await prisma.site.delete({ where: { id: site.id } });
+
+  after(async () => {
+    const supabase = supabaseAdmin();
+    if (!supabase) return;
+    for (const bucket of [PHOTO_BUCKET, DOCUMENT_BUCKET]) {
+      const { data } = await supabase.storage.from(bucket).list(site.id, { limit: 1000 });
+      // Soubory, které používá jiný web (duplikát sdílí fotky), zůstávají
+      const paths: string[] = [];
+      for (const f of data ?? []) {
+        const path = `${site.id}/${f.name}`;
+        const used = await prisma.site.count({
+          where: {
+            OR: [
+              { photos: { contains: path } },
+              { heroPhoto: { contains: path } },
+              { aboutPhoto: { contains: path } },
+              { termsPdf: { contains: path } },
+              { privacyPdf: { contains: path } },
+            ],
+          },
+        });
+        if (!used) paths.push(path);
+      }
+      if (paths.length) await supabase.storage.from(bucket).remove(paths);
+    }
+  });
+  return NextResponse.json({ ok: true });
 }

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { PHOTO_BUCKET, ensurePhotoBucket, supabaseAdmin } from "@/lib/supabase/admin";
@@ -54,6 +55,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
   const marker = `/storage/v1/object/public/${PHOTO_BUCKET}/`;
   const path = src.includes(marker) ? decodeURIComponent(src.split(marker)[1]) : "";
   if (!path.startsWith(`${guard.site.id}/`) || path.includes("..")) return NextResponse.json({ ok: true });
+
+  // Fotku může používat i duplikát této nemovitosti — pak soubor zůstane
+  const usedElsewhere = await prisma.site.count({
+    where: {
+      id: { not: guard.site.id },
+      OR: [{ photos: { contains: path } }, { heroPhoto: { contains: path } }, { aboutPhoto: { contains: path } }],
+    },
+  });
+  if (usedElsewhere) return NextResponse.json({ ok: true });
 
   const supabase = supabaseAdmin();
   if (!supabase) return NextResponse.json({ ok: true });

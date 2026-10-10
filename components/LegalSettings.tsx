@@ -47,27 +47,33 @@ export function LegalSettings({
 }) {
   return (
     <>
-      <ProviderCard form={form} set={set} requestSave={requestSave} />
+      <div id="pole-provozovatel" className="scroll-mt-24 rounded-2xl">
+        <ProviderCard form={form} set={set} requestSave={requestSave} />
+      </div>
       <PaymentCard form={form} set={set} />
-      <LegalDocCard
-        kind="terms"
-        form={form}
-        published={hasDoc(saved, "terms")}
-        hint="Host je musí odsouhlasit před dokončením rezervace. Odkaz bude i v patičce webu."
-        text={form.termsText}
-        pdf={form.termsPdf ? { url: form.termsPdf, name: form.termsName, updatedAt: form.termsUpdatedAt } : null}
-        onText={(t) => set("termsText", t)}
-        defaultText={defaultTermsText(form)}
-        setDoc={setDoc}
-        toast={toast}
-      />
+      <div id="pole-dokumenty" className="scroll-mt-24 rounded-2xl">
+        <LegalDocCard
+          kind="terms"
+          form={form}
+          published={hasDoc(saved, "terms")}
+          hint="Host je musí odsouhlasit před dokončením rezervace. Odkaz bude i v patičce webu."
+          text={form.termsText}
+          pdf={form.termsPdf ? { url: form.termsPdf, name: form.termsName, updatedAt: form.termsUpdatedAt } : null}
+          onText={(t) => set("termsText", t)}
+          defaultText={defaultTermsText(form)}
+          setDoc={setDoc}
+          toast={toast}
+        />
+      </div>
       <LegalDocCard
         kind="privacy"
         form={form}
         published={hasDoc(saved, "privacy")}
         hint="Jak zpracováváš údaje hostů (GDPR). Odkaz se ukáže u rezervace a v patičce webu."
         text={form.privacyText}
-        pdf={form.privacyPdf ? { url: form.privacyPdf, name: form.privacyName, updatedAt: form.privacyUpdatedAt } : null}
+        pdf={
+          form.privacyPdf ? { url: form.privacyPdf, name: form.privacyName, updatedAt: form.privacyUpdatedAt } : null
+        }
         onText={(t) => set("privacyText", t)}
         setDoc={setDoc}
         toast={toast}
@@ -182,7 +188,7 @@ function ProviderCard({
         <p className={`mt-1 text-xs ${icoInvalid || ares.state === "error" ? "text-coral" : "text-soft"}`}>
           {icoInvalid
             ? "Tohle IČ není platné — zkontroluj ho."
-            : ares.text ?? "Podle IČ doplníme název, sídlo a DIČ z veřejného registru ARES."}
+            : (ares.text ?? "Podle IČ doplníme název, sídlo a DIČ z veřejného registru ARES.")}
         </p>
       </div>
 
@@ -270,7 +276,11 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
 
       <div>
         <span className="mb-1.5 block text-sm font-medium">DPH</span>
-        <div className="flex max-w-sm rounded-xl border border-line bg-bg p-1" role="radiogroup" aria-label="Plátce DPH">
+        <div
+          className="flex max-w-sm rounded-xl border border-line bg-bg p-1"
+          role="radiogroup"
+          aria-label="Plátce DPH"
+        >
           {(
             [
               [false, "Neplátce DPH"],
@@ -304,8 +314,8 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
               Proč 12 %? Znění zákona
             </button>
             <p className="text-xs text-soft">
-              Ubytování má sníženou sazbu 12 %. Ceny v ceníku zadávej{" "}
-              <strong>včetně DPH</strong> — host vždy vidí konečnou cenu a pod ní „včetně DPH {form.vatRate} %“ s částkou.
+              Ubytování má sníženou sazbu 12 %. Ceny v ceníku zadávej <strong>včetně DPH</strong> — host vždy vidí
+              konečnou cenu a pod ní „včetně DPH {form.vatRate} %“ s částkou.
             </p>
             {!form.vatId.trim() && (
               <p className="rounded-xl bg-amber/15 px-4 py-2.5 text-sm text-[#92600a]">
@@ -355,7 +365,10 @@ function VatRateInput({ value, onChange }: { value: number; onChange: (rate: num
           readOnly={!editable}
           aria-readonly={!editable}
           className="field text-center tabular-nums"
-          style={{ width: "4.5rem", ...(editable ? {} : { background: "var(--bg)", color: "var(--soft)", cursor: "default" }) }}
+          style={{
+            width: "4.5rem",
+            ...(editable ? {} : { background: "var(--bg)", color: "var(--soft)", cursor: "default" }),
+          }}
           value={text}
           onChange={(e) => {
             const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
@@ -416,7 +429,9 @@ function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?:
             <h2 className="font-display text-xl font-semibold">
               {confirm ? "Opravdu změnit sazbu DPH?" : "Sazba DPH u ubytování"}
             </h2>
-            <p className="mt-0.5 text-xs text-soft">Zákon č. 235/2004 Sb., o dani z přidané hodnoty — znění od 1. 1. 2024</p>
+            <p className="mt-0.5 text-xs text-soft">
+              Zákon č. 235/2004 Sb., o dani z přidané hodnoty — znění od 1. 1. 2024
+            </p>
           </div>
           <button
             ref={closeRef}
@@ -432,21 +447,25 @@ function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?:
         <div className="space-y-4 overflow-y-auto px-5 py-5 text-sm text-soft">
           {confirm && (
             <p className="rounded-xl bg-amber/15 px-4 py-3 text-sm text-[#92600a]">
-              Pro krátkodobý pronájem (ubytování hostů na noci) platí sazba <strong>12 %</strong>. Jinou sazbu nastav, jen
-              pokud víš, že se na tvoje ubytování vztahuje — z ceny pobytu se podle ní počítá DPH, které uvidí hosté.
+              Pro krátkodobý pronájem (ubytování hostů na noci) platí sazba <strong>12 %</strong>. Jinou sazbu nastav,
+              jen pokud víš, že se na tvoje ubytování vztahuje — z ceny pobytu se podle ní počítá DPH, které uvidí
+              hosté.
             </p>
           )}
           <p>
-            Krátkodobé ubytování hostů (chata, apartmán, pokoj) je <strong className="text-ink">ubytovací služba</strong>.
-            Pro ubytovací služby platí <strong className="text-ink">snížená sazba DPH 12 %</strong>.
+            Krátkodobé ubytování hostů (chata, apartmán, pokoj) je{" "}
+            <strong className="text-ink">ubytovací služba</strong>. Pro ubytovací služby platí{" "}
+            <strong className="text-ink">snížená sazba DPH 12 %</strong>.
           </p>
 
           <div className="space-y-1.5">
             <p className="font-semibold text-ink">§ 47 odst. 1 — sazby daně</p>
             <p className={quote}>
               U zdanitelného plnění nebo přijaté úplaty, ze které vznikne povinnost přiznat daň, se uplatňuje
-              <br />a) základní sazba daně ve výši 21 %,
-              <br />b) snížená sazba daně ve výši 12 %.
+              <br />
+              a) základní sazba daně ve výši 21 %,
+              <br />
+              b) snížená sazba daně ve výši 12 %.
             </p>
           </div>
 
@@ -464,8 +483,8 @@ function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?:
           </div>
 
           <p>
-            Od 1. 1. 2024 platí jediná snížená sazba 12 % (dřívější dvě snížené sazby se sloučily). Pokud
-            k ubytování prodáváš i jiné služby (např. stravování s alkoholem, wellness), mohou mít jinou sazbu.
+            Od 1. 1. 2024 platí jediná snížená sazba 12 % (dřívější dvě snížené sazby se sloučily). Pokud k ubytování
+            prodáváš i jiné služby (např. stravování s alkoholem, wellness), mohou mít jinou sazbu.
           </p>
 
           <p className="text-xs">
@@ -484,10 +503,18 @@ function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?:
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
           {confirm ? (
             <>
-              <button type="button" onClick={onConfirm} className="btn-ghost flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none">
+              <button
+                type="button"
+                onClick={onConfirm}
+                className="btn-ghost flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none"
+              >
                 Přesto upravit
               </button>
-              <button type="button" onClick={onClose} className="btn-primary flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-primary flex-1 whitespace-nowrap !px-4 !py-2 text-sm sm:flex-none"
+              >
                 Ponechat 12 %
               </button>
             </>
@@ -499,7 +526,7 @@ function VatLawDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm?:
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -633,7 +660,11 @@ function LegalDocCard({
         )}
       </div>
 
-      <div className="inline-flex rounded-xl border border-line bg-bg p-1" role="radiogroup" aria-label={`${title}: způsob`}>
+      <div
+        className="inline-flex rounded-xl border border-line bg-bg p-1"
+        role="radiogroup"
+        aria-label={`${title}: způsob`}
+      >
         {(
           [
             ["text", "Napsat text"],
@@ -686,7 +717,11 @@ function LegalDocCard({
                   <a href={pdf.url} target="_blank" className="font-medium text-pine hover:underline">
                     Zobrazit
                   </a>
-                  <button type="button" className="font-medium text-soft hover:text-ink" onClick={() => fileRef.current?.click()}>
+                  <button
+                    type="button"
+                    className="font-medium text-soft hover:text-ink"
+                    onClick={() => fileRef.current?.click()}
+                  >
                     Nahradit
                   </button>
                   <button type="button" className="font-medium text-soft hover:text-coral" onClick={removePdf}>
@@ -702,7 +737,9 @@ function LegalDocCard({
               className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-line px-4 py-8 text-center transition hover:border-pine/40 hover:bg-bg"
             >
               <span className="text-sm font-semibold">Vybrat PDF nebo Word</span>
-              <span className="text-xs text-soft">PDF se ukáže hostům tak, jak je. Word převedeme na text, který můžeš upravit.</span>
+              <span className="text-xs text-soft">
+                PDF se ukáže hostům tak, jak je. Word převedeme na text, který můžeš upravit.
+              </span>
             </button>
           )}
           <p className="text-xs text-soft">PDF má přednost před napsaným textem. Ukládá se hned po nahrání.</p>
@@ -738,7 +775,11 @@ function LegalDocCard({
             forceExpanded={converted}
           />
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            <button type="button" className="font-medium text-pine hover:underline" onClick={() => fileRef.current?.click()}>
+            <button
+              type="button"
+              className="font-medium text-pine hover:underline"
+              onClick={() => fileRef.current?.click()}
+            >
               Převést z Wordu (.docx)
             </button>
             {!!defaultText && !usingDefault && (
@@ -822,7 +863,8 @@ export function ProviderSavedDialog({ change, onClose }: { change: ProviderChang
   ].filter(Boolean) as string[];
   const manual = [
     change.termsPdf && "Obchodní podmínky máš nahrané jako PDF — do souboru zapsat nejde, nahraj novou verzi.",
-    change.privacyPdf && "Zásady ochrany osobních údajů máš nahrané jako PDF — do souboru zapsat nejde, nahraj novou verzi.",
+    change.privacyPdf &&
+      "Zásady ochrany osobních údajů máš nahrané jako PDF — do souboru zapsat nejde, nahraj novou verzi.",
     change.stripe &&
       "Faktury posílá Stripe s vlastními firemními údaji — nové IČ uprav i ve Stripe (Nastavení → Údaje o firmě).",
   ].filter(Boolean) as string[];
@@ -873,6 +915,6 @@ export function ProviderSavedDialog({ change, onClose }: { change: ProviderChang
         </button>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

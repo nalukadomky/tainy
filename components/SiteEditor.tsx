@@ -6,9 +6,6 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
 import { applyAdjust, czk } from "@/lib/pricing";
-import { PhotoManager } from "@/components/PhotoManager";
-import { HeroPicker } from "@/components/HeroPicker";
-import { parsePhotoLines } from "@/lib/photos";
 import { AdjustField } from "@/components/AdjustField";
 import { parseCategories, serializeCategories, type GuestCategory } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
@@ -28,14 +25,10 @@ import {
 import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 import { AutomationSettings } from "@/components/AutomationSettings";
 import { ExternalCalendars } from "@/components/ExternalCalendars";
-import { LocationSettings } from "@/components/LocationSettings";
-import { ThemePicker } from "@/components/ThemePicker";
-import { AboutSettings } from "@/components/AboutSettings";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 
-type Tab = "vzhled" | "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
+type Tab = "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
-  vzhled: { label: "Vzhled a obsah", short: "Vzhled", hint: "Úvod, fotky, texty a kontakt" },
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
   pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
@@ -44,16 +37,14 @@ const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
 };
 const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 
-// Stejný editor slouží dvěma sekcím administrace: „Můj web" (vzhled a obsah)
-// a „Nastavení" (ceník a pobyt, firma a platby). Formulář i ukládání jsou společné.
-export type EditorArea = "web" | "settings";
-const AREA_TABS: Record<EditorArea, Tab[]> = { web: ["vzhled"], settings: ["zakladni", "cenik", "pravni", "portaly", "automatizace"] };
-const AREA_PATH: Record<EditorArea, string> = { web: "/admin/web", settings: "/admin/nastaveni" };
-const areaOf = (t: Tab): EditorArea => (AREA_TABS.web.includes(t) ? "web" : "settings");
+// Nastavení webu (název, ceník, firma, portály, e-maily). Vzhled a obsah webu
+// se upravuje přímo ve webu (/admin/web/builder).
+export type EditorArea = "settings";
+const TAB_ORDER: Tab[] = ["zakladni", "cenik", "pravni", "portaly", "automatizace"];
 
-export function SiteEditor({ area }: { area: EditorArea }) {
+export function SiteEditor(_props: { area?: EditorArea }) {
   const router = useRouter();
-  const tabs = AREA_TABS[area];
+  const tabs = TAB_ORDER;
   const { slug, site, setSite, loading, error, reload } = useAdminData();
   const [form, setForm] = useState<Site | null>(null);
   const [saved, setSaved] = useState(false);
@@ -92,14 +83,27 @@ export function SiteEditor({ area }: { area: EditorArea }) {
     onFocusCapture: () => point(section),
   });
 
+  // Odkaz z úprav webu (?pole=luzka…) sjede přímo ke konkrétnímu poli a krátce ho zvýrazní
+  const fieldShown = useRef(false);
+  useEffect(() => {
+    if (!form || fieldShown.current) return;
+    const pole = new URLSearchParams(window.location.search).get("pole");
+    if (!pole) return;
+    fieldShown.current = true;
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`pole-${pole}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.transition = "box-shadow .4s";
+      el.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--pine) 40%, transparent)";
+      window.setTimeout(() => (el.style.boxShadow = ""), 2200);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [form, tab]);
+
   function switchTab(t: Tab) {
-    // Záložka z druhé sekce (např. chybný čas check-inu při ukládání vzhledu)
-    if (areaOf(t) !== area) {
-      router.push(`${AREA_PATH[areaOf(t)]}?sekce=${t}`);
-      return;
-    }
     setTab(t);
-    point(t === "vzhled" || t === "zakladni" ? "uvod" : "rezervace");
+    point(t === "zakladni" ? "uvod" : "rezervace");
     const url = new URL(window.location.href);
     if (t !== tabs[0]) url.searchParams.set("sekce", t);
     else url.searchParams.delete("sekce");
@@ -107,11 +111,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
   }
 
   const set = <K extends keyof Site>(key: K, value: Site[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
-  const setPhotos = useCallback((photos: string) => set("photos", photos), []);
-  const setHero = useCallback(
-    (patch: { heroStyle: Site["heroStyle"]; heroPhoto: string }) => setForm((f) => (f ? { ...f, ...patch } : f)),
-    [],
-  );
 
   // PDF podmínek/zásad se ukládá hned po nahrání — zapíše se do formuláře
   // i do uložených dat, ať se nepočítá jako neuložená změna.
@@ -120,11 +119,15 @@ export function SiteEditor({ area }: { area: EditorArea }) {
       const patch =
         kind === "terms"
           ? { termsPdf: doc?.url ?? "", termsName: doc?.name ?? "", ...(doc && { termsUpdatedAt: doc.updatedAt }) }
-          : { privacyPdf: doc?.url ?? "", privacyName: doc?.name ?? "", ...(doc && { privacyUpdatedAt: doc.updatedAt }) };
+          : {
+              privacyPdf: doc?.url ?? "",
+              privacyName: doc?.name ?? "",
+              ...(doc && { privacyUpdatedAt: doc.updatedAt }),
+            };
       setForm((f) => (f ? { ...f, ...patch } : f));
       setSite((s) => (s ? { ...s, ...patch } : s));
     },
-    [setSite]
+    [setSite],
   );
 
   const setRule = (index: number, patch: Partial<PriceRule>) =>
@@ -285,56 +288,42 @@ export function SiteEditor({ area }: { area: EditorArea }) {
       {icoSaved && <ProviderSavedDialog change={icoSaved} onClose={() => setIcoSaved(null)} />}
       <LivePreview site={form} dirty={dirty} focus={focus} />
       <div className="flex flex-wrap items-end justify-between gap-3">
-        {area === "settings" ? (
-          <div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight">Nastavení</h1>
-            <p className="mt-1 text-sm text-soft">Ceny a pravidla pobytu, údaje o firmě, platby, dokumenty a e-maily hostům.</p>
-          </div>
-        ) : (
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Můj web</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Nastavení</h1>
           <p className="mt-1 text-sm text-soft">
-            Veřejná adresa:{" "}
-            <Link
-              href={`/w/${form.slug}`}
-              target="_blank"
-              className="font-medium text-pine underline decoration-line underline-offset-4"
-            >
-              /w/{form.slug} ↗
-            </Link>
+            Ceny a pravidla pobytu, údaje o firmě, platby, dokumenty a e-maily hostům.
           </p>
-          <Link href="/admin/web/builder" className="btn-ghost mt-3 !px-4 !py-2 text-sm">
-            ✨ Upravit přímo ve webu <span className="rounded-full bg-amber/20 px-1.5 text-[10px] font-bold uppercase">beta</span>
-          </Link>
         </div>
-        )}
+        <Link href="/admin/nastaveni/nemovitosti" className="btn-ghost !px-4 !py-2 text-sm">
+          Spravovat nemovitosti →
+        </Link>
       </div>
 
       {tabs.length > 1 && (
-      <div className="flex rounded-2xl border border-line bg-bg p-1" role="tablist" aria-label="Části nastavení">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => switchTab(t)}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:text-center sm:px-4 ${
-              tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
-            }`}
-          >
-            <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
-              <span className="whitespace-nowrap sm:hidden">{TABS[t].short}</span>
-              <span className="hidden sm:inline">{TABS[t].label}</span>
-            </span>
-            <span className="hidden text-xs text-soft sm:block">{TABS[t].hint}</span>
-          </button>
-        ))}
-      </div>
+        <div className="flex rounded-2xl border border-line bg-bg p-1" role="tablist" aria-label="Části nastavení">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => switchTab(t)}
+              className={`flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:text-center sm:px-4 ${
+                tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
+              }`}
+            >
+              <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
+                <span className="whitespace-nowrap sm:hidden">{TABS[t].short}</span>
+                <span className="hidden sm:inline">{TABS[t].label}</span>
+              </span>
+              <span className="hidden text-xs text-soft sm:block">{TABS[t].hint}</span>
+            </button>
+          ))}
+        </div>
       )}
 
       {tab === "zakladni" ? (
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+        <div id="pole-kontakt" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
           <div>
             <h2 className="font-display text-lg font-semibold">Název a kontakt</h2>
             <p className="text-sm text-soft">
@@ -386,93 +375,6 @@ export function SiteEditor({ area }: { area: EditorArea }) {
         <ExternalCalendars />
       ) : tab === "automatizace" ? (
         <AutomationSettings form={form} set={set} />
-      ) : tab === "vzhled" ? (
-        <>
-          {/* Úvod webu */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("uvod")}>
-            <div>
-              <h2 className="font-display text-lg font-semibold">Úvod webu</h2>
-              <p className="text-sm text-soft">První, co hosté uvidí. Změny se ukládají hned.</p>
-            </div>
-            <HeroPicker
-              slug={form.slug}
-              siteName={form.name}
-              tagline={form.tagline}
-              propertyType={form.propertyType}
-              heroStyle={form.heroStyle === "photo" ? "photo" : "text"}
-              heroPhoto={form.heroPhoto ?? ""}
-              gallery={parsePhotoLines(form.photos)}
-              onChange={setHero}
-            />
-          </div>
-
-          {/* Barva webu */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("uvod")}>
-            <div>
-              <h2 className="font-display text-lg font-semibold">Barva webu</h2>
-              <p className="text-sm text-soft">Tlačítka, výběr termínu v kalendáři, ikony a odkazy.</p>
-            </div>
-            <ThemePicker value={form.themeColor} onChange={(key) => set("themeColor", key)} />
-          </div>
-
-          {/* Fotky */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("galerie")}>
-            <div>
-              <h2 className="font-display text-lg font-semibold">Fotky</h2>
-              <p className="text-sm text-soft">Takhle je hosté uvidí na webu. Změny se ukládají hned.</p>
-            </div>
-            <PhotoManager slug={form.slug} value={form.photos} onChange={setPhotos} />
-          </div>
-
-          {/* Texty (název a kontakt jsou v Nastavení) */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-            <div>
-              <h2 className="font-display text-lg font-semibold">Texty</h2>
-              <p className="text-sm text-soft">Co si hosté na webu přečtou.</p>
-            </div>
-            <label className="block" {...watch("uvod")}>
-              <span className="mb-1.5 block text-sm font-medium">Slogan</span>
-              <input className="field" value={form.tagline} onChange={(e) => set("tagline", e.target.value)} />
-            </label>
-            <label className="block" {...watch("o-miste")}>
-              <span className="mb-1.5 block text-sm font-medium">Popis</span>
-              <textarea
-                className="field min-h-36"
-                value={form.description}
-                onChange={(e) => set("description", e.target.value)}
-              />
-            </label>
-            <label className="block" {...watch("vybaveni")}>
-              <span className="mb-1.5 block text-sm font-medium">Vybavení (oddělené čárkou)</span>
-              <textarea
-                className="field min-h-20"
-                value={form.amenities}
-                onChange={(e) => set("amenities", e.target.value)}
-              />
-            </label>
-          </div>
-
-          {/* O nás — příběh majitele */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("o-nas")}>
-            <div>
-              <h2 className="font-display text-lg font-semibold">O nás</h2>
-              <p className="text-sm text-soft">Nepovinná sekce s vaším příběhem — kdo jste a jak místo vzniklo.</p>
-            </div>
-            <AboutSettings value={form} onChange={(patch) => setForm((f) => (f ? { ...f, ...patch } : f))} />
-          </div>
-
-          {/* Kde nás najdete — adresa je stejná jako v Automatizaci (e-mail před příjezdem) */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("poloha")}>
-            <div>
-              <h2 className="font-display text-lg font-semibold">Kde nás najdete</h2>
-              <p className="text-sm text-soft">Poloha ubytování na webu — přibližně, nebo přesně.</p>
-            </div>
-            <LocationSettings
-              value={form}
-              onChange={(patch) => setForm((f) => (f ? { ...f, ...patch } : f))}
-            />
-          </div>
-        </>
       ) : (
         <>
           {/* Ceník */}
@@ -638,12 +540,14 @@ export function SiteEditor({ area }: { area: EditorArea }) {
               </p>
             </div>
 
-            <SleepingField
-              value={form.sleeping}
-              onChange={(v) => set("sleeping", v)}
-              maxGuests={form.maxGuests}
-              onMaxGuests={(n) => set("maxGuests", n)}
-            />
+            <div id="pole-luzka" className="scroll-mt-24 rounded-xl">
+              <SleepingField
+                value={form.sleeping}
+                onChange={(v) => set("sleeping", v)}
+                maxGuests={form.maxGuests}
+                onMaxGuests={(n) => set("maxGuests", n)}
+              />
+            </div>
 
             <label className="block sm:max-w-48">
               <span className="mb-1.5 block text-sm font-medium">Maximální počet hostů</span>
@@ -776,7 +680,7 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                   onChange={(e) => set("leadTimeDays", Number(e.target.value))}
                 />
               </label>
-              <label className="block">
+              <label id="pole-casy" className="block scroll-mt-24 rounded-xl">
                 <span className="mb-1.5 block text-sm font-medium">Check-in (příjezd od)</span>
                 <input
                   className={`field ${isTime(form.checkInTime) ? "" : "!border-coral"}`}
@@ -864,12 +768,20 @@ function SaveBar({ dirty, saved, onSave }: { dirty: boolean; saved: boolean; onS
         <div className="rounded-full bg-pine px-5 py-2.5 text-sm font-semibold text-white shadow-xl">✓ Uloženo</div>
       )}
     </div>,
-    document.body
+    document.body,
   );
 }
 
 /** Odchod ze stránky s neuloženými změnami: uložit, neukládat, nebo zůstat. */
-function LeaveDialog({ onSave, onDiscard, onStay }: { onSave: () => Promise<void>; onDiscard: () => void; onStay: () => void }) {
+function LeaveDialog({
+  onSave,
+  onDiscard,
+  onStay,
+}: {
+  onSave: () => Promise<void>;
+  onDiscard: () => void;
+  onStay: () => void;
+}) {
   const [saving, setSaving] = useState(false);
   const saveRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -880,7 +792,10 @@ function LeaveDialog({ onSave, onDiscard, onStay }: { onSave: () => Promise<void
   }, [onStay]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6" onClick={onStay}>
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onStay}
+    >
       <div
         role="alertdialog"
         aria-modal="true"
@@ -907,12 +822,17 @@ function LeaveDialog({ onSave, onDiscard, onStay }: { onSave: () => Promise<void
           <button type="button" className="btn-ghost w-full !py-2.5 !text-coral" disabled={saving} onClick={onDiscard}>
             Odejít bez uložení
           </button>
-          <button type="button" className="w-full py-2 text-sm font-medium text-soft hover:text-ink" disabled={saving} onClick={onStay}>
+          <button
+            type="button"
+            className="w-full py-2 text-sm font-medium text-soft hover:text-ink"
+            disabled={saving}
+            onClick={onStay}
+          >
             Zůstat na stránce
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

@@ -1,8 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { SiteEditor } from "@/components/SiteEditor";
-
-// Můj web: vzhled a obsah veřejného webu.
+// Můj web se upravuje přímo ve webu — starší odkazy na /admin/web vedou tam.
 export default function WebPage() {
-  return <SiteEditor area="web" />;
+  redirect("/admin/web/builder");
 }

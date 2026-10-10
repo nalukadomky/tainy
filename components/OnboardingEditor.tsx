@@ -15,7 +15,7 @@ import { ThemePicker } from "@/components/ThemePicker";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { EditableSection } from "@/components/EditableText";
 
-// Onboarding, krok 2: nový web se dotváří přímo v sobě — stejně jako beta editace
+// Onboarding, krok 2: nový web se dotváří přímo v sobě — stejně jako editace
 // webu v administraci. Texty se píšou do webu, sekce mají „Upravit". Nic se zatím
 // neukládá na server: „Chci tento web" otevře registraci a web vznikne až po ní.
 

@@ -23,7 +23,7 @@ const MAIN: Item[] = [
   { href: "/admin/kalendar", label: "Kalendář", icon: "calendar" },
   { href: "/admin/rezervace", label: "Rezervace", icon: "list" },
   { href: "/admin/hoste", label: "Hosté", icon: "users" },
-  { href: "/admin/web", label: "Můj web", icon: "web" },
+  { href: "/admin/web/builder", label: "Můj web", icon: "web" },
 ];
 const MORE: Item[] = [
   { href: "/admin/kalendar/uklid", label: "Úklid", icon: "broom" },
@@ -175,13 +175,17 @@ export function AdminNav() {
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3">
           <div className="flex shrink-0 items-center gap-3">
             <Logo className="text-xl" />
-            {sites.length > 1 ? (
+            {sites.length > 0 ? (
               <Dropdown
                 label="Nemovitost"
                 size="sm"
                 value={current || sites[0]?.slug}
                 onChange={switchSite}
                 items={sites.map((s) => ({ value: s.slug, label: s.name }))}
+                actions={[
+                  { label: "+ Přidat nemovitost", onClick: () => router.push("/onboarding?nova=1") },
+                  { label: "Spravovat nemovitosti", onClick: () => router.push("/admin/nastaveni/nemovitosti") },
+                ]}
               />
             ) : (
               <span className="rounded-full bg-line/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-soft">

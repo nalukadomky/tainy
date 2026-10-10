@@ -128,7 +128,7 @@ export default function BuilderPage() {
       if (timer.current) window.clearTimeout(timer.current);
       timer.current = window.setTimeout(flush, 800);
     },
-    [flush]
+    [flush],
   );
 
   // Při odchodu ze stránky dopsat, co ještě čeká.
@@ -157,7 +157,7 @@ export default function BuilderPage() {
   }, [slug, flush]);
 
   // Odchod zpět do administrace: nejdřív dopsat změny, pak potvrdit, že jsou uložené.
-  async function leave(to = "/admin/web") {
+  async function leave(to = "/admin") {
     if (leaving) return;
     setLeaving(true);
     const ok = await flush();
@@ -225,7 +225,7 @@ export default function BuilderPage() {
           ← <span className="max-sm:hidden">{leaving ? "Ukládám a odcházím…" : "Administrace"}</span>
         </button>
         <p className="mr-auto min-w-0 truncate font-display text-base font-semibold leading-tight">
-          Úpravy webu{form ? ` · ${form.name || "bez názvu"}` : ""}
+          Můj web{form ? ` · ${form.name || "bez názvu"}` : ""}
         </p>
         <SaveIndicator state={save} savedAt={savedAt} onRetry={() => flush()} />
         <DeviceSwitch value={device} onChange={setDevice} />
@@ -265,30 +265,41 @@ export default function BuilderPage() {
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
 /** Stav ukládání v horní liště builderu — ať je pořád vidět, že se změny ukládají. */
 function SaveIndicator({ state, savedAt, onRetry }: { state: SaveState; savedAt: Date | null; onRetry: () => void }) {
   const time = savedAt?.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-  const base = "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold";
+  const base =
+    "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold";
   return (
     <div aria-live="polite" className="shrink-0">
       {state === "saving" ? (
         <span className={`${base} border-amber/40 bg-amber/10 text-[#92600a]`}>
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+          <span
+            className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+            aria-hidden
+          />
           Ukládám…
         </span>
       ) : state === "error" ? (
         <span className={`${base} border-coral/40 bg-coral/10 text-coral`}>
           ⚠ <span className="max-sm:hidden">Neuloženo</span>
-          <button type="button" onClick={onRetry} className="rounded-full bg-coral px-2 py-0.5 text-white hover:bg-coral/90">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full bg-coral px-2 py-0.5 text-white hover:bg-coral/90"
+          >
             Zkusit znovu
           </button>
         </span>
       ) : state === "saved" ? (
-        <span className={`${base} border-pine/30 bg-pine/10 text-pine`} title="Změny jsou uložené a hosté je vidí na webu">
+        <span
+          className={`${base} border-pine/30 bg-pine/10 text-pine`}
+          title="Změny jsou uložené a hosté je vidí na webu"
+        >
           ✓ Uloženo<span className="max-sm:hidden"> v {time}</span>
         </span>
       ) : (
@@ -343,7 +354,11 @@ function SectionPanel({
           <SettingsLinks
             onLeave={onLeave}
             links={[
-              { label: "Počet hostů a ložnice", hint: "„až 4 hostů · 2 ložnice“ v úvodu", to: "/admin/nastaveni?sekce=cenik" },
+              {
+                label: "Počet hostů a ložnice",
+                hint: "„až 4 hostů · 2 ložnice“ v úvodu",
+                to: "/admin/nastaveni?sekce=cenik&pole=luzka",
+              },
             ]}
           />
         </>
@@ -388,7 +403,16 @@ function SectionPanel({
           <SettingsLinks
             onLeave={onLeave}
             links={[
-              { label: "Check-in, check-out a lůžka", hint: "Štítky pod popisem", to: "/admin/nastaveni?sekce=cenik" },
+              {
+                label: "Check-in a check-out",
+                hint: "Štítky s časy pod popisem",
+                to: "/admin/nastaveni?sekce=cenik&pole=casy",
+              },
+              {
+                label: "Ložnice a lůžka",
+                hint: "Štítky s postelemi pod popisem",
+                to: "/admin/nastaveni?sekce=cenik&pole=luzka",
+              },
             ]}
           />
         </>
@@ -419,9 +443,21 @@ function SectionPanel({
           <SettingsLinks
             onLeave={onLeave}
             links={[
-              { label: "Provozovatel a IČ", hint: "Údaje o provozovateli a řádek dole v patičce", to: "/admin/nastaveni?sekce=pravni" },
-              { label: "Obchodní podmínky a ochrana údajů", hint: "Odkazy v části Dokumenty", to: "/admin/nastaveni?sekce=pravni" },
-              { label: "Název a kontakt", hint: "Název webu, e-mail a telefon", to: "/admin/nastaveni?sekce=zakladni" },
+              {
+                label: "Provozovatel a IČ",
+                hint: "Údaje o provozovateli a řádek dole v patičce",
+                to: "/admin/nastaveni?sekce=pravni&pole=provozovatel",
+              },
+              {
+                label: "Obchodní podmínky a ochrana údajů",
+                hint: "Odkazy v části Dokumenty",
+                to: "/admin/nastaveni?sekce=pravni&pole=dokumenty",
+              },
+              {
+                label: "Název a kontakt",
+                hint: "Název webu, e-mail a telefon",
+                to: "/admin/nastaveni?sekce=zakladni&pole=kontakt",
+              },
             ]}
           />
         </>
@@ -436,7 +472,11 @@ function SectionPanel({
           <button type="button" onClick={() => onLeave("/admin/nastaveni?sekce=cenik")} className="btn-primary w-full">
             Upravit ceník a pobyt →
           </button>
-          <button type="button" onClick={() => onLeave("/admin/nastaveni?sekce=pravni")} className="btn-ghost w-full">
+          <button
+            type="button"
+            onClick={() => onLeave("/admin/nastaveni?sekce=pravni&pole=provozovatel")}
+            className="btn-ghost w-full"
+          >
             Provozovatel a obchodní podmínky →
           </button>
         </>

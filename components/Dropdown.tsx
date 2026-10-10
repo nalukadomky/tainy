@@ -14,6 +14,7 @@ export function Dropdown({
   label,
   align = "left",
   size = "md",
+  actions,
 }: {
   value: string;
   items: DropdownItem[];
@@ -23,6 +24,8 @@ export function Dropdown({
   align?: "left" | "right";
   /** sm = kompaktní varianta do horní lišty. */
   size?: "md" | "sm";
+  /** Akce pod seznamem (např. „+ Přidat nemovitost“). */
+  actions?: { label: string; onClick: () => void }[];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -96,6 +99,23 @@ export function Dropdown({
                 {item.value === value && <span aria-hidden>✓</span>}
               </button>
             )
+          )}
+          {actions && actions.length > 0 && (
+            <div className="mt-1 border-t border-line pt-1">
+              {actions.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    a.onClick();
+                  }}
+                  className="flex w-full whitespace-nowrap px-3.5 py-2 text-left text-sm font-medium text-pine transition hover:bg-bg"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
