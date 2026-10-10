@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { AddressInput } from "@/components/AddressInput";
+import { MiniMap } from "@/components/MiniMap";
 import { useAdminData } from "@/lib/admin";
 import { cleanLocationMode, parseGeo, type LocationMode } from "@/lib/location";
 
@@ -41,6 +42,8 @@ export function LocationSettings({
   const hasAddress = !!value.arrivalAddress.trim();
   // Adresa zadaná, ale mapa ji nenašla přesně (ani přibližně, nebo jen obec)
   const notFound = hasAddress && !geo.exact;
+  // Kde je špendlík teď (přesný bod, případně aspoň obec)
+  const pinPoint = geo.exact ?? (geo.area ? { lat: geo.area.lat, lng: geo.area.lng } : null);
 
   const [failed, setFailed] = useState("");
 
@@ -94,51 +97,61 @@ export function LocationSettings({
         <span className="mt-1 block text-xs text-soft">
           Hosté ji vždy dostanou celou v e-mailu před příjezdem. Na webu ji ukážeš podle volby níže.
         </span>
-        {/* Upřesnění polohy: špendlík, odkaz z map, souřadnice */}
-        <div
-          className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-4 py-3 text-sm ${
-            notFound && !geo.manual ? "bg-amber/15" : "bg-bg"
-          }`}
-        >
-          <span className="min-w-0 flex-1">
-            {geo.manual ? (
-              <>
-                📍 <strong>Poloha určená ručně</strong>
-                {area && <span className="text-soft"> · {area.label}</span>}
-              </>
-            ) : notFound ? (
-              <span className="text-[#92600a]">
-                {geo.area ? "Na mapě jsme našli jen obec, ne přesné místo." : "Adresu jsme na mapě nenašli."} Označ místo
-                špendlíkem.
-              </span>
-            ) : (
-              <span className="text-soft">Nesedí místo na mapě? Upřesni ho špendlíkem, odkazem z map nebo souřadnicemi.</span>
-            )}
-          </span>
+        {/* Upřesnění polohy: náhled se špendlíkem — klik otevře mapu, kde jde špendlík posunout */}
+        {hasAddress && (
           <button
             type="button"
             onClick={() => setPicking(true)}
-            disabled={!slug}
-            className={notFound && !geo.manual ? "btn-primary !px-4 !py-2 text-sm" : "btn-ghost !px-4 !py-2 text-sm"}
+            disabled={!slug || resetting}
+            className={`mt-3 flex w-full items-center gap-3 rounded-xl border p-2 pr-4 text-left transition hover:border-pine/40 ${
+              notFound && !geo.manual ? "border-amber/50 bg-amber/10" : "border-line bg-surface"
+            }`}
           >
-            📍 {geo.manual ? "Upravit" : "Upřesnit polohu na mapě"}
+            {pinPoint ? (
+              <MiniMap lat={pinPoint.lat} lng={pinPoint.lng} width={compact ? 96 : 120} height={compact ? 68 : 80} />
+            ) : (
+              <span className="flex shrink-0 items-center justify-center rounded-lg bg-bg text-soft" style={{ width: compact ? 96 : 120, height: compact ? 68 : 80 }}>
+                <PinIcon />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">
+                {resetting
+                  ? "Hledám polohu podle adresy…"
+                  : geo.manual
+                    ? "Špendlík umístěný ručně"
+                    : notFound
+                      ? "Umísti špendlík na mapu"
+                      : "Sedí špendlík na přesném místě?"}
+              </span>
+              <span className={`mt-0.5 block text-xs ${notFound && !geo.manual ? "text-[#92600a]" : "text-soft"}`}>
+                {geo.manual
+                  ? "Kliknutím ho můžeš posunout jinam."
+                  : notFound
+                    ? geo.area
+                      ? "Na mapě jsme našli jen obec — označ přesné místo."
+                      : "Adresu jsme na mapě nenašli — označ místo ručně."
+                    : "Pokud ne, posuň ho ručně, vlož odkaz z map nebo souřadnice."}
+              </span>
+              <span className="mt-1 inline-block text-xs font-semibold text-pine">
+                {geo.manual ? "Posunout špendlík →" : "Umístit špendlík →"}
+              </span>
+            </span>
           </button>
-          {geo.manual && hasAddress && (
-            <button
-              type="button"
-              onClick={resetToAddress}
-              disabled={resetting}
-              className="text-sm font-medium text-soft underline-offset-4 hover:text-ink hover:underline"
-            >
-              {resetting ? "Hledám…" : "Podle adresy"}
-            </button>
-          )}
-        </div>
+        )}
         {failed && <p className="mt-2 text-xs font-medium text-coral">{failed}</p>}
       </div>
       {picking && slug && (
         <LocationPicker
           initial={geo.exact ?? (geo.area ? { lat: geo.area.lat, lng: geo.area.lng } : null)}
+          onReset={
+            geo.manual && hasAddress
+              ? () => {
+                  setPicking(false);
+                  resetToAddress();
+                }
+              : undefined
+          }
           onClose={() => setPicking(false)}
           onPick={(point, town) => {
             setPicking(false);
@@ -172,5 +185,15 @@ export function LocationSettings({
         )}
       </div>
     </div>
+  );
+}
+
+/** Malý špendlík v barvě webu (místo emoji). */
+function PinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 text-pine">
+      <path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </svg>
   );
 }

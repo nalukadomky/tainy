@@ -86,6 +86,15 @@ model Site {
   arrivalInfo    String @default("")
   wifiName       String @default("")
   wifiPassword   String @default("")
+  // Sekce „O nás“ (příběh majitele): zapnutí, šablona vzhledu a obsah
+  aboutEnabled   Boolean @default(false)
+  aboutLayout    String  @default("photo-left") // photo-left | photo-right | quote | text
+  aboutTitle     String  @default("O nás")
+  aboutText      String  @default("")
+  aboutPhoto     String  @default("")
+  aboutPhotoCrop String  @default("")
+  aboutPhotoShape String @default("auto") // auto (výška podle textu) | portrait | square | landscape // výřez fotky „x,y,zoom“ (lib/crop.ts), prázdné = střed
+  aboutSignature String  @default("")
   // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
   // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
   locationMode   String @default("area")

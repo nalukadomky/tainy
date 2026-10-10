@@ -8,6 +8,8 @@ import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { cleanVatRate } from "@/lib/vat";
 import { cleanLocationMode } from "@/lib/location";
 import { cleanTheme } from "@/lib/theme";
+import { cleanAboutLayout, cleanPhotoShape } from "@/lib/about";
+import { parseCrop, serializeCrop } from "@/lib/crop";
 import { geocodeAddress } from "@/lib/geocode";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 import { isValidIco, isValidVatId, normalizeIco, normalizeVatId } from "@/lib/legal";
@@ -169,6 +171,15 @@ export async function PATCH(
     data[key] = body[key];
   }
   if (body.themeColor !== undefined) data.themeColor = cleanTheme(body.themeColor);
+  // Sekce „O nás“
+  if (typeof body.aboutEnabled === "boolean") data.aboutEnabled = body.aboutEnabled;
+  if (body.aboutLayout !== undefined) data.aboutLayout = cleanAboutLayout(body.aboutLayout);
+  if (typeof body.aboutTitle === "string") data.aboutTitle = body.aboutTitle.trim().slice(0, 80);
+  if (typeof body.aboutText === "string") data.aboutText = body.aboutText.slice(0, 8000);
+  if (typeof body.aboutSignature === "string") data.aboutSignature = body.aboutSignature.trim().slice(0, 120);
+  if (typeof body.aboutPhoto === "string") data.aboutPhoto = body.aboutPhoto.trim().slice(0, 600);
+  if (body.aboutPhotoShape !== undefined) data.aboutPhotoShape = cleanPhotoShape(body.aboutPhotoShape);
+  if (typeof body.aboutPhotoCrop === "string") data.aboutPhotoCrop = serializeCrop(parseCrop(body.aboutPhotoCrop));
   // Poloha na webu a souřadnice z adresy (dohledají se jen při změně adresy)
   if (body.locationMode !== undefined) data.locationMode = cleanLocationMode(body.locationMode);
   if (typeof body.arrivalAddress === "string" && body.arrivalAddress.trim() !== current.arrivalAddress.trim()) {

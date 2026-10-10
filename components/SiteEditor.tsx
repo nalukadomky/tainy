@@ -30,6 +30,7 @@ import { AutomationSettings } from "@/components/AutomationSettings";
 import { ExternalCalendars } from "@/components/ExternalCalendars";
 import { LocationSettings } from "@/components/LocationSettings";
 import { ThemePicker } from "@/components/ThemePicker";
+import { AboutSettings } from "@/components/AboutSettings";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 
 type Tab = "vzhled" | "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
@@ -449,6 +450,15 @@ export function SiteEditor({ area }: { area: EditorArea }) {
                 onChange={(e) => set("amenities", e.target.value)}
               />
             </label>
+          </div>
+
+          {/* O nás — příběh majitele */}
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" {...watch("o-nas")}>
+            <div>
+              <h2 className="font-display text-lg font-semibold">O nás</h2>
+              <p className="text-sm text-soft">Nepovinná sekce s vaším příběhem — kdo jste a jak místo vzniklo.</p>
+            </div>
+            <AboutSettings value={form} onChange={(patch) => setForm((f) => (f ? { ...f, ...patch } : f))} />
           </div>
 
           {/* Kde nás najdete — adresa je stejná jako v Automatizaci (e-mail před příjezdem) */}

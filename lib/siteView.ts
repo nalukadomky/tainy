@@ -7,6 +7,7 @@ import { parseCategories } from "@/lib/guests";
 import { parseSleeping } from "@/lib/sleeping";
 import { vatRateOf } from "@/lib/vat";
 import { publicLocation } from "@/lib/location";
+import { cleanAboutLayout, cleanPhotoShape } from "@/lib/about";
 import { hasDoc, privacyTextOf, termsTextOf, type LegalSource } from "@/lib/legal";
 import type { LegalDocData } from "@/components/LegalModal";
 
@@ -55,6 +56,14 @@ export type SiteSource = {
   // Poloha na webu (adresa z Automatizace, souřadnice z lib/geocode)
   locationMode?: string;
   themeColor?: string;
+  aboutEnabled?: boolean;
+  aboutLayout?: string;
+  aboutTitle?: string;
+  aboutText?: string;
+  aboutPhoto?: string;
+  aboutPhotoCrop?: string;
+  aboutPhotoShape?: string;
+  aboutSignature?: string;
   geo?: string;
   arrivalAddress?: string;
   /** Data jako ISO „YYYY-MM-DD". */
@@ -94,12 +103,36 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
     sleeping: parseSleeping(site.sleeping),
     location: publicLocation(site),
     themeColor: site.themeColor,
+    about:
+      site.aboutEnabled && site.aboutText?.trim()
+        ? {
+            layout: cleanAboutLayout(site.aboutLayout),
+            title: site.aboutTitle?.trim() || "O nás",
+            text: site.aboutText,
+            photo: site.aboutPhoto ?? "",
+            crop: site.aboutPhotoCrop ?? "",
+            shape: cleanPhotoShape(site.aboutPhotoShape),
+            signature: site.aboutSignature?.trim() ?? "",
+          }
+        : null,
+    // Pro úpravy webu: sekce zapnutá, ale bez textu → v náhledu ukázka zvolené šablony
+    aboutDraft: site.aboutEnabled
+      ? {
+          layout: cleanAboutLayout(site.aboutLayout),
+          title: site.aboutTitle?.trim() || "O nás",
+          photo: site.aboutPhoto ?? "",
+          crop: site.aboutPhotoCrop ?? "",
+          shape: cleanPhotoShape(site.aboutPhotoShape),
+          signature: site.aboutSignature?.trim() ?? "",
+        }
+      : null,
     vatRate: vatRateOf(site),
     provider: {
       name: site.businessName ?? "",
       id: site.businessId ?? "",
       vatId: site.vatId ?? "",
       address: site.businessAddress ?? "",
+      register: site.businessRegister ?? "",
     },
     hasTerms: hasDoc(site, "terms"),
     hasPrivacy: hasDoc(site, "privacy"),

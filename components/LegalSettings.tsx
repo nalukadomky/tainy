@@ -112,6 +112,7 @@ function ProviderCard({
     if (data.name) set("businessName", data.name);
     if (data.address) set("businessAddress", data.address);
     set("vatId", data.vatId ?? "");
+    if (data.register) set("businessRegister", data.register);
     setAres({ state: "done", text: "Doplněno z ARES — zkontroluj a ulož." });
     return true;
   }
@@ -222,7 +223,7 @@ function ProviderCard({
           </span>
           <input
             className="field"
-            placeholder="Zapsán v živnostenském rejstříku"
+            placeholder="Doplní se z ARES (obchodní rejstřík / živnostník)"
             value={form.businessRegister}
             onChange={(e) => set("businessRegister", e.target.value)}
           />

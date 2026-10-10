@@ -16,11 +16,14 @@ const PIN = `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w
 export default function LocationPicker({
   initial,
   onPick,
+  onReset,
   onClose,
 }: {
   initial: Point | null;
   /** Vybraný bod a název místa (obec, okres) — ukládá volající. */
   onPick: (point: Point, town: string) => void;
+  /** Ručně určenou polohu zahodit a vrátit polohu podle adresy (jen když nějaká ruční je). */
+  onReset?: () => void;
   onClose: () => void;
 }) {
   const [point, setPoint] = useState<Point | null>(initial);
@@ -196,7 +199,12 @@ export default function LocationPicker({
                 <span className="text-soft">Zatím není vybrané místo.</span>
               )}
             </p>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {onReset && (
+                <button type="button" className="mr-1 text-sm font-medium text-soft underline-offset-4 hover:text-ink hover:underline" onClick={onReset}>
+                  Podle adresy
+                </button>
+              )}
               <button type="button" className="btn-ghost !px-4 !py-2 text-sm" onClick={onClose}>
                 Zrušit
               </button>

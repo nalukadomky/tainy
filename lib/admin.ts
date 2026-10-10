@@ -82,6 +82,15 @@ export type Site = {
   /** Poloha na webu (none | area | exact) a souřadnice dohledané z adresy (lib/location.ts). */
   locationMode: string;
   geo: string;
+  /** Sekce „O nás“ (lib/about.ts). */
+  aboutEnabled: boolean;
+  aboutLayout: string;
+  aboutTitle: string;
+  aboutText: string;
+  aboutPhoto: string;
+  aboutPhotoCrop: string;
+  aboutPhotoShape: string;
+  aboutSignature: string;
 };
 
 /** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */

@@ -17,6 +17,7 @@ import { PhotoManager } from "@/components/PhotoManager";
 import { AmenityPicker } from "@/components/AmenityPicker";
 import { LocationSettings } from "@/components/LocationSettings";
 import { ThemePicker } from "@/components/ThemePicker";
+import { AboutSettings } from "@/components/AboutSettings";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
@@ -35,6 +36,8 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   "o-miste": "Popis a kontakt",
   vybaveni: "Vybavení",
   poloha: "Kde nás najdete",
+  "o-nas": "O nás",
+  paticka: "Patička",
   rezervace: "Ceník a pobyt",
 };
 
@@ -337,6 +340,12 @@ function SectionPanel({
             gallery={parsePhotoLines(form.photos)}
             onChange={(patch) => update(patch, false)}
           />
+          <SettingsLinks
+            onLeave={onLeave}
+            links={[
+              { label: "Počet hostů a ložnice", hint: "„až 4 hostů · 2 ložnice“ v úvodu", to: "/admin/nastaveni?sekce=cenik" },
+            ]}
+          />
         </>
       );
     case "galerie":
@@ -376,6 +385,12 @@ function SectionPanel({
               onChange={(e) => update({ contactPhone: e.target.value })}
             />
           </label>
+          <SettingsLinks
+            onLeave={onLeave}
+            links={[
+              { label: "Check-in, check-out a lůžka", hint: "Štítky pod popisem", to: "/admin/nastaveni?sekce=cenik" },
+            ]}
+          />
         </>
       );
     case "vybaveni":
@@ -390,9 +405,27 @@ function SectionPanel({
           />
         </>
       );
+    case "o-nas":
+      return <AboutSettings value={form} onChange={(patch) => update(patch)} inlineText />;
     case "poloha":
       // Souřadnice (ručně určené) ukládá okno se špendlíkem samo — do formuláře je jen propíšeme
       return <LocationSettings value={form} onChange={(patch) => update(patch, !("geo" in patch))} compact />;
+    case "paticka":
+      return (
+        <>
+          <p className="text-sm text-soft">
+            Kontakt v patičce je stejný jako u popisu místa. Provozovatel a dokumenty se nastavují v Nastavení.
+          </p>
+          <SettingsLinks
+            onLeave={onLeave}
+            links={[
+              { label: "Provozovatel a IČ", hint: "Údaje o provozovateli a řádek dole v patičce", to: "/admin/nastaveni?sekce=pravni" },
+              { label: "Obchodní podmínky a ochrana údajů", hint: "Odkazy v části Dokumenty", to: "/admin/nastaveni?sekce=pravni" },
+              { label: "Název a kontakt", hint: "Název webu, e-mail a telefon", to: "/admin/nastaveni?sekce=zakladni" },
+            ]}
+          />
+        </>
+      );
     case "rezervace":
       return (
         <>
@@ -409,4 +442,35 @@ function SectionPanel({
         </>
       );
   }
+}
+
+/** Odkazy do Nastavení u věcí, které se ve webu zobrazují, ale nastavují se jinde. */
+function SettingsLinks({
+  links,
+  onLeave,
+}: {
+  links: { label: string; hint: string; to: string }[];
+  onLeave: (to: string) => void;
+}) {
+  return (
+    <div className="space-y-2 border-t border-line pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-soft">Upravuje se v nastavení</p>
+      {links.map((l) => (
+        <button
+          key={l.label}
+          type="button"
+          onClick={() => onLeave(l.to)}
+          className="flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-pine/40"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{l.label}</span>
+            <span className="block text-xs text-soft">{l.hint}</span>
+          </span>
+          <span aria-hidden className="shrink-0 text-pine">
+            →
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import type { PublicLocation } from "@/lib/location";
+import { registerNote } from "@/lib/legal";
 
 // Mapa (Leaflet) se načte jen na webech, které polohu na mapě ukazují
 const PlaceMap = dynamic(() => import("@/components/PlaceMap"), {
@@ -238,5 +239,70 @@ export function StickyBookBar({ price, suffix }: { price: string; suffix: string
         </a>
       </div>
     </div>
+  );
+}
+
+/* ---------- Údaje o provozovateli ---------- */
+
+/** Okno s identifikací provozovatele (§ 435 OZ) — odkaz z patičky webu. */
+export function ProviderDialog({
+  provider,
+  vatPayer,
+  onClose,
+}: {
+  provider: { name: string; id: string; vatId: string; address: string; register?: string };
+  vatPayer: boolean;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const rows: [string, string][] = [
+    ["Provozovatel", provider.name],
+    ["Sídlo", provider.address],
+    ["IČ", provider.id],
+    ["DIČ", provider.vatId],
+    ["Zápis v rejstříku", registerNote(provider)],
+    ["DPH", vatPayer ? "plátce DPH" : "neplátce DPH"],
+  ].filter(([, v]) => v) as [string, string][];
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Údaje o provozovateli"
+        className="rise w-full max-w-md rounded-t-3xl bg-surface p-6 shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="font-display text-xl font-semibold">Údaje o provozovateli</h2>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-2 -mt-1 flex h-10 w-10 items-center justify-center rounded-full text-xl text-soft outline-none transition hover:bg-bg hover:text-ink focus-visible:ring-2 focus-visible:ring-pine/40"
+          >
+            ×
+          </button>
+        </div>
+        <dl className="mt-4 divide-y divide-line text-sm">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex gap-4 py-2.5">
+              <dt className="w-32 shrink-0 text-soft">{k}</dt>
+              <dd className="min-w-0 text-ink">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>,
+    document.body
   );
 }

@@ -365,3 +365,36 @@ function replaceProviderMentions(text: string, p: ProviderFields): string {
   }
   return out;
 }
+
+/** Krajské soudy, které vedou obchodní (veřejný) rejstřík — kódy z ARES. */
+const REGISTER_COURTS: Record<string, string> = {
+  MSPH: "Městským soudem v Praze",
+  KSCB: "Krajským soudem v Českých Budějovicích",
+  KSPL: "Krajským soudem v Plzni",
+  KSUL: "Krajským soudem v Ústí nad Labem",
+  KSHK: "Krajským soudem v Hradci Králové",
+  KSBR: "Krajským soudem v Brně",
+  KSOS: "Krajským soudem v Ostravě",
+};
+
+/** „Zapsáno v obchodním rejstříku vedeném Městským soudem v Praze, oddíl B, vložka 1581“. */
+export function registerEntry(z: { soud?: string; oddil?: string; vlozka?: number | string }): string {
+  const court = REGISTER_COURTS[z.soud ?? ""] ?? (z.soud ? `soudem ${z.soud}` : "");
+  const kind = ["A", "B", "C", "D", "E"].includes(z.oddil ?? "") ? "obchodním rejstříku" : "veřejném rejstříku";
+  return [`Zapsáno v ${kind}${court ? ` vedeném ${court}` : ""}`, z.oddil && `oddíl ${z.oddil}`, z.vlozka && `vložka ${z.vlozka}`]
+    .filter(Boolean)
+    .join(", ");
+}
+
+export const SOLE_TRADER_REGISTER = "Fyzická osoba podnikající podle živnostenského zákona, nezapsaná v obchodním rejstříku";
+
+/**
+ * Údaj o zápisu pro web: vyplněný (z ARES nebo ručně), jinak u živnostníka
+ * (jméno bez právní formy firmy) obvyklé znění; u firmy bez údaje nic.
+ */
+export function registerNote(p: { name: string; id: string; register?: string }): string {
+  if (p.register?.trim()) return p.register.trim();
+  if (!p.id) return "";
+  const company = /\b(s\.\s?r\.\s?o|spol\.|a\.\s?s|v\.\s?o\.\s?s|k\.\s?s|z\.\s?s|o\.\s?p\.\s?s|z\.\s?ú|družstvo)\b\.?/i.test(p.name);
+  return company ? "" : SOLE_TRADER_REGISTER;
+}

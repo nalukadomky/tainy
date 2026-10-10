@@ -239,6 +239,6 @@ body {
 .theme-picker .react-colorful__hue { height: 12px; border-radius: 999px; }
 .theme-picker .react-colorful__pointer { width: 20px; height: 20px; border-width: 3px; box-shadow: 0 1px 4px rgba(30, 42, 32, 0.35); }
 
-/* Kontakt v patičce webu — celý řádek je dotyková plocha */
-.footer-link { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; color: color-mix(in srgb, var(--ink) 85%, transparent); }
-.footer-link:hover { color: var(--ink); }
+
+/* O nás — fotka „podle textu“: na širší obrazovce stejně vysoká jako text vedle */
+@media (min-width: 640px) { .about-photo-auto { aspect-ratio: auto !important; height: 100%; } }

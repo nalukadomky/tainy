@@ -27,6 +27,8 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   "o-miste": "Popis a kontakt",
   vybaveni: "Vybavení",
   poloha: "Kde nás najdete",
+  "o-nas": "O nás",
+  paticka: "Patička",
   rezervace: "Kapacita a ceny",
 };
 
@@ -68,7 +70,10 @@ export function OnboardingEditor({
     booked: [],
     editable: true,
     focus: panel,
-    onEdit: (field, value) => set(field, value),
+    // Sekce „O nás“ v onboardingu ještě není — upravují se jen pole průvodce
+    onEdit: (field, value) => {
+      if (field in form) set(field as keyof OnboardingForm, value as never);
+    },
     onSelect: setPanel,
   });
   const closePanel = useCallback(() => setPanel(null), []);
@@ -223,6 +228,18 @@ function SectionPanel({ section, form, set }: { section: EditableSection; form: 
             placeholder="Další vybavení…"
           />
         </>
+      );
+    case "paticka":
+      return (
+        <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+          Provozovatele, IČ a obchodní podmínky do patičky doplníš po vytvoření účtu v Nastavení → Firma a platby.
+        </p>
+      );
+    case "o-nas":
+      return (
+        <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+          Sekci O nás s vaším příběhem, fotkou a výběrem vzhledu přidáte hned po vytvoření účtu v úpravách webu.
+        </p>
       );
     case "poloha":
       return (
