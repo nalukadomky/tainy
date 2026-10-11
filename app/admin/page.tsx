@@ -15,6 +15,9 @@ import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { stayTimes, todayISO } from "@/lib/stay";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { hasDoc } from "@/lib/legal";
+import { CleaningAlerts, CleaningBadge } from "@/components/CleaningAlert";
+import { SourceMix } from "@/components/SourceMix";
+import { Icon } from "@/components/Icon";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`;
@@ -168,13 +171,13 @@ function Dashboard() {
       {toast.node}
       {welcome && (
         <div className="rise rounded-2xl border border-pine/20 bg-pine/5 p-5">
-          <h2 className="font-display text-xl font-semibold">🎉 Tvůj web je na světě!</h2>
+          <h2 className="font-display text-xl font-semibold"><Icon name="sparkle" size={20} className="mr-1.5 text-pine" />Tvůj web je na světě!</h2>
           <p className="mt-1 text-sm text-soft">
             Podívej se, jak vypadá pro hosty, a pošli jim odkaz. Všechno tady můžeš kdykoli upravit.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/admin/web/builder?panel=galerie" className="btn-primary !px-5 !py-2 text-sm">
-              📷 Přidat fotky
+              <Icon name="camera" className="mr-1.5" />Přidat fotky
             </Link>
             <Link href={`/${site.slug}`} className="btn-ghost !px-5 !py-2 text-sm" target="_blank">
               Otevřít můj web ↗
@@ -194,6 +197,9 @@ function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* Úklid po předchozím pobytu není hotový a dnes/zítra přijíždějí další hosté */}
+      <CleaningAlerts reservations={reservations} />
 
       {/* Chybějící údaje webu (provozovatel, podmínky, účet pro platby) */}
       {missing.length > 0 && (
@@ -253,17 +259,21 @@ function Dashboard() {
                 <span className="h-2 w-2 rounded-full bg-amber" aria-hidden />
                 Čeká na platbu
               </span>
-              <span className="mt-3 flex items-baseline gap-2">
-                <span className="font-display text-4xl font-semibold leading-none">{stats.pending.count}</span>
-                <span className="text-sm text-soft">{plural(stats.pending.count, "rezervace", "rezervace", "rezervací")}</span>
-              </span>
-              <span className="mt-2 text-sm font-semibold">{czk(stats.pending.total)}</span>
-              {stats.pending.overdue > 0 && (
-                <span className="text-xs text-coral">
-                  {stats.pending.overdue === stats.pending.count ? "všechny" : stats.pending.overdue} po lhůtě na zaplacení
+              {/* Stejné rozložení jako Nejbližší pobyt: počet vlevo, částka vpravo, odkaz vpravo dole */}
+              <span className="mt-2 flex items-start justify-between gap-4">
+                <span className="min-w-0">
+                  <span className="block font-display text-2xl font-semibold leading-tight">
+                    {stats.pending.count} {plural(stats.pending.count, "rezervace", "rezervace", "rezervací")}
+                  </span>
+                  {stats.pending.overdue > 0 && (
+                    <span className="mt-1 block text-sm text-coral">
+                      {stats.pending.overdue === stats.pending.count ? "všechny" : stats.pending.overdue} po lhůtě na zaplacení
+                    </span>
+                  )}
                 </span>
-              )}
-              <span className="mt-auto pt-3 text-sm font-medium text-pine group-hover:underline">Zobrazit →</span>
+                <span className="shrink-0 font-display text-xl font-semibold">{czk(stats.pending.total)}</span>
+              </span>
+              <span className="mt-auto self-end pt-4 text-sm font-medium text-pine group-hover:underline">Zobrazit →</span>
             </Link>
           )}
         </div>
@@ -340,6 +350,9 @@ function Dashboard() {
         )}
       </div>
 
+      {/* Poměr rezervací z vlastního webu a z portálů */}
+      <SourceMix reservations={reservations} />
+
       {/* Nadcházející rezervace */}
       <div className="rounded-2xl border border-line bg-surface p-5">
         <div className="flex items-center justify-between">
@@ -363,7 +376,9 @@ function Dashboard() {
           {stats.upcoming.slice(1).map((r) => (
             <div key={r.id} className="flex items-center justify-between gap-3 py-3">
               <div>
-                <p className="font-medium">{r.guestName}</p>
+                <p className="flex flex-wrap items-center gap-2 font-medium">
+                  {r.guestName} <CleaningBadge alert={r.cleaningAlert} />
+                </p>
                 <p className="text-sm text-soft">
                   {fmtStay(r, site)} · {r.guests}{" "}
                   {r.guests === 1 ? "host" : r.guests < 5 ? "hosté" : "hostů"}
@@ -433,6 +448,11 @@ function NextStay({
       <div className="mt-2 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="truncate font-display text-2xl font-semibold leading-tight">{r.guestName}</p>
+          {r.cleaningAlert && (
+            <p className="mt-1.5">
+              <CleaningBadge alert={r.cleaningAlert} withLink />
+            </p>
+          )}
           <p className="mt-1 text-sm text-soft">
             {shortRange(r.startDate, r.endDate)}
             {times.checkInTime && times.checkOutTime && ` · ${times.checkInTime} → ${times.checkOutTime}`} · {r.guests}{" "}

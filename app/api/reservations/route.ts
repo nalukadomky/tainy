@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
 
   // Ukázkovou platbu smí přijmout jen server, kde je povolená — jinak by
   // stačilo poslat payment: "demo" a rezervace by byla zaplacená zdarma.
-  // Bez čísla účtu majitele nemá QR platba co nabídnout, pak platí delší lhůta.
+  // S číslem účtu se platí vždy QR převodem (volba „domluvím se s majitelem“ už není).
+  // Bez čísla účtu pošle platební údaje majitel sám — pak platí delší lhůta.
   const demo = body.payment === "demo" && demoPaymentsEnabled();
-  const payment: PaymentMethod = demo ? "demo" : body.payment === "qr" && site.bankAccount ? "qr" : "onsite";
+  const payment: PaymentMethod = demo ? "demo" : site.bankAccount ? "qr" : "onsite";
 
   // Cena se počítá vždy na serveru — noc po noci podle ceníku webu, plus poplatky.
   const quote = quoteForSite(site, startIso, endIso, counts);

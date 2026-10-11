@@ -159,3 +159,96 @@ export function manualWindow<T extends StayLike>(dateIso: string, time: string, 
     sameDay: !!next && iso(next.startDate) === date,
   };
 }
+
+/**
+ * Upozornění „úklid ještě není hotový“ u rezervace, kdy hosté přijíždějí dnes
+ * nebo zítra a před příjezdem zbývá nehotový úklid:
+ *  - po předchozím pobytu (odjezd v posledních 14 dnech) — nehotový, nebo ho
+ *    nikdo nemá přiřazený (hotový ruční úklid mezi odjezdem a příjezdem stačí),
+ *  - nebo ručně naplánovaný úklid mezi předchozím odjezdem a příjezdem.
+ */
+export type CleaningAlert = {
+  /** todo = přiřazený, ale nehotový; unassigned = nikdo ho nemá */
+  kind: "todo" | "unassigned";
+  arrival: string;
+  arrivalTime: string;
+  /** Úklid po pobytu: jméno hostů, kteří odjeli (u ručního úklidu prázdné). */
+  prevGuest: string;
+  /** Ruční úklid: popis a den, kdy je naplánovaný. */
+  title: string;
+  date: string;
+  cleaner: string;
+  done: number;
+  total: number;
+};
+
+type AlertCleaning = { status: string; checklist: string; cleaner: { name: string } | null };
+
+type AlertStay = {
+  id: string;
+  guestName: string;
+  startDate: Date;
+  endDate: Date;
+  checkInTime: string;
+  status: string;
+  expiresAt: Date | null;
+  cleaning: AlertCleaning | null;
+};
+
+type AlertManual = AlertCleaning & { date: Date | null; title: string };
+
+export function cleaningAlerts(stays: AlertStay[], manual: AlertManual[], today: string): Record<string, CleaningAlert> {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  const holds = stays.filter((r) => r.status !== "cancelled" && (!r.expiresAt || r.expiresAt > now));
+  const [y, m, d] = today.split("-").map(Number);
+  const day = (n: number) => new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  const tomorrow = day(1);
+  const recent = day(-14);
+  const manuals = manual.filter((c) => c.date).map((c) => ({ ...c, day: iso(c.date!) }));
+  const progress = (c: AlertCleaning) => {
+    const list = parseChecklist(c.checklist);
+    return { cleaner: c.cleaner?.name ?? "", done: list.filter((i) => i.done).length, total: list.length };
+  };
+  const out: Record<string, CleaningAlert> = {};
+
+  for (const a of holds) {
+    const start = iso(a.startDate);
+    if (start < today || start > tomorrow) continue;
+    const base = { arrival: start, arrivalTime: a.checkInTime };
+    const prev = holds
+      .filter((r) => r.id !== a.id && iso(r.endDate) <= start)
+      .sort((p, q) => iso(q.endDate).localeCompare(iso(p.endDate)))[0];
+    // Od kdy hledat úklidy: od předchozího odjezdu, nejdál 14 dní zpět
+    const since = prev && iso(prev.endDate) > recent ? iso(prev.endDate) : recent;
+    const between = manuals.filter((c) => c.day >= since && c.day <= start);
+
+    // Ručně naplánovaný úklid před příjezdem, který ještě není hotový
+    const pending = between.filter((c) => c.status !== "done").sort((p, q) => q.day.localeCompare(p.day))[0];
+    if (pending) {
+      out[a.id] = {
+        ...base,
+        kind: pending.cleaner ? "todo" : "unassigned",
+        prevGuest: "",
+        title: pending.title || "Úklid",
+        date: pending.day,
+        ...progress(pending),
+      };
+      continue;
+    }
+
+    // Úklid po předchozím pobytu (jen nedávný odjezd)
+    if (!prev || iso(prev.endDate) < recent) continue;
+    const c = prev.cleaning;
+    if (c?.status === "done" || between.some((x) => x.status === "done")) continue;
+    out[a.id] = {
+      ...base,
+      kind: c ? "todo" : "unassigned",
+      prevGuest: prev.guestName,
+      title: "",
+      date: iso(prev.endDate),
+      ...(c ? progress(c) : { cleaner: "", done: 0, total: 0 }),
+    };
+  }
+  return out;
+}

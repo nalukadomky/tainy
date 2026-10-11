@@ -17,6 +17,7 @@ import { uploadSitePhoto } from "@/lib/image";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
 import { cropStyle, parseCrop } from "@/lib/crop";
+import { Icon } from "@/components/Icon";
 
 // Nastavení sekce „O nás“ — v Můj web i v úpravách přímo ve webu.
 
@@ -153,7 +154,7 @@ export function AboutSettings({
 
       {inlineText ? (
         <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
-          ✍️ Nadpis, příběh i podpis přepíšeš přímo ve webu — klikni do textu v náhledu.
+          <Icon name="pen" className="mr-1.5" />Nadpis, příběh i podpis přepíšeš přímo ve webu — klikni do textu v náhledu.
           {layout === "quote" && " První odstavec se ukáže jako citát."}
         </p>
       ) : (

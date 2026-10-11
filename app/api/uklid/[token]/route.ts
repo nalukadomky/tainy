@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const fields = parseCleanerFields(cleaner.site.cleanerFields);
   const since = fromISO(addDays(todayISO(), -45));
   // Jen pobyty, které drží termín — zrušený nebo propadlý pobyt úklid nemá.
-  const [stays, manual] = await Promise.all([
+  const [stays, manual, blackouts] = await Promise.all([
     prisma.reservation.findMany({
       where: { siteId: cleaner.site.id, ...holdsDates() },
       select: {
@@ -57,6 +57,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     }),
     prisma.cleaning.findMany({
       where: { cleanerId: cleaner.id, reservationId: null, date: { gte: since } },
+    }),
+    prisma.blackout.findMany({
+      where: { siteId: cleaner.site.id, endDate: { gte: since } },
+      select: { startDate: true, endDate: true },
     }),
   ]);
 
@@ -90,10 +94,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   }));
 
   const cleanings = [...fromStays, ...manuals].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+
+  // Kalendář obsazenosti: všechny pobyty jen s termínem, časy a údaji o hostech,
+  // které majitel povolil — žádné ceny, e-maily, stav platby ani zdroj.
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const calendar = {
+    stays: stays
+      .filter((r) => r.endDate >= since)
+      .map((r, i) => ({
+        id: `s${i}`,
+        start: iso(r.startDate),
+        end: iso(r.endDate),
+        checkIn: r.checkInTime,
+        checkOut: r.checkOutTime,
+        guest: guestInfoForCleaner(r, cleaner.site, fields),
+        // Úklid po tomhle pobytu má ona — odkaz na něj v detailu
+        cleaningId: r.cleaning?.cleanerId === cleaner.id ? r.cleaning.id : null,
+      })),
+    blocks: blackouts.map((b, i) => ({ id: `b${i}`, start: iso(b.startDate), end: iso(b.endDate) })),
+  };
+
   return NextResponse.json({
     cleaner: { name: cleaner.name, payMode: cleaner.payMode, rate: cleaner.rate },
     site: { name: cleaner.site.name },
     cleanings,
+    calendar,
   });
 }
 

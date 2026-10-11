@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { AuthForm } from "@/components/AuthForm";
 import { devLoginEmail, devLoginEnabled } from "@/lib/dev-login";
+import { Icon } from "@/components/Icon";
 
 export default async function LoginPage({
   searchParams,
@@ -32,7 +33,7 @@ export default async function LoginPage({
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-[#92600a]">Jen při vývoji</p>
             <button type="submit" className="btn-primary mt-3 w-full">
-              ⚡ Přihlásit jedním klikem
+              <Icon name="zap" className="mr-1.5" />Přihlásit jedním klikem
             </button>
             <p className="mt-2 text-center text-xs text-soft">jako {devLoginEmail()}, bez hesla</p>
           </form>

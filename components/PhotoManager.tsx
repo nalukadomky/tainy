@@ -5,6 +5,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import Image from "next/image";
 import { parsePhotoLines, serializePhotos, type Photo } from "@/lib/photos";
 import { uploadSitePhoto } from "@/lib/image";
+import { Icon } from "@/components/Icon";
 
 // Správa galerie v administraci: mozaika jako na webu, nahrávání přetažením,
 // přeuspořádání, hlavní fotka a popisky. Každá změna se hned uloží.
@@ -130,7 +131,7 @@ export function PhotoManager({
           className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-bg px-6 py-14 text-center transition hover:border-pine/50"
         >
           <span className="text-3xl" aria-hidden>
-            🖼
+            <Icon name="image" size={32} className="text-soft" />
           </span>
           <span className="font-semibold">Přetáhni sem fotky nebo klikni</span>
           <span className="text-sm text-soft">JPG, PNG nebo WebP · první fotka bude hlavní</span>
@@ -178,7 +179,7 @@ export function PhotoManager({
               </button>
               {i === 0 && (
                 <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-ink/75 px-2.5 py-1 text-[11px] font-semibold text-white">
-                  ★ Hlavní
+                  <Icon name="star" size={12} className="mr-1" />Hlavní
                 </span>
               )}
               {photo.alt && (
@@ -189,11 +190,11 @@ export function PhotoManager({
               <div className="absolute right-1.5 top-1.5 flex gap-1 transition sm:opacity-0 sm:group-hover:opacity-100">
                 {i > 0 && (
                   <TileButton label="Nastavit jako hlavní" onClick={() => move(i, 0)}>
-                    ★
+                    <Icon name="star" size={14} />
                   </TileButton>
                 )}
                 <TileButton label="Smazat fotku" onClick={() => remove(i)}>
-                  🗑
+                  <Icon name="trash" size={14} />
                 </TileButton>
               </div>
             </div>
@@ -331,7 +332,7 @@ function PhotoDetail({
           </button>
           {index === 0 && (
             <span className="absolute left-3 top-3 rounded-full bg-surface/90 px-3 py-1 text-xs font-semibold">
-              ★ Hlavní fotka
+              <Icon name="star" size={12} className="mr-1" />Hlavní fotka
             </span>
           )}
         </div>
@@ -389,7 +390,7 @@ function PhotoDetail({
               </button>
               {index > 0 && (
                 <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => onMove(0)}>
-                  ★ Hlavní
+                  <Icon name="star" size={12} className="mr-1" />Hlavní
                 </button>
               )}
             </div>

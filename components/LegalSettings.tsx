@@ -20,6 +20,7 @@ import {
   defaultTermsText,
   type LegalKind,
 } from "@/lib/legal";
+import { Icon } from "@/components/Icon";
 
 // Záložka „Provozovatel a podmínky" v editoru webu: identifikace podnikatele
 // (s doplněním z ARES) a obchodní podmínky + zásady ochrany osobních údajů.
@@ -270,7 +271,7 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
         <span className="mt-1 block text-xs text-soft">
           {form.bankAccount
             ? ibanPreview(form.bankAccount)
-            : "Z čísla účtu se hostům u rezervace vytvoří QR kód pro platbu. Bez něj se nabídne jen domluva s tebou."}
+            : "Z čísla účtu se hostům u rezervace vytvoří QR kód pro platbu. Bez něj musíš hostům poslat platební údaje sám."}
         </span>
       </label>
 
@@ -703,7 +704,7 @@ function LegalDocCard({
           {uploading || pdf ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-bg px-4 py-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">📄 {uploading ?? (pdf?.name || "dokument.pdf")}</p>
+                <p className="truncate text-sm font-medium"><Icon name="file" className="mr-1.5 text-soft" />{uploading ?? (pdf?.name || "dokument.pdf")}</p>
                 <p className="text-xs text-soft">
                   {uploading
                     ? "Nahrávám…"

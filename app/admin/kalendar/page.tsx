@@ -17,8 +17,10 @@ import { StatusMenu } from "@/components/StatusMenu";
 import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { CalendarPageSkeleton } from "@/components/Skeleton";
+import { HATCH, Legend, StayCalendar, currentMonth, monthBounds, shortRange } from "@/components/StayCalendar";
 import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/Icon";
 
 // Kalendář obsazenosti: měsíční mřížka Po–Ne, pobyty jako pruhy přes dny.
 // Pruh začíná v polovině dne příjezdu a končí v polovině dne odjezdu (jako
@@ -28,8 +30,6 @@ type Bar =
   | { kind: "stay"; id: string; start: string; end: string; label: string; r: Reservation }
   | { kind: "block"; id: string; start: string; end: string; label: string; b: Blackout };
 
-const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
-
 const iso = (s: string) => s.slice(0, 10);
 
 /** Rezervace, která opravdu drží termín (stejné pravidlo jako holdsDates na serveru). */
@@ -38,32 +38,13 @@ function holds(r: Reservation): boolean {
   return r.status === "paid" || !r.expiresAt || new Date(r.expiresAt) > new Date();
 }
 
-function monthTitle(y: number, m: number): string {
-  const t = new Date(y, m, 1).toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-/** Krátký rozsah dat. Pobyt se píše příjezd–odjezd, blokace první–poslední blokovaný den. */
-function shortRange(start: string, endExclusive: string, kind: "stay" | "block" = "block"): string {
-  const last = kind === "stay" ? endExclusive : addDays(endExclusive, -1);
-  const [, sm, sd] = start.split("-").map(Number);
-  const [, lm, ld] = last.split("-").map(Number);
-  if (start === last) return `${sd}. ${sm}.`;
-  return sm === lm ? `${sd}.–${ld}. ${lm}.` : `${sd}. ${sm}. – ${ld}. ${lm}.`;
-}
-
-const HATCH = {
-  backgroundImage:
-    "repeating-linear-gradient(135deg, rgba(90,101,87,.28) 0 6px, rgba(90,101,87,.12) 6px 12px)",
-};
-
 export default function CalendarPage() {
   const { slug, site, reservations, blackouts, setBlackouts, loading, error, setStatus, setTimes, replaceReservation, reload } =
     useAdminData();
   const router = useRouter();
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const today = todayISO();
-  const [cursor, setCursor] = useState(() => ({ y: new Date().getFullYear(), m: new Date().getMonth() }));
+  const [cursor, setCursor] = useState(currentMonth);
   const toast = useToast();
   const confirmDlg = useConfirm();
 
@@ -120,16 +101,7 @@ export default function CalendarPage() {
     [reservations, blackouts]
   );
 
-  // Týdny mřížky: od pondělí před 1. dnem měsíce po neděli za posledním.
-  const { weeks, monthStart, monthEnd } = useMemo(() => {
-    const first = `${cursor.y}-${String(cursor.m + 1).padStart(2, "0")}-01`;
-    const next = new Date(cursor.y, cursor.m + 1, 1);
-    const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
-    const dow = (new Date(cursor.y, cursor.m, 1).getDay() + 6) % 7;
-    const weeks: string[] = [];
-    for (let w = addDays(first, -dow); w < monthEnd; w = addDays(w, 7)) weeks.push(w);
-    return { weeks, monthStart: first, monthEnd };
-  }, [cursor]);
+  const { monthStart, monthEnd } = useMemo(() => monthBounds(cursor), [cursor]);
 
   const summary = useMemo(() => {
     const days = nightsOf(monthStart, monthEnd);
@@ -154,13 +126,6 @@ export default function CalendarPage() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const isBusy = (day: string) => bars.some((b) => b.start <= day && b.end > day);
-
-  function shift(delta: number) {
-    setCursor(({ y, m }) => {
-      const d = new Date(y, m + delta, 1);
-      return { y: d.getFullYear(), m: d.getMonth() };
-    });
-  }
 
   function clickDay(day: string) {
     if (day < today) return;
@@ -196,7 +161,7 @@ export default function CalendarPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/kalendar/uklid" className="btn-ghost h-10 !px-4 !py-0 text-sm">
-            🧹 Úklid
+            <Icon name="broom" className="mr-1.5" />Úklid
           </Link>
           <button
             type="button"
@@ -208,128 +173,42 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-3 sm:p-5">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-semibold sm:text-xl">{monthTitle(cursor.y, cursor.m)}</h2>
-          <div className="flex items-center gap-1">
-            <NavButton label="Předchozí měsíc" onClick={() => shift(-1)}>
-              ←
-            </NavButton>
-            <button
-              type="button"
-              onClick={() => setCursor({ y: new Date().getFullYear(), m: new Date().getMonth() })}
-              className="h-8 rounded-lg px-3 text-sm font-medium text-soft transition hover:bg-line/40 hover:text-ink"
-            >
-              Dnes
-            </button>
-            <NavButton label="Další měsíc" onClick={() => shift(1)}>
-              →
-            </NavButton>
-          </div>
-        </div>
-
-        {pick && (
-          <p className="mb-3 rounded-xl bg-amber/15 px-3 py-2 text-sm text-[#7a5208]">
-            {!pick.start
-              ? "Klikni na první den, který chceš zablokovat."
-              : !pick.last
-                ? "Teď klikni na poslední blokovaný den (nebo znovu na stejný den)."
-                : null}
-            {pick.start && pick.last && "Vybráno — doplň důvod níže a potvrď."}
-          </p>
-        )}
-
-        <div className="grid grid-cols-7 border-b border-line pb-1.5">
-          {WEEKDAYS.map((d, i) => (
-            <span key={d} className={`text-center text-[11px] font-semibold uppercase tracking-wide ${i > 4 ? "text-ink" : "text-soft"}`}>
-              {d}
-            </span>
-          ))}
-        </div>
-
-        <div className="divide-y divide-line">
-          {weeks.map((ws) => {
-            const weekEnd = addDays(ws, 7);
-            const segments = bars.filter((b) => b.start < weekEnd && b.end > ws);
-            return (
-              <div key={ws} className="relative grid grid-cols-7">
-                {Array.from({ length: 7 }, (_, i) => {
-                  const day = addDays(ws, i);
-                  const outside = day < monthStart || day >= monthEnd;
-                  const past = day < today;
-                  const selectable = !!pick && !past;
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => clickDay(day)}
-                      disabled={past && !pick}
-                      className={`flex h-16 flex-col items-start justify-start border-line p-1 text-left transition sm:h-20 sm:p-1.5 ${i > 0 ? "border-l" : ""} ${
-                        inPick(day) ? "bg-amber/25" : selectable ? "hover:bg-amber/10" : past ? "bg-bg/60" : "hover:bg-bg"
-                      } ${pick && past ? "cursor-not-allowed" : ""}`}
-                    >
-                      <span
-                        className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                          day === today
-                            ? "bg-ink font-semibold text-white"
-                            : outside
-                              ? "text-soft/40"
-                              : past
-                                ? "text-soft/70"
-                                : "font-medium text-ink"
-                        }`}
-                      >
-                        {Number(day.slice(8))}
-                      </span>
-                    </button>
-                  );
-                })}
-
-                {segments.map((bar) => {
-                  const segStart = bar.start > ws ? bar.start : ws;
-                  const segEnd = bar.end < weekEnd ? bar.end : weekEnd;
-                  const startsHere = segStart === bar.start;
-                  const endsHere = segEnd === bar.end;
-                  const left = (nightsOf(ws, segStart) + (startsHere ? 0.5 : 0)) / 7;
-                  // Odjezd v pondělí dalšího týdne: půlden navíc by vyjel z mřížky,
-                  // pruh proto končí na konci neděle.
-                  const right = Math.min(1, (nightsOf(ws, segEnd) + (endsHere ? 0.5 : 0)) / 7);
-                  const pending = bar.kind === "stay" && bar.r.status === "pending";
-                  const color =
-                    bar.kind === "block" ? "text-ink" : pending ? "bg-amber text-ink" : "bg-pine text-white";
-                  return (
-                    <button
-                      key={`${bar.id}-${ws}`}
-                      type="button"
-                      onClick={() => setDetail(bar)}
-                      title={`${bar.label} · ${shortRange(bar.start, bar.end, bar.kind)}`}
-                      style={{
-                        left: `calc(${left * 100}% + 1px)`,
-                        width: `calc(${(right - left) * 100}% - 2px)`,
-                        ...(bar.kind === "block" ? HATCH : {}),
-                      }}
-                      className={`absolute top-8 flex h-6 items-center overflow-hidden px-1.5 text-left text-[11px] font-semibold shadow-sm transition hover:brightness-95 sm:top-10 sm:h-7 sm:px-2 sm:text-xs ${color} ${
-                        startsHere ? "rounded-l-full" : ""
-                      } ${endsHere ? "rounded-r-full" : ""}`}
-                    >
-                      {/* Jméno jen na začátku úseku a jen když je pruh dost široký */}
-                      {(startsHere || segStart === ws) && right - left > 0.2 && (
-                        <span className="truncate">{bar.label}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-soft">
-          <Legend className="bg-pine">Zaplaceno</Legend>
-          <Legend className="bg-amber">Čeká na platbu</Legend>
-          <Legend style={HATCH}>Blokováno</Legend>
-        </div>
-      </div>
+      <StayCalendar
+        cursor={cursor}
+        onCursor={setCursor}
+        bars={bars.map((b) => ({
+          id: b.id,
+          start: b.start,
+          end: b.end,
+          label: b.label,
+          variant: b.kind === "block" ? "block" : b.r.status === "pending" ? "pending" : "stay",
+        }))}
+        onBarClick={(id) => setDetail(bars.find((b) => b.id === id) ?? null)}
+        onDayClick={clickDay}
+        dayDisabled={(day) => day < today && !pick}
+        dayClass={(day) =>
+          inPick(day) ? "bg-amber/25" : pick && day >= today ? "hover:bg-amber/10" : pick ? "bg-bg/60 cursor-not-allowed" : ""
+        }
+        notice={
+          pick && (
+            <p className="mb-3 rounded-xl bg-amber/15 px-3 py-2 text-sm text-[#7a5208]">
+              {!pick.start
+                ? "Klikni na první den, který chceš zablokovat."
+                : !pick.last
+                  ? "Teď klikni na poslední blokovaný den (nebo znovu na stejný den)."
+                  : null}
+              {pick.start && pick.last && "Vybráno — doplň důvod níže a potvrď."}
+            </p>
+          )
+        }
+        legend={
+          <>
+            <Legend className="bg-pine">Zaplaceno</Legend>
+            <Legend className="bg-amber">Čeká na platbu</Legend>
+            <Legend style={HATCH}>Blokováno</Legend>
+          </>
+        }
+      />
 
       {pick?.start && pick.last && (
         <BlockPanel
@@ -441,37 +320,6 @@ export default function CalendarPage() {
         </DetailSheet>
       )}
     </div>
-  );
-}
-
-function NavButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm transition hover:border-ink/30"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Legend({
-  className = "",
-  style,
-  children,
-}: {
-  className?: string;
-  style?: React.CSSProperties;
-  children: React.ReactNode;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`h-2.5 w-5 rounded-full ${className}`} style={style} />
-      {children}
-    </span>
   );
 }
 
@@ -630,7 +478,7 @@ function StayDetail({
         </button>
         <div className="flex flex-wrap items-center gap-4">
           <Link href="/admin/kalendar/uklid" className="text-sm font-medium text-pine hover:underline">
-            🧹 Úklid po odjezdu
+            <Icon name="broom" className="mr-1.5" />Úklid po odjezdu
           </Link>
           <Link href={`/r/${r.publicId}`} target="_blank" className="text-sm font-medium text-pine hover:underline">
             Stránka pro hosta ↗

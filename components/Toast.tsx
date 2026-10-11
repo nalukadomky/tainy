@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/Icon";
 
 // Krátká notifikace dole uprostřed obrazovky, sama zmizí.
 // Použití: const toast = useToast(); … toast.show("Doplň výši slevy.") … {toast.node}
@@ -45,7 +46,7 @@ export function useToast() {
           message.tone === "error" ? "bg-ink text-white" : "bg-pine text-white"
         }`}
       >
-        <span aria-hidden>{message.tone === "error" ? "⚠️" : "✓"}</span>
+        <span aria-hidden>{message.tone === "error" ? <Icon name="alert" /> : "✓"}</span>
         {message.text}
         <button
           type="button"

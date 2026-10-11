@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type RefObject } from "react";
 import { slugProblem } from "@/lib/site-slug";
+import { Icon } from "@/components/Icon";
 
 // Plocha s webem v rámu zařízení (okno prohlížeče / telefon). Web běží v iframe
 // (/nahled) ve skutečné šířce zařízení a zmenší se do plochy — breakpointy
@@ -99,7 +100,7 @@ export function DeviceStage({
               <SlugBar slug={slug} onSave={onSlugChange} />
             ) : (
               <span className="mx-auto max-w-[60%] truncate rounded-md bg-surface px-3 py-0.5 text-center text-[11px] text-soft">
-                🔒 tainy.cz/{slug}
+                <Icon name="lock" size={11} className="mr-1 text-soft" />tainy.cz/{slug}
               </span>
             )}
             <span className="w-[42px]" aria-hidden />
@@ -197,7 +198,7 @@ function SlugBar({ slug, onSave }: { slug: string; onSave: (slug: string) => Pro
         title="Změnit adresu webu"
         className="group mx-auto flex max-w-[60%] items-center gap-1.5 truncate rounded-md bg-surface px-3 py-0.5 text-[11px] text-soft transition hover:text-ink hover:ring-1 hover:ring-pine/40"
       >
-        🔒 tainy.cz/<span className="font-semibold text-ink">{slug}</span>
+        <Icon name="lock" size={11} className="mr-1 text-soft" />tainy.cz/<span className="font-semibold text-ink">{slug}</span>
         <span aria-hidden className="text-pine opacity-60 group-hover:opacity-100">✎</span>
       </button>
     );
@@ -205,7 +206,7 @@ function SlugBar({ slug, onSave }: { slug: string; onSave: (slug: string) => Pro
   return (
     <span className="relative mx-auto flex max-w-[70%] items-center gap-1">
       <span className="flex min-w-0 items-center rounded-md bg-surface px-2 py-0.5 text-[11px] text-soft ring-1 ring-pine">
-        🔒 tainy.cz/
+        <Icon name="lock" size={11} className="mr-1 text-soft" />tainy.cz/
         <input
           autoFocus
           aria-label="Adresa webu"

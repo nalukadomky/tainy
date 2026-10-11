@@ -7,8 +7,11 @@ import { useToast } from "@/components/Toast";
 import { greetingName } from "@/lib/vocative";
 import { cleaningAmount, cleaningStart, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
 import { czk, plural } from "@/lib/pricing";
-import { todayISO } from "@/lib/stay";
+import { addDays, todayISO } from "@/lib/stay";
 import { Skeleton, CardsSkeleton } from "@/components/Skeleton";
+import { HATCH, Legend, StayCalendar, currentMonth, monthBounds, shortRange } from "@/components/StayCalendar";
+import { createPortal } from "react-dom";
+import { Icon } from "@/components/Icon";
 
 // Kalendář úklidů uklízečky (tajný odkaz, bez přihlášení). Vidí jen své úklidy,
 // termíny a časy, údaje o hostech, které majitel povolil, a svou odměnu — nikdy
@@ -39,11 +42,29 @@ type Cleaning = {
   earned?: number | null;
 };
 
+type GuestInfo = { guests?: string; name?: string; note?: string; phone?: string };
+
+/** Pobyt v kalendáři obsazenosti — jen termín, časy a údaje, které majitel povolil. */
+type CalStay = {
+  id: string;
+  start: string;
+  end: string;
+  checkIn: string;
+  checkOut: string;
+  guest: GuestInfo;
+  /** Úklid po pobytu, který má tahle uklízečka (jinak null). */
+  cleaningId: string | null;
+};
+
 type Data = {
   cleaner: { name: string; payMode: string; rate: number };
   site: { name: string };
   cleanings: Cleaning[];
+  calendar: { stays: CalStay[]; blocks: { id: string; start: string; end: string }[] };
 };
+
+type Tab = "list" | "calendar";
+const TAB_KEY = "tainy.cleaner-tab";
 
 const day = (iso: string, long = false) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("cs-CZ", {
@@ -58,6 +79,19 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
   const [data, setData] = useState<Data | null>(null);
   const [missing, setMissing] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  // Úklidy / Kalendář — volbu si pamatuje prohlížeč
+  const [tab, setTab] = useState<Tab>("list");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TAB_KEY) === "calendar") setTab("calendar");
+    } catch {}
+  }, []);
+  function switchTab(t: Tab) {
+    setTab(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  }
   const toast = useToast();
 
   const load = useCallback(async () => {
@@ -133,7 +167,7 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
         <p className="text-4xl" aria-hidden>
-          🧹
+          <Icon name="broom" size={40} className="text-soft" />
         </p>
         <h1 className="mt-3 font-display text-2xl font-semibold">Odkaz už neplatí</h1>
         <p className="mt-2 text-soft">Požádej majitele ubytování o nový odkaz na kalendář úklidů.</p>
@@ -162,13 +196,48 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
         <span className="truncate rounded-full bg-line/60 px-3 py-1 text-xs font-semibold text-soft">{data.site.name}</span>
       </header>
 
-      <h1 className="mt-7 font-display text-3xl font-semibold tracking-tight">Ahoj {greetingName(data.cleaner.name, "")} 👋</h1>
+      <h1 className="mt-7 font-display text-3xl font-semibold tracking-tight">Ahoj {greetingName(data.cleaner.name, "")}</h1>
       <p className="mt-1 text-soft">
         {todo
           ? `Máš ${todo} ${plural(todo, "úklid", "úklidy", "úklidů")} před sebou.`
           : "Teď nemáš žádný úklid. Až ti majitel nějaký přiřadí, objeví se tady."}
       </p>
 
+      {/* Přepínač: seznam úklidů / kalendář obsazenosti */}
+      <div className="mt-5 flex rounded-xl bg-line/50 p-1" role="tablist" aria-label="Zobrazení">
+        {(
+          [
+            ["list", "Úklidy", "broom"],
+            ["calendar", "Kalendář", "calendar"],
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => switchTab(id)}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              tab === id ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"
+            }`}
+          >
+            <Icon name={icon} className="mr-1.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "calendar" ? (
+        <CleanerCalendar
+          data={data}
+          onOpenCleaning={(id) => {
+            switchTab("list");
+            setOpen(id);
+            window.setTimeout(() => document.getElementById(`uklid-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+          }}
+        />
+      ) : (
+      <>
       <AddOwn
         token={token}
         onAdded={load}
@@ -188,6 +257,8 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
         patch={patch}
         remove={remove}
       />
+      </>
+      )}
     </main>
   );
 }
@@ -256,7 +327,8 @@ function Card({
 
   return (
     <article
-      className={`overflow-hidden rounded-2xl border ${
+      id={`uklid-${c.id}`}
+      className={`scroll-mt-4 overflow-hidden rounded-2xl border ${
         locked ? "border-pine/30 bg-[#eef5f0]" : highlight ? "border-pine/40 bg-surface shadow-sm" : "border-line bg-surface"
       }`}
     >
@@ -395,7 +467,7 @@ function Detail({
           </>
         )}
       </dl>
-      {c.guest.note && <p className="rounded-xl bg-bg px-3 py-2 text-sm">💬 {c.guest.note}</p>}
+      {c.guest.note && <p className="rounded-xl bg-bg px-3 py-2 text-sm"><Icon name="chat" className="mr-1.5 text-soft" />{c.guest.note}</p>}
       </>
       ) : null}
 
@@ -596,6 +668,8 @@ function AddOwn({
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("");
   const [title, setTitle] = useState("");
+  const [other, setOther] = useState(false);
+  const dayChoice = other ? "other" : date === todayISO() ? "today" : date === addDays(todayISO(), 1) ? "tomorrow" : "other";
 
   // Zapsaný úklid se v seznamu ukáže hned; úkoly a další hosty doplní server.
   async function submit(e: React.FormEvent) {
@@ -619,6 +693,8 @@ function AddOwn({
     const body = { date, time, title };
     setTitle("");
     setTime("");
+    setDate(todayISO());
+    setOther(false);
     setOpen(false);
     toast("Úklid zapsaný — majitel ho uvidí v přehledu.", "success");
     const res = await fetch(`/api/uklid/${token}`, {
@@ -651,10 +727,60 @@ function AddOwn({
         onChange={(e) => setTitle(e.target.value)}
         autoFocus
       />
-      <div className="flex gap-2">
-        <input type="date" className="field flex-1" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Datum" />
-        <input type="time" className="field w-32" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Čas začátku" />
+      {/* Den: rychlá volba, vlastní datum až na požádání */}
+      <div>
+        <span className="mb-1.5 block text-sm font-medium">Kdy</span>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Den úklidu">
+          {(
+            [
+              ["today", "Dnes"],
+              ["tomorrow", "Zítra"],
+              ["other", "Jiný den"],
+            ] as const
+          ).map(([id, label]) => {
+            const on = dayChoice === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => {
+                  if (id === "today") setDate(todayISO());
+                  if (id === "tomorrow") setDate(addDays(todayISO(), 1));
+                  if (id === "other" && dayChoice !== "other") setDate(addDays(todayISO(), 2));
+                  setOther(id === "other");
+                }}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                  on ? "border-ink bg-ink text-white" : "border-line bg-surface text-soft hover:border-ink/30"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        {dayChoice === "other" && (
+          <label className="mt-2 flex items-center gap-3">
+            <input
+              type="date"
+              className="control w-44"
+              value={date}
+              min={todayISO()}
+              onChange={(e) => e.target.value && setDate(e.target.value)}
+              aria-label="Datum úklidu"
+            />
+            <span className="text-sm capitalize text-soft">{day(date, true)}</span>
+          </label>
+        )}
       </div>
+
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">
+          Od kolika <span className="font-normal text-soft">(nepovinné)</span>
+        </span>
+        <input type="time" className="control w-28" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Čas začátku" />
+      </label>
       <div className="flex gap-2">
         <button type="button" className="btn-ghost flex-1 !py-2.5 text-sm" onClick={() => setOpen(false)}>
           Zrušit
@@ -664,5 +790,138 @@ function AddOwn({
         </button>
       </div>
     </form>
+  );
+}
+
+/* --------------------------- Kalendář obsazenosti --------------------------- */
+
+/**
+ * Stejná mřížka jako Kalendář v administraci: pobyty jako pruhy (jméno hosta jen
+ * když ho majitel povolil, jinak „Obsazeno“), blokace šrafovaně, 🧹 u dnů s jejím
+ * úklidem. Klik na pobyt ukáže termín, časy a povolené údaje o hostech.
+ */
+function CleanerCalendar({ data, onOpenCleaning }: { data: Data; onOpenCleaning: (id: string) => void }) {
+  const [cursor, setCursor] = useState(currentMonth);
+  const [detail, setDetail] = useState<CalStay | null>(null);
+  const { stays, blocks } = data.calendar;
+  const { monthStart, monthEnd } = monthBounds(cursor);
+  const label = (s: CalStay) => s.guest.name || "Obsazeno";
+
+  // Dny, kdy má uklízečka úklid (hotový i nehotový)
+  const marks = useMemo(() => {
+    const m: Record<string, React.ReactNode> = {};
+    for (const c of data.cleanings) m[c.window.date] = <Icon name={c.status === "done" ? "checkCircle" : "broom"} size={15} className={c.status === "done" ? "text-pine" : "text-ink"} />;
+    return m;
+  }, [data.cleanings]);
+
+  const monthStays = stays.filter((s) => s.start < monthEnd && s.end > monthStart).sort((a, b) => a.start.localeCompare(b.start));
+
+  return (
+    <div className="mt-5 space-y-5">
+      <StayCalendar
+        cursor={cursor}
+        onCursor={setCursor}
+        bars={[
+          ...stays.map((s) => ({ id: s.id, start: s.start, end: s.end, label: label(s), variant: "stay" as const })),
+          ...blocks.map((b) => ({ id: b.id, start: b.start, end: b.end, label: "Blokováno", variant: "block" as const })),
+        ]}
+        onBarClick={(id) => setDetail(stays.find((s) => s.id === id) ?? null)}
+        marks={marks}
+        legend={
+          <>
+            <Legend className="bg-pine">Obsazeno</Legend>
+            <Legend style={HATCH}>Blokováno</Legend>
+            <span className="inline-flex items-center gap-1.5"><Icon name="broom" size={14} /> tvůj úklid</span>
+          </>
+        }
+      />
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-soft">Pobyty v tomhle měsíci</h2>
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
+          {monthStays.length === 0 && <p className="p-5 text-center text-sm text-soft">V tomhle měsíci nikdo neubytovaný není.</p>}
+          {monthStays.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setDetail(s)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg/60"
+            >
+              <span aria-hidden className="h-8 w-1.5 shrink-0 rounded-full bg-pine" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{label(s)}</span>
+                <span className="block text-xs text-soft">
+                  {shortRange(s.start, s.end, "stay")} · příjezd {s.checkIn}, odjezd {s.checkOut}
+                  {s.guest.guests && ` · ${s.guest.guests}`}
+                </span>
+              </span>
+              {s.cleaningId && <span className="shrink-0 text-soft" title="Po odjezdu uklízíš ty"><Icon name="broom" /></span>}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {detail && <StayDetail s={detail} onClose={() => setDetail(null)} onOpenCleaning={onOpenCleaning} />}
+    </div>
+  );
+}
+
+function StayDetail({ s, onClose, onOpenCleaning }: { s: CalStay; onClose: () => void; onOpenCleaning: (id: string) => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const row = (k: string, v: React.ReactNode) => (
+    <div className="flex justify-between gap-4 py-2 text-sm">
+      <span className="text-soft">{k}</span>
+      <span className="text-right font-medium">{v}</span>
+    </div>
+  );
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pobyt"
+        className="rise w-full max-w-sm rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-semibold">{s.guest.name || "Pobyt"}</h2>
+            <p className="text-sm text-soft">{shortRange(s.start, s.end, "stay")}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-1 flex h-9 w-9 items-center justify-center rounded-full text-xl text-soft hover:bg-bg hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+        <div className="mt-3 divide-y divide-line">
+          {row("Příjezd", `${day(s.start, true)} od ${s.checkIn}`)}
+          {row("Odjezd", `${day(s.end, true)} do ${s.checkOut}`)}
+          {s.guest.guests && row("Hosté", s.guest.guests)}
+          {s.guest.phone && row("Telefon", <a href={`tel:${s.guest.phone}`} className="text-pine underline-offset-2 hover:underline">{s.guest.phone}</a>)}
+        </div>
+        {s.guest.note && <p className="mt-3 rounded-xl bg-bg px-3 py-2 text-sm"><Icon name="chat" className="mr-1.5 text-soft" />{s.guest.note}</p>}
+        {s.cleaningId && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenCleaning(s.cleaningId!);
+            }}
+            className="btn-primary mt-4 w-full !py-2.5 text-sm"
+          >
+            <Icon name="broom" className="mr-1.5" />Můj úklid po pobytu →
+          </button>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }

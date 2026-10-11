@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/Icon";
 
 // Sdílený formulář pro přihlášení i registraci: Google OAuth + e-mail/heslo.
 // Registrace běží bez potvrzení e-mailu, takže signUp rovnou vrátí session.
@@ -96,7 +97,7 @@ export function AuthForm({
     return (
       <div className="rounded-2xl border border-line bg-surface p-8 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-pine/10 text-2xl">
-          ✉️
+          <Icon name="mail" size={26} className="text-pine" />
         </div>
         <h2 className="mt-4 font-display text-2xl font-semibold">Zkontroluj e-mail</h2>
         <p className="mt-2 text-soft">

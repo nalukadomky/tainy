@@ -14,6 +14,7 @@ import { AuthForm } from "@/components/AuthForm";
 import { ThemePicker } from "@/components/ThemePicker";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { EditableSection } from "@/components/EditableText";
+import { Icon } from "@/components/Icon";
 
 // Onboarding, krok 2: nový web se dotváří přímo v sobě — stejně jako editace
 // webu v administraci. Texty se píšou do webu, sekce mají „Upravit". Nic se zatím
@@ -145,7 +146,7 @@ export function OnboardingEditor({
         <div className="relative flex min-w-0 flex-1 flex-col">
           {hint && (
             <BuilderHint onDismiss={dismissHint}>
-              ✍️ Klikni na text a piš. Vybavení, ceny a kontakt otevřeš tlačítkem <strong>Upravit</strong> u sekce.
+              <Icon name="pen" className="mr-1.5" />Klikni na text a piš. Vybavení, ceny a kontakt otevřeš tlačítkem <strong>Upravit</strong> u sekce.
             </BuilderHint>
           )}
           <DeviceStage device={device} slug={previewSlug(form.name)} frameRef={frameRef} title="Tvůj nový web" />
@@ -271,7 +272,7 @@ function PhotosLater({ text }: { text: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-line bg-bg px-5 py-6 text-center">
       <p className="text-3xl" aria-hidden>
-        📷
+        <Icon name="camera" size={32} className="text-soft" />
       </p>
       <p className="mt-2 text-sm text-soft">{text}</p>
     </div>

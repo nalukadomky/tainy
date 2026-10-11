@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { Photo } from "@/lib/photos";
 import { uploadSitePhoto } from "@/lib/image";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Icon } from "@/components/Icon";
 
 // Volba úvodu webu: jen text, nebo nadpis přes velkou úvodní fotku.
 // Úvodní fotka je samostatná — nahraje se zvlášť, nebo se vybere z galerie.
@@ -186,7 +187,7 @@ export function HeroPicker({
               className="flex min-h-56 w-full flex-col items-center justify-center gap-1 border-2 border-dashed border-line bg-bg text-center sm:min-h-0 sm:aspect-[16/7]"
             >
               <span className="text-2xl" aria-hidden>
-                🖼
+                <Icon name="image" size={28} className="text-soft" />
               </span>
               <span className="font-semibold">Nahraj nebo vyber úvodní fotku</span>
               <span className="text-xs text-soft">Do té doby se web ukáže s minimalistickým úvodem.</span>

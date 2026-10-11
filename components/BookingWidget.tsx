@@ -21,6 +21,7 @@ import { submitOnEnter } from "@/lib/enter";
 import { PhoneInput, isPhoneComplete } from "@/components/PhoneInput";
 import { vatNote, vatOfQuote } from "@/lib/vat";
 import { LEGAL_PATH, type LegalKind } from "@/lib/legal";
+import { Icon } from "@/components/Icon";
 
 export type BookingSite = {
   slug: string;
@@ -59,7 +60,6 @@ type Payment = "qr" | "onsite" | "demo";
 
 const PAYMENT_OPTIONS = [
   ["qr", "QR platba převodem", "Po potvrzení dostaneš QR kód — načteš ho v bankovní aplikaci. Termín držíme 24 hodin."],
-  ["onsite", "Domluvím se s majitelem", "Majitel se ti ozve a dohodnete se. Termín držíme 3 dny."],
   ["demo", "Zaplatit kartou (ukázka)", "Ukázková platba pro vývoj — žádné peníze se nestrhnou, rezervace se rovnou označí jako zaplacená."],
 ] as const;
 
@@ -485,7 +485,7 @@ export function BookingWidget({
               )}
               {preview ? (
                 <p className="rounded-xl bg-bg px-4 py-3 text-center text-sm text-soft">
-                  👀 Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou dokončit.
+                  <Icon name="eye" className="mr-1.5" />Takhle uvidí rezervaci tvoji hosté — na živém webu se dá rovnou dokončit.
                 </p>
               ) : (
                 <div className="flex gap-3">
@@ -641,14 +641,18 @@ export function BookingWidget({
                 )
               )}
 
+              {/* Bez čísla účtu se nevybírá — platební údaje pošle majitel (volba „domluva“ už není) */}
+              {site.paymentMode !== "qr" && !demoDostupna ? (
+                <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+                  <strong className="text-ink">Platba:</strong> platební údaje ti pošle majitel po odeslání rezervace. Termín
+                  držíme 3 dny.
+                </p>
+              ) : (
               <div>
                 <span className="mb-2 block text-sm font-medium">Jak zaplatíš</span>
                 <div className="space-y-2">
                   {PAYMENT_OPTIONS.filter(
-                    (o) =>
-                      (o[0] === "qr" && site.paymentMode === "qr") ||
-                      o[0] === "onsite" ||
-                      (o[0] === "demo" && demoDostupna)
+                    (o) => (o[0] === "qr" && site.paymentMode === "qr") || (o[0] === "demo" && demoDostupna)
                   ).map(([id, label, hint]) => (
                     <label
                       key={id}
@@ -678,6 +682,7 @@ export function BookingWidget({
                   ))}
                 </div>
               </div>
+              )}
 
               {site.cancellationPolicy && (
                 <div className="whitespace-pre-line rounded-xl bg-bg px-4 py-3 text-xs text-soft">

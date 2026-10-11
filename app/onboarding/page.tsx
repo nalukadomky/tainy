@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { OnboardingEditor, PriceFields } from "@/components/OnboardingEditor";
 import { PROPERTY_TYPES } from "@/lib/listing";
 import { EMPTY_FORM, FORM_KEY, withSuggestedTexts, type OnboardingForm } from "@/lib/onboarding";
+import { Icon } from "@/components/Icon";
 
 // Onboarding: dvě krátké otázky (název a typ, kapacita a ceny), pak se web
 // dotváří přímo v sobě (OnboardingEditor) a „Chci tento web" otevře registraci.
@@ -123,7 +124,7 @@ function Wizard() {
           <>
             <PriceFields form={form} set={set} />
             <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
-              💰 Víkend necháš prázdný = stejná cena jako ve všední dny. Texty, vybavení a kontakt doplníš za chvíli
+              <Icon name="bulb" className="mr-1.5" />Víkend necháš prázdný = stejná cena jako ve všední dny. Texty, vybavení a kontakt doplníš za chvíli
               přímo ve webu.
             </p>
           </>

@@ -15,24 +15,21 @@ import {
 } from "@/lib/admin";
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { addDays, stayTimes, todayISO } from "@/lib/stay";
-import { Dropdown } from "@/components/Dropdown";
 import { RescheduleDialog } from "@/components/RescheduleDialog";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { ListPageSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { CleaningBadge } from "@/components/CleaningAlert";
 import { StatusMenu, cancelReservationConfirm } from "@/components/StatusMenu";
 import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { SwipeToPay } from "@/components/SwipeToPay";
 import { ListMore, usePaged } from "@/components/ListMore";
-import { SortHeader } from "@/components/SortHeader";
 
-type Filter = "all" | "active" | Reservation["status"];
-/** all | upcoming | past | měsíc příjezdu ve tvaru YYYY-MM */
-type Period = string;
-type Sort = "nearest" | "arrival-desc" | "arrival-asc" | "created-desc" | "price-desc" | "price-asc" | "name-asc" | "name-desc";
+/** Záložky seznamu — každá má své přirozené řazení (viz `shown`). */
+type Filter = "upcoming" | "pending" | "past" | "cancelled" | "all";
 
 function monthLabel(key: string): string {
   const [y, m] = key.split("-").map(Number);
@@ -82,7 +79,7 @@ export default function ReservationsPage() {
   const [codeFor, setCodeFor] = useState<Reservation | null>(null);
   // Rozkliknuté rezervace — časy příjezdu a odjezdu a skladba hostů
 
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>("upcoming");
   // Odkaz z Přehledu (?detail=ID) otevře detail konkrétní rezervace — jednou, až jsou data
   const openedFromLink = useRef(false);
   useEffect(() => {
@@ -96,12 +93,9 @@ export default function ReservationsPage() {
   // Odkaz z Přehledu (?stav=pending) otevře rovnou čekající rezervace
   useEffect(() => {
     const stav = new URLSearchParams(window.location.search).get("stav");
-    if (stav === "pending" || stav === "paid" || stav === "cancelled") setFilter(stav);
+    if (stav === "pending" || stav === "cancelled") setFilter(stav);
   }, []);
   const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState<Period>("all");
-  const [source, setSource] = useState("all");
-  const [sort, setSort] = useState<Sort>("nearest");
   const [busy, setBusy] = useState<string | null>(null);
 
   async function setStatus(id: string, status: Reservation["status"]) {
@@ -114,67 +108,37 @@ export default function ReservationsPage() {
     setBusy(null);
   }
 
-  // Měsíce a zdroje, které se v rezervacích opravdu vyskytují — nabízet prázdné volby nemá smysl.
-  const months = useMemo(
-    () => [...new Set(reservations.map((r) => r.startDate.slice(0, 7)))].sort().reverse(),
-    [reservations],
-  );
-  const sources = useMemo(() => [...new Set(reservations.map((r) => r.source))], [reservations]);
-
-  // Vše kromě stavu: počty na čipech stavů pak odpovídají ostatním filtrům.
+  // Hledání; počty na záložkách pak odpovídají hledanému textu
   const matching = useMemo(() => {
-    const today = todayISO();
     const q = norm(query.trim());
-    return reservations.filter((r) => {
-      if (source !== "all" && r.source !== source) return false;
-      const end = r.endDate.slice(0, 10);
-      if (period === "upcoming" && end <= today) return false;
-      if (period === "past" && end > today) return false;
-      if (period.length === 7 && !r.startDate.startsWith(period)) return false;
-      if (q && !norm(`${r.guestName} ${r.email} ${r.phone} ${r.publicId}`).includes(q)) return false;
-      return true;
-    });
-  }, [reservations, query, period, source]);
+    if (!q) return reservations;
+    return reservations.filter((r) => norm(`${r.guestName} ${r.email} ${r.phone} ${r.publicId}`).includes(q));
+  }, [reservations, query]);
 
+  // Řazení podle záložky: nadcházející od nejbližšího příjezdu, proběhlé a zrušené
+  // od posledního; „Vše“ nejdřív nadcházející, pak proběhlé
   const shown = useMemo(() => {
     const list = matching.filter((r) => matchesFilter(r, filter));
-    // „Od nejbližší“: probíhající a nadcházející od nejbližšího příjezdu, pak proběhlé od posledního
-    const today = todayISO();
-    const ahead = (r: Reservation) => r.endDate.slice(0, 10) >= today;
-    const by: Record<Sort, (a: Reservation, b: Reservation) => number> = {
-      nearest: (a, b) =>
-        ahead(a) !== ahead(b)
-          ? ahead(a)
-            ? -1
-            : 1
-          : ahead(a)
-            ? a.startDate.localeCompare(b.startDate)
-            : b.startDate.localeCompare(a.startDate),
-      "arrival-desc": (a, b) => b.startDate.localeCompare(a.startDate),
-      "arrival-asc": (a, b) => a.startDate.localeCompare(b.startDate),
-      "created-desc": (a, b) => b.createdAt.localeCompare(a.createdAt),
-      "price-desc": (a, b) => b.totalPrice - a.totalPrice,
-      "price-asc": (a, b) => a.totalPrice - b.totalPrice,
-      "name-asc": (a, b) => a.guestName.localeCompare(b.guestName, "cs"),
-      "name-desc": (a, b) => b.guestName.localeCompare(a.guestName, "cs"),
-    };
-    return list.sort(by[sort]);
-  }, [matching, filter, sort]);
+    const ahead = (r: Reservation) => r.endDate.slice(0, 10) >= todayISO();
+    const asc = (a: Reservation, b: Reservation) => a.startDate.localeCompare(b.startDate);
+    const desc = (a: Reservation, b: Reservation) => b.startDate.localeCompare(a.startDate);
+    if (filter === "upcoming" || filter === "pending") return list.sort(asc);
+    if (filter === "all") return list.sort((a, b) => (ahead(a) !== ahead(b) ? (ahead(a) ? -1 : 1) : ahead(a) ? asc(a, b) : desc(a, b)));
+    return list.sort(desc);
+  }, [matching, filter]);
 
   const count = (f: Filter) => matching.filter((r) => matchesFilter(r, f)).length;
 
   // Postupné načítání a skupiny po měsících příjezdu (při řazení podle data)
-  const paged = usePaged(`${filter}|${sort}|${query}|${period}|${source}`);
+  const paged = usePaged(`${filter}|${query}`);
   const visible = shown.slice(0, paged.limit);
-  const byDate = sort === "nearest" || sort === "arrival-asc" || sort === "arrival-desc";
-  // „Od nejbližší“ má dvě části — nadcházející a proběhlé; stejný měsíc může být v obou
+  // „Vše“ má dvě části — nadcházející a proběhlé; stejný měsíc může být v obou
   const groupKey = useCallback(
     (r: Reservation) =>
-      sort === "nearest" ? `${r.endDate.slice(0, 10) >= todayISO() ? "a" : "p"}:${r.startDate.slice(0, 7)}` : r.startDate.slice(0, 7),
-    [sort]
+      filter === "all" ? `${r.endDate.slice(0, 10) >= todayISO() ? "a" : "p"}:${r.startDate.slice(0, 7)}` : r.startDate.slice(0, 7),
+    [filter]
   );
   const groups = useMemo(() => {
-    if (!byDate) return [{ key: "all", items: visible }];
     const out: { key: string; items: Reservation[] }[] = [];
     for (const r of visible) {
       const key = groupKey(r);
@@ -183,7 +147,7 @@ export default function ReservationsPage() {
       else out.push({ key, items: [r] });
     }
     return out;
-  }, [visible, byDate, groupKey]);
+  }, [visible, groupKey]);
   // Součty měsíce ze všech rezervací v měsíci (i těch ještě nezobrazených), bez zrušených
   const monthTotals = useMemo(() => {
     const m = new Map<string, { stays: number; sum: number }>();
@@ -208,15 +172,6 @@ export default function ReservationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown]);
 
-  // Řazení kliknutím na sloupec tabulky (počítač); druhý klik obrátí směr
-  const sortBy = (col: "arrival" | "name" | "price") => {
-    const pairs = { arrival: ["arrival-asc", "arrival-desc"], name: ["name-asc", "name-desc"], price: ["price-desc", "price-asc"] } as const;
-    const [first, second] = pairs[col];
-    setSort(sort === first ? second : first);
-  };
-  const sortCol = sort.startsWith("arrival") || sort === "nearest" ? "arrival" : sort.startsWith("name") ? "name" : sort.startsWith("price") ? "price" : null;
-  const sortDir: "asc" | "desc" = sort.endsWith("desc") ? "desc" : "asc";
-
   // Jedna akce na řádku podle situace (zbytek je v nabídce ⋯)
   function primaryAction(r: Reservation): { label: string; run: () => void; primary?: boolean } | null {
     if (editable(r) && r.guestName.startsWith("Host z ")) return { label: "✎ Doplnit údaje", run: () => setEditing(r) };
@@ -229,14 +184,6 @@ export default function ReservationsPage() {
   const active = shown.filter((r) => r.status !== "cancelled");
   const sum = active.reduce((acc, r) => acc + r.totalPrice, 0);
   const nights = active.reduce((acc, r) => acc + nightsBetween(new Date(r.startDate), new Date(r.endDate)), 0);
-  const filtered = filter !== "all" || query !== "" || period !== "all" || source !== "all";
-
-  function resetFilters() {
-    setFilter("all");
-    setQuery("");
-    setPeriod("all");
-    setSource("all");
-  }
 
   if (loading) return <ListPageSkeleton label="Načítám rezervace" rows={6} />;
   if (error) return <p className="py-16 text-center text-soft">{error}</p>;
@@ -269,54 +216,21 @@ export default function ReservationsPage() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Dropdown
-          label="Termín"
-          value={period}
-          onChange={setPeriod}
-          items={[
-            { value: "all", label: "Všechny termíny" },
-            { value: "upcoming", label: "Nadcházející" },
-            { value: "past", label: "Proběhlé" },
-            { group: "Měsíc příjezdu" },
-            ...months.map((m) => ({ value: m, label: monthLabel(m) })),
-          ]}
-        />
-        <Dropdown
-          label="Zdroj"
-          value={source}
-          onChange={setSource}
-          items={[
-            { value: "all", label: "Všechny zdroje" },
-            ...sources.map((src) => ({ value: src, label: SOURCE_LABEL[src] ?? src })),
-          ]}
-        />
-        <Dropdown
-          label="Řazení"
-          value={sort}
-          onChange={(v) => setSort(v as Sort)}
-          align="right"
-          items={[
-            { value: "nearest", label: "Od nejbližší" },
-            { value: "arrival-desc", label: "Nejpozdější příjezd" },
-            { value: "arrival-asc", label: "Nejdřívější příjezd" },
-            { value: "created-desc", label: "Nově vytvořené" },
-            { value: "price-desc", label: "Nejvyšší cena" },
-            { value: "price-asc", label: "Nejnižší cena" },
-            { value: "name-asc", label: "Host A–Z" },
-          ]}
-        />
       </div>
 
       <div className="flex flex-wrap gap-2">
         {(
           [
-            ["all", "Všechny"],
-            ["active", "Nejbližší aktivní"],
-            ["pending", "Čekající"],
-            ["paid", "Zaplacené"],
+            ["upcoming", "Nadcházející"],
+            ["pending", "Čeká na platbu"],
+            ["past", "Proběhlé"],
             ["cancelled", "Zrušené"],
+            ["all", "Vše"],
           ] as const
-        ).map(([id, label]) => (
+        )
+          // „Čeká na platbu“ jen když nějaká taková rezervace je (nebo je zrovna vybraná)
+          .filter(([id]) => id !== "pending" || count(id) > 0 || filter === id)
+          .map(([id, label]) => (
           <button
             key={id}
             onClick={() => setFilter(id)}
@@ -353,9 +267,9 @@ export default function ReservationsPage() {
             </>
           )}
         </p>
-        {filtered && (
-          <button onClick={resetFilters} className="font-medium text-pine hover:underline">
-            Zrušit filtry
+        {query && (
+          <button onClick={() => setQuery("")} className="font-medium text-pine hover:underline">
+            Zrušit hledání
           </button>
         )}
       </div>
@@ -363,25 +277,29 @@ export default function ReservationsPage() {
       <div className="space-y-5">
         {shown.length === 0 && (
           <p className="rounded-2xl border border-line bg-surface p-6 text-center text-sm text-soft">
-            Tomuhle filtru neodpovídá žádná rezervace.
+            {query
+              ? "Hledanému textu neodpovídá žádná rezervace."
+              : filter === "upcoming"
+                ? "Žádné nadcházející pobyty."
+                : "Tady zatím nic není."}
           </p>
         )}
 
-        {/* Hlavička tabulky (počítač) — klik na sloupec řadí */}
+        {/* Hlavička tabulky (počítač) */}
         {shown.length > 0 && (
-          <div className="hidden items-center gap-4 px-5 sm:flex">
-            <SortHeader label="Příjezd" active={sortCol === "arrival"} dir={sort === "nearest" ? "asc" : sortDir} onClick={() => sortBy("arrival")} className="w-16" />
-            <SortHeader label="Host" active={sortCol === "name"} dir={sortDir} onClick={() => sortBy("name")} className="min-w-0 flex-1" />
+          <div className="hidden items-center gap-4 px-5 text-xs font-semibold uppercase tracking-wider text-soft sm:flex">
+            <span className="w-16">Příjezd</span>
+            <span className="min-w-0 flex-1">Host</span>
             <span className="w-36" aria-hidden />
-            <span className="w-32 text-xs font-semibold uppercase tracking-wider text-soft">Stav</span>
-            <SortHeader label="Cena" active={sortCol === "price"} dir={sortDir} onClick={() => sortBy("price")} align="right" className="w-28" />
+            <span className="w-32">Stav</span>
+            <span className="w-28 text-right">Cena</span>
             <span className="w-9" aria-hidden />
           </div>
         )}
 
         {groups.map((g, gi) => (
           <section key={g.key} aria-label={g.key === "all" ? "Rezervace" : monthLabel(g.key.slice(-7))}>
-            {/* Předěl mezi nadcházejícími a proběhlými pobyty („Od nejbližší“) */}
+            {/* Předěl mezi nadcházejícími a proběhlými pobyty (záložka „Vše“) */}
             {g.key.startsWith("p:") && !groups[gi - 1]?.key.startsWith("p:") && (
               <p className={`mb-3 flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-soft ${gi > 0 ? "pt-4" : ""}`}>
                 Proběhlé pobyty <span className="h-px flex-1 bg-line" />
@@ -451,6 +369,7 @@ export default function ReservationsPage() {
                               </span>
                             )}
                             <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                            <CleaningBadge alert={r.cleaningAlert} />
                           </p>
                           <p className="truncate text-sm text-soft">
                             {shortRange(r.startDate, r.endDate)} · {nightsOf(r)} {plural(nightsOf(r), "noc", "noci", "nocí")}
@@ -764,6 +683,7 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
               <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
                 {STATUS_LABEL[r.status]}
               </span>
+              <CleaningBadge alert={r.cleaningAlert} withLink />
             </p>
           </div>
           <button
@@ -798,9 +718,12 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
 
 /** Filtr rezervací. „Nejbližší aktivní“ = nezrušené pobyty, které probíhají nebo teprve přijdou. */
 function matchesFilter(r: Reservation, f: Filter): boolean {
+  const ahead = r.endDate.slice(0, 10) >= todayISO();
   if (f === "all") return true;
-  if (f === "active") return r.status !== "cancelled" && r.endDate.slice(0, 10) >= todayISO();
-  return r.status === f;
+  if (f === "cancelled") return r.status === "cancelled";
+  if (f === "pending") return r.status === "pending";
+  if (f === "upcoming") return r.status !== "cancelled" && ahead;
+  return r.status !== "cancelled" && !ahead;
 }
 
 /** Údaje jde doplnit u rezervací z portálů a ručních — u webových je zadal host. */

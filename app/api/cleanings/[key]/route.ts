@@ -5,7 +5,8 @@ import { checklistFromTemplate, cleaningAmount, parseChecklist } from "@/lib/cle
 
 // Jeden úklid (majitel). `key` je ID rezervace (úklid po pobytu — vznikne při
 // prvním přiřazení) nebo ID ručního úklidu.
-//  PATCH: přiřadit uklízečku, úkoly navíc, zaplaceno (→ Náklady), povolit úpravu
+//  PATCH: přiřadit uklízečku, úkoly navíc, zaplaceno (→ Náklady), povolit úpravu,
+//         dokončit úklid za personál (když to uklízečka sama nemůže udělat)
 //  DELETE: jen ruční a nezaplacený úklid
 
 type Target = { siteId: string; reservationId: string | null; cleaningId: string | null; day: Date | null };
@@ -90,7 +91,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ke
         }
         if (typeof body.removeTask === "string") checklist = checklist.filter((i) => i.id !== body.removeTask);
 
-        const data: Record<string, unknown> = { checklist: JSON.stringify(checklist) };
+        // Dokončení za personál: hotovo teď, délka úklidu (pro hodinovou sazbu), úkoly odškrtnuté
+        const finish: Record<string, unknown> = {};
+        if (body.complete && typeof body.complete === "object") {
+          if (cleaning.status === "done") throw new HttpError(409, "Úklid už je hotový.");
+          const minutes = Math.round(Number(body.complete.minutes));
+          if (cleaning.cleaner?.payMode === "hourly" && !(minutes > 0))
+            throw new HttpError(400, "Vyplň, jak dlouho úklid trval — podle toho se spočítá platba.");
+          if (body.complete.checkAll !== false) checklist = checklist.map((i) => ({ ...i, done: true }));
+          Object.assign(finish, {
+            status: "done",
+            finishedAt: new Date(),
+            minutes: minutes > 0 ? Math.min(minutes, 24 * 60) : cleaning.minutes,
+          });
+        }
+
+        const data: Record<string, unknown> = { checklist: JSON.stringify(checklist), ...finish };
 
         // Zaplaceno ↔ záznam v Nákladech
         if (body.paid === true && !cleaning.paid) {

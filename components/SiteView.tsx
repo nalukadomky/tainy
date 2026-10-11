@@ -22,6 +22,7 @@ import { AboutPlaceholder, AboutSection, type AboutData } from "@/components/Abo
 import { ABOUT_SAMPLE } from "@/lib/about";
 import { ReviewsPlaceholder, ReviewsSection } from "@/components/ReviewsSection";
 import { SAMPLE_REVIEWS, type Review, type ReviewsLayout } from "@/lib/reviews";
+import { Icon } from "@/components/Icon";
 
 // Vizuál veřejného webu nemovitosti. Používá se jednak na /[slug] (data z DB),
 // jednak jako živý náhled v průvodci (data z draftu, preview=true).
@@ -108,7 +109,7 @@ export type SiteViewData = {
 const EDGE = "px-5 sm:px-8 lg:px-12 xl:px-16";
 
 // Nálada místo fotek — dokud si majitel v průvodci žádné nenahrál
-const PLACEHOLDERS = ["🌲", "🛁", "🔥", "🌄", "☕️", "🌙"];
+const PLACEHOLDERS = [0, 1, 2, 3, 4, 5];
 
 export function SiteView({
   site,
@@ -202,7 +203,7 @@ export function SiteView({
                       }}
                       aria-hidden
                     >
-                      {g}
+                      <Icon name="image" size={i === 0 ? 40 : 26} className="text-soft/50" />
                     </div>
                   ))}
                 </div>
@@ -242,7 +243,7 @@ export function SiteView({
                   )}
                   {beds.map((b) => (
                     <span key={b} className="rounded-full border border-line bg-surface px-3.5 py-1.5">
-                      🛏 {b}
+                      <Icon name="bed" className="mr-1.5 text-soft" />{b}
                     </span>
                   ))}
                 </div>
@@ -254,7 +255,7 @@ export function SiteView({
                     {editing ? (
                       <>
                         <p>
-                          ✉️{" "}
+                          <Icon name="mail" className="mr-1.5" />
                           <EditableText
                             editing={editing}
                             field="contactEmail"
@@ -263,7 +264,7 @@ export function SiteView({
                           />
                         </p>
                         <p>
-                          📞{" "}
+                          <Icon name="phone" className="mr-1.5" />
                           <EditableText
                             editing={editing}
                             field="contactPhone"
@@ -276,7 +277,7 @@ export function SiteView({
                       <>
                         {site.contactEmail && (
                           <p>
-                            ✉️{" "}
+                            <Icon name="mail" className="mr-1.5" />
                             <a
                               className="underline decoration-line underline-offset-4 hover:text-ink"
                               href={`mailto:${site.contactEmail}`}
@@ -285,7 +286,7 @@ export function SiteView({
                             </a>
                           </p>
                         )}
-                        {site.contactPhone && <p>📞 {site.contactPhone}</p>}
+                        {site.contactPhone && <p><Icon name="phone" className="mr-1.5" />{site.contactPhone}</p>}
                       </>
                     )}
                   </div>

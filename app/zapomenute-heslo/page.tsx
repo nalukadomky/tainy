@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/Icon";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -40,7 +41,7 @@ export default function ForgotPasswordPage() {
         {sent ? (
           <div className="rounded-2xl border border-line bg-surface p-8 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-pine/10 text-2xl">
-              ✉️
+              <Icon name="mail" size={26} className="text-pine" />
             </div>
             <h1 className="mt-4 font-display text-2xl font-semibold">Zkontroluj e-mail</h1>
             <p className="mt-2 text-soft">

@@ -1,24 +1,25 @@
 import Link from "next/link";
 import { Logo, Wordmark } from "@/components/Logo";
+import { Icon } from "@/components/Icon";
 
 const FEATURES = [
   {
-    icon: "🗓️",
+    icon: "calendar" as const,
     title: "Rezervace včetně půldnů",
     text: "Hosté si vyberou termín, počet nocí i dřívější příjezd nebo pozdější odjezd. Kolize termínů hlídáme za tebe.",
   },
   {
-    icon: "💳",
+    icon: "card" as const,
     title: "Platby přes Stripe",
     text: "Z výběru termínu vede host rovnou na platbu. Žádné dohadování přes e-maily a zálohy na účet.",
   },
   {
-    icon: "📊",
+    icon: "chart" as const,
     title: "Přehled na jednom místě",
     text: "Dashboard výdělků, správa rezervací, ubytovaní hosté a evidence nákladů v jednoduché administraci.",
   },
   {
-    icon: "🏡",
+    icon: "home" as const,
     title: "Moderní web za pár minut",
     text: "Fotky, popis, ceník a kalendář. Web vypadá skvěle na mobilu i počítači a každou změnu hned vidíš v živém náhledu.",
   },
@@ -118,7 +119,7 @@ export default function Home() {
               key={f.title}
               className="rounded-2xl border border-line bg-surface p-6 transition hover:-translate-y-0.5 hover:shadow-sm"
             >
-              <span className="text-2xl">{f.icon}</span>
+              <Icon name={f.icon} size={26} className="text-pine" />
               <h3 className="mt-3 font-display text-xl font-semibold">{f.title}</h3>
               <p className="mt-2 text-[15px] leading-relaxed text-soft">{f.text}</p>
             </div>

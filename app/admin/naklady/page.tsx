@@ -10,6 +10,7 @@ import { Dropdown } from "@/components/Dropdown";
 import { REPEAT_LABEL, isActive, monthlyFixed, spentToDate, type Repeat } from "@/lib/costs";
 import { ListPageSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
+import { Icon } from "@/components/Icon";
 
 const CATEGORIES = ["provoz", "energie", "služby", "úklid", "údržba", "pojištění", "vybavení", "jiné"];
 
@@ -283,7 +284,7 @@ function DeleteButton({ label, onClick }: { label: string; onClick: () => void }
       title="Smazat náklad"
       aria-label={`Smazat náklad ${label}`}
     >
-      🗑
+      <Icon name="trash" />
     </button>
   );
 }

@@ -19,6 +19,7 @@ import {
   type PayMode,
 } from "@/lib/cleaning";
 import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
+import { Icon } from "@/components/Icon";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
 // správa uklízeček a jejich odkazů a nastavení, co uklízečky uvidí.
@@ -293,10 +294,92 @@ function predict(prev: Cleaning | null, body: Record<string, unknown>, cleaners:
     next.amount = null;
   }
   if (body.reopen === true) next.status = "todo";
+  const complete = body.complete as { minutes?: number; checkAll?: boolean } | undefined;
+  if (complete) {
+    next.status = "done";
+    if (complete.minutes) next.minutes = complete.minutes;
+    if (complete.checkAll !== false) next.checklist = next.checklist.map((i) => ({ ...i, done: true }));
+  }
   return next;
 }
 
 /* ------------------------------ Úklidy ------------------------------ */
+
+/**
+ * Dokončení úklidu za personál (uklízečka nemá telefon po ruce, zapomněla…).
+ * U hodinové sazby je potřeba délka úklidu — podle ní se spočítá platba.
+ */
+function CompleteDialog({
+  cleaning,
+  title,
+  onCancel,
+  onConfirm,
+}: {
+  cleaning: Cleaning | null;
+  title: string;
+  onCancel: () => void;
+  onConfirm: (complete: { minutes?: number; checkAll: boolean }) => void;
+}) {
+  const hourly = cleaning?.cleaner?.payMode === "hourly";
+  const [hours, setHours] = useState("");
+  const [mins, setMins] = useState("");
+  const [checkAll, setCheckAll] = useState(true);
+  const minutes = (Number(hours) || 0) * 60 + (Number(mins) || 0);
+  const open = (cleaning?.checklist ?? []).filter((i) => !i.done).length;
+  const missing = hourly && minutes <= 0;
+  return (
+    <ConfirmDialog
+      title="Označit úklid jako hotový?"
+      confirmLabel="Hotovo"
+      tone="primary"
+      onCancel={onCancel}
+      onConfirm={() => !missing && onConfirm({ minutes: minutes || undefined, checkAll })}
+    >
+      <p>
+        {title}
+        {cleaning?.cleaner ? ` · uklízí ${cleaning.cleaner.name}` : ""}. Použij, když to personál sám nemůže označit.
+      </p>
+      <div>
+        <span className="mb-1.5 block text-sm font-medium text-ink">
+          Jak dlouho úklid trval{hourly ? "" : " (nepovinné)"}
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            className="control w-20"
+            inputMode="numeric"
+            aria-label="Hodiny"
+            placeholder="0"
+            value={hours}
+            onChange={(e) => setHours(e.target.value.replace(/\D/g, "").slice(0, 2))}
+          />
+          <span className="text-sm">h</span>
+          <input
+            className="control w-20"
+            inputMode="numeric"
+            aria-label="Minuty"
+            placeholder="0"
+            value={mins}
+            onChange={(e) => setMins(e.target.value.replace(/\D/g, "").slice(0, 2))}
+          />
+          <span className="text-sm">min</span>
+        </div>
+        {hourly && cleaning?.cleaner && (
+          <span className={`mt-1 block text-xs ${missing ? "text-coral" : "text-soft"}`}>
+            {missing
+              ? "Vyplň délku — podle ní se spočítá platba."
+              : `Platba ≈ ${czk(cleaningAmount(cleaning.cleaner, minutes))} (${czk(cleaning.cleaner.rate)}/h).`}
+          </span>
+        )}
+      </div>
+      {open > 0 && (
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+          <input type="checkbox" className="accent-[var(--pine)]" checked={checkAll} onChange={(e) => setCheckAll(e.target.checked)} />
+          Odškrtnout i zbývající úkoly ({open})
+        </label>
+      )}
+    </ConfirmDialog>
+  );
+}
 
 function Cleanings({
   items,
@@ -417,6 +500,7 @@ function CleaningCard({
 }) {
   const c = item.cleaning;
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [task, setTask] = useState("");
 
   // Poznámka od uklízečky: „nová", dokud ji majitel neotevře (pamatuje si prohlížeč;
@@ -510,13 +594,34 @@ function CleaningCard({
                   <span className="relative h-1.5 w-1.5 rounded-full bg-white" />
                 </span>
               )}
-              💬 {noteSeen ? "Poznámka" : "Nová poznámka"}
+              <Icon name="chat" size={12} /> {noteSeen ? "Poznámka" : "Nová poznámka"}
             </button>
           )}
           {total > 0 && (
             <span className="text-xs text-soft">
               ✓ {done}/{total} úkolů
             </span>
+          )}
+          {c?.status !== "done" && !item.key.startsWith("tmp-") && (
+            <button
+              type="button"
+              onClick={() => setCompleting(true)}
+              className="text-xs font-medium text-pine hover:underline"
+              title="Když to personál sám nemůže označit"
+            >
+              ✓ Označit jako hotový
+            </button>
+          )}
+          {completing && (
+            <CompleteDialog
+              cleaning={c}
+              title={item.kind === "stay" ? `Úklid po pobytu ${item.guestName}` : item.title ?? "Úklid"}
+              onCancel={() => setCompleting(false)}
+              onConfirm={(complete) => {
+                setCompleting(false);
+                run({ complete }, "Úklid je označený jako hotový.");
+              }}
+            />
           )}
           {c?.status === "done" && !c.paid && (
             <button
@@ -656,7 +761,7 @@ function CleaningCard({
           )}
           {c?.note && (
             <p className="rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-sm">
-              <span className="font-semibold">💬 {c.cleaner?.name ?? "Personál"} píše:</span> {c.note}
+              <span className="font-semibold"><Icon name="chat" className="mr-1" />{c.cleaner?.name ?? "Personál"} píše:</span> {c.note}
             </p>
           )}
         </div>
@@ -1054,7 +1159,7 @@ function Settings({
             {f.label}
           </label>
         ))}
-        <p className="rounded-xl bg-bg px-3 py-2 text-xs text-soft">🔒 Cenu pobytu ani e-mail hosta personál nikdy neuvidí.</p>
+        <p className="rounded-xl bg-bg px-3 py-2 text-xs text-soft"><Icon name="lock" size={13} className="mr-1" />Cenu pobytu ani e-mail hosta personál nikdy neuvidí.</p>
       </div>
     </div>
   );

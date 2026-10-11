@@ -26,6 +26,7 @@ import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 import { AutomationSettings } from "@/components/AutomationSettings";
 import { ExternalCalendars } from "@/components/ExternalCalendars";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
+import { Icon } from "@/components/Icon";
 
 type Tab = "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
@@ -462,7 +463,7 @@ export function SiteEditor(_props: { area?: EditorArea }) {
                           setForm((f) => (f ? { ...f, priceRules: f.priceRules.filter((_, j) => j !== i) } : f))
                         }
                       >
-                        🗑
+                        <Icon name="trash" />
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">

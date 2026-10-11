@@ -34,6 +34,7 @@ import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
 import { FLASH_KEY, useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
+import { Icon } from "@/components/Icon";
 
 // Builder (varianta B): web se upravuje přímo v sobě. Texty se přepisují
 // kliknutím do webu, sekce mají „Upravit", které otevře boční panel.
@@ -350,7 +351,7 @@ export default function BuilderPage() {
           {/* Nápověda je v toku stránky, ne nad iframe — jinak ji některé prohlížeče schovají pod web */}
           {hint && !previewing && (
             <BuilderHint onDismiss={dismissHint}>
-              ✍️ Klikni na text a piš. Fotky a další nastavení sekce otevřeš tlačítkem <strong>Upravit</strong>.
+              <Icon name="pen" className="mr-1.5" />Klikni na text a piš. Fotky a další nastavení sekce otevřeš tlačítkem <strong>Upravit</strong>.
             </BuilderHint>
           )}
           {loading || !form ? (
@@ -425,7 +426,7 @@ function SaveIndicator({ state, savedAt, onRetry }: { state: SaveState; savedAt:
         </span>
       ) : state === "error" ? (
         <span className={`${base} border-coral/40 bg-coral/10 text-coral`}>
-          ⚠ <span className="max-sm:hidden">Neuloženo</span>
+          <Icon name="alert" size={14} /> <span className="max-sm:hidden">Neuloženo</span>
           <button type="button" onClick={onRetry} className="rounded-full bg-coral px-2 py-0.5 text-white hover:bg-coral/90">
             Zkusit znovu
           </button>

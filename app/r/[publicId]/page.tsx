@@ -12,6 +12,7 @@ import { pricedCategories } from "@/lib/pricing";
 import { buildPayment, formatIBAN } from "@/lib/payment";
 import { paymentQrDataUrl } from "@/lib/payment-qr";
 import { Wordmark } from "@/components/Logo";
+import { Icon } from "@/components/Icon";
 
 export const dynamic = "force-dynamic";
 
@@ -235,13 +236,13 @@ export default async function ReservationPage({
             <div className="mt-2 space-y-1 text-sm text-soft">
               {site.contactEmail && (
                 <p>
-                  ✉️{" "}
+                  <Icon name="mail" className="mr-1.5" />
                   <a className="underline decoration-line underline-offset-4 hover:text-ink" href={`mailto:${site.contactEmail}`}>
                     {site.contactEmail}
                   </a>
                 </p>
               )}
-              {site.contactPhone && <p>📞 {site.contactPhone}</p>}
+              {site.contactPhone && <p><Icon name="phone" className="mr-1.5" />{site.contactPhone}</p>}
             </div>
           </div>
         )}

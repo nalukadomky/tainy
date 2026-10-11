@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { CleaningAlert } from "@/lib/cleaning";
 import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
 import { DELETED_GUEST, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
@@ -136,6 +137,8 @@ export type Reservation = {
   source: string;
   status: "pending" | "paid" | "cancelled";
   expiresAt: string | null;
+  /** Hosté přijíždějí dnes/zítra a úklid po předchozím pobytu není hotový (jen s personálem úklidu). */
+  cleaningAlert?: CleaningAlert | null;
   publicId: string;
   createdAt: string;
   /** DPH v době rezervace (0 = neplátce) a jeho částka obsažená v ceně. */

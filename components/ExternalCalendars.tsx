@@ -6,6 +6,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
 import { plural } from "@/lib/pricing";
+import { Icon } from "@/components/Icon";
 
 // Nastavení → Externí rezervace: výměna obsazenosti s Airbnb, Booking.com
 // a dalšími portály přes iCal (zdarma). Odkaz na kalendář webu pro portály,
@@ -169,7 +170,7 @@ export function ExternalCalendars() {
 
       {conflicts.length > 0 && (
         <div className="space-y-2 rounded-2xl border border-coral/30 bg-coral/5 p-5">
-          <p className="font-semibold text-coral">⚠ Překrývající se termíny</p>
+          <p className="font-semibold text-coral"><Icon name="alert" className="mr-1.5" />Překrývající se termíny</p>
           <p className="text-sm text-soft">
             Termín z portálu se kryje s rezervací z tvého webu. Domluv se s jedním z hostů na jiném termínu nebo rezervaci
             zruš.
