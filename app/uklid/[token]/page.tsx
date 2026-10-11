@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/Logo";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { greetingName } from "@/lib/vocative";
-import { cleaningAmount, cleaningStart, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
+import { cleaningAmount, cleaningStart, finishedEarly, fmtFinished, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
 import { czk, plural } from "@/lib/pricing";
 import { addDays, todayISO } from "@/lib/stay";
 import { Skeleton, CardsSkeleton } from "@/components/Skeleton";
@@ -21,8 +21,9 @@ type Cleaning = {
   id: string;
   /** stay = úklid po pobytu, manual = ruční úklid (zadal majitel nebo zapsala uklízečka) */
   kind: "stay" | "manual";
-  /** Začátek úklidu — dřív ho nejde ukončit. */
+  /** Plánovaný začátek úklidu (ukončit jde i dřív — pak „uklizeno dřív“). */
   startsAt: string;
+  finishedAt?: string | null;
   window: { date: string; from: string; nextArrival: { date: string; time: string } | null; sameDay: boolean };
   // úklid po pobytu
   arrival?: { date: string; time: string };
@@ -356,6 +357,12 @@ function Card({
           ) : null}
         </div>
 
+        {locked && c.finishedAt && finishedEarly(c.finishedAt, c.window.date, c.window.from) && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-amber/20 px-2.5 py-0.5 text-[11px] font-semibold text-[#92600a]">Uklizeno dřív</span>
+            <span className="text-soft">dokončeno {fmtFinished(c.finishedAt)}</span>
+          </p>
+        )}
         {locked && (
           <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm text-pine">
             <strong className="font-display text-lg font-semibold">{czk(c.earned ?? 0)}</strong>
@@ -400,13 +407,8 @@ function Detail({
   patch: (id: string, body: Record<string, unknown>, optimistic?: Partial<Cleaning>) => Promise<unknown>;
   remove: (id: string) => void;
 }) {
-  // Ukončit jde až od začátku úklidu — hlídáme průběžně, tlačítko se samo odemkne.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-  const tooEarly = new Date(c.startsAt).getTime() > now;
+  // Před plánovaným začátkem jde úklid ukončit taky — jen na to upozorníme
+  const early = new Date(c.startsAt).getTime() > Date.now();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const locked = c.status === "done";
   const [hours, setHours] = useState(String(Math.floor((c.minutes ?? 0) / 60) || ""));
@@ -585,17 +587,13 @@ function Detail({
         />
       </label>
 
-      <button
-        type="button"
-        className="btn-primary w-full"
-        disabled={minutesTotal <= 0 || tooEarly}
-        onClick={() => setConfirm(true)}
-      >
-        {tooEarly
-          ? `Ukončit půjde od ${fmtStart(c.window.date, c.window.from)}`
-          : minutesTotal > 0
-            ? "Ukončit úklid"
-            : "Vyplň čas a ukonči úklid"}
+      {early && (
+        <p className="rounded-xl bg-bg px-3 py-2 text-sm text-soft">
+          Úklid je naplánovaný na {fmtStart(c.window.date, c.window.from)}. Když ho ukončíš teď, uloží se jako uklizený dřív.
+        </p>
+      )}
+      <button type="button" className="btn-primary w-full" disabled={minutesTotal <= 0} onClick={() => setConfirm(true)}>
+        {minutesTotal > 0 ? (early ? "Ukončit úklid dřív" : "Ukončit úklid") : "Vyplň čas a ukonči úklid"}
       </button>
       {c.ownCreated && (
         <button
@@ -629,7 +627,7 @@ function Detail({
           confirmLabel="Ukončit úklid"
           onConfirm={async () => {
             setConfirm(false);
-            await patch(c.id, { minutes: minutesTotal, note, finish: true }, { status: "done", minutes: minutesTotal, note });
+            await patch(c.id, { minutes: minutesTotal, note, finish: true }, { status: "done", minutes: minutesTotal, note, finishedAt: new Date().toISOString() });
           }}
           onCancel={() => setConfirm(false)}
         >
@@ -643,6 +641,7 @@ function Detail({
                 "úkolů není odškrtnutých"
               )}.`}
           </p>
+          {early && <p>Úklid se uloží jako uklizený dřív, než byl naplánovaný.</p>}
           <p>Po uložení už úklid nepůjde upravit — případnou opravu ti může povolit jen majitel.</p>
         </ConfirmDialog>
       )}

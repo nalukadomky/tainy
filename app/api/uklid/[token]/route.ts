@@ -71,6 +71,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     checklist: parseChecklist(c.checklist),
     minutes: c.minutes,
     status: c.status,
+    finishedAt: c.finishedAt?.toISOString() ?? null,
     note: c.note,
     paid: c.paid,
     // Odměna: u zaplaceného úklidu skutečně vyplacená částka

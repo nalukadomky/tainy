@@ -17,6 +17,8 @@ import {
   parseCleanerFields,
   type ChecklistItem,
   type PayMode,
+  finishedEarly,
+  fmtFinished,
 } from "@/lib/cleaning";
 import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
@@ -41,6 +43,7 @@ type Cleaning = {
   checklist: ChecklistItem[];
   minutes: number | null;
   status: "todo" | "done";
+  finishedAt?: string | null;
   note: string;
   paid: boolean;
   amount: number | null;
@@ -293,10 +296,14 @@ function predict(prev: Cleaning | null, body: Record<string, unknown>, cleaners:
     next.paid = false;
     next.amount = null;
   }
-  if (body.reopen === true) next.status = "todo";
+  if (body.reopen === true) {
+    next.status = "todo";
+    next.finishedAt = null;
+  }
   const complete = body.complete as { minutes?: number; checkAll?: boolean } | undefined;
   if (complete) {
     next.status = "done";
+    next.finishedAt = new Date().toISOString();
     if (complete.minutes) next.minutes = complete.minutes;
     if (complete.checkAll !== false) next.checklist = next.checklist.map((i) => ({ ...i, done: true }));
   }
@@ -600,6 +607,12 @@ function CleaningCard({
           {total > 0 && (
             <span className="text-xs text-soft">
               ✓ {done}/{total} úkolů
+            </span>
+          )}
+          {c?.status === "done" && c.finishedAt && finishedEarly(c.finishedAt, item.window.date, item.window.from) && (
+            <span className="text-right text-xs">
+              <span className="rounded-full bg-amber/20 px-2 py-0.5 font-semibold text-[#92600a]">Uklizeno dřív</span>
+              <span className="mt-0.5 block text-soft">dokončeno {fmtFinished(c.finishedAt)}</span>
             </span>
           )}
           {c?.status !== "done" && !item.key.startsWith("tmp-") && (

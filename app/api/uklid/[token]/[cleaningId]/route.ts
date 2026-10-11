@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cleaningStart, fmtStart, parseChecklist } from "@/lib/cleaning";
+import { parseChecklist } from "@/lib/cleaning";
 
 // Uklízečka upravuje svůj úklid: odškrtnutí úkolu, čas, poznámka, ukončení.
 // Jen vlastní a neukončený úklid — ukončený může znovu otevřít jen majitel.
@@ -46,12 +46,7 @@ export async function PATCH(
       }
       if (typeof body.note === "string") data.note = body.note.trim().slice(0, 1000);
       if (body.finish === true) {
-        // Ukončit jde až od plánovaného začátku úklidu (odjezd hostů / čas ručního úklidu)
-        const dateIso = (cleaning.reservation?.endDate ?? cleaning.date)!.toISOString().slice(0, 10);
-        const time = cleaning.reservation ? cleaning.reservation.checkOutTime : cleaning.time;
-        if (cleaningStart(dateIso, time) > new Date()) {
-          throw new HttpError(409, `Úklid můžeš ukončit až od ${fmtStart(dateIso, time)}.`);
-        }
+        // Ukončit jde i před plánovaným začátkem — úklid se pak ukáže jako „uklizeno dřív“
         const minutes = (data.minutes as number | undefined) ?? cleaning.minutes ?? 0;
         if (minutes <= 0) throw new HttpError(400, "Než úklid ukončíš, vyplň, jak dlouho trval.");
         Object.assign(data, { status: "done", finishedAt: new Date() });

@@ -145,6 +145,18 @@ export function fmtStart(dateIso: string, time: string): string {
   return time ? `${day} v ${time}` : day;
 }
 
+/** Okamžik dokončení v Praze: „po 12. 10. v 9:30“. */
+export function fmtFinished(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Prague" });
+  const time = d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Prague" });
+  return `${day} v ${time}`;
+}
+
+/** Úklid je hotový dřív, než byl naplánovaný (den + čas začátku). */
+export const finishedEarly = (finishedAt: string | Date | null | undefined, dateIso: string, time: string) =>
+  !!finishedAt && new Date(finishedAt) < cleaningStart(dateIso, time);
+
 /** Okno ručního úklidu: jeho datum a čas, další příjezd hostů od toho dne. */
 export function manualWindow<T extends StayLike>(dateIso: string, time: string, stays: T[]) {
   const iso = (d: Date | string) => (typeof d === "string" ? d : d.toISOString()).slice(0, 10);
