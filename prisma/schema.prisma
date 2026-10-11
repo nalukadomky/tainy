@@ -104,6 +104,8 @@ model Site {
   sectionOrder   String  @default("")
   // Vlastní nadpisy sekcí (JSON, lib/sections.ts), prázdné = výchozí
   sectionTitles  String  @default("")
+  // Tón podkladu (lib/theme.ts TONES), prázdné = automaticky podle hlavní barvy
+  surfaceTone    String  @default("")
   // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
   // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
   locationMode   String @default("area")

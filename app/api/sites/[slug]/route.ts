@@ -7,7 +7,7 @@ import { parseCleanerFields } from "@/lib/cleaning";
 import { parseSleeping, serializeSleeping } from "@/lib/sleeping";
 import { cleanVatRate } from "@/lib/vat";
 import { cleanLocationMode } from "@/lib/location";
-import { cleanTheme } from "@/lib/theme";
+import { cleanTheme, cleanTone } from "@/lib/theme";
 import { slugProblem } from "@/lib/site-slug";
 import { PHOTO_BUCKET, DOCUMENT_BUCKET, supabaseAdmin } from "@/lib/supabase/admin";
 import { cleanAboutLayout, cleanPhotoShape } from "@/lib/about";
@@ -175,6 +175,7 @@ export async function PATCH(
     data[key] = body[key];
   }
   if (body.themeColor !== undefined) data.themeColor = cleanTheme(body.themeColor);
+  if (body.surfaceTone !== undefined) data.surfaceTone = cleanTone(body.surfaceTone);
   // Sekce „O nás“
   if (typeof body.aboutEnabled === "boolean") data.aboutEnabled = body.aboutEnabled;
   if (body.aboutLayout !== undefined) data.aboutLayout = cleanAboutLayout(body.aboutLayout);

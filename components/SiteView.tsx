@@ -83,6 +83,8 @@ export type SiteViewData = {
   sectionOrder?: MovableSection[];
   /** Vlastní nadpisy sekcí (prázdné = výchozí). */
   sectionTitles?: SectionTitles;
+  /** Tón podkladu (lib/theme.ts), "" = automaticky podle hlavní barvy. */
+  surfaceTone?: string;
   /** Primární barva webu (klíč z lib/theme.ts). */
   themeColor?: string;
   /** Poloha na mapě podle volby majitele (přibližně / přesně); null = nezobrazovat. */
@@ -148,14 +150,15 @@ export function SiteView({
 
   // Barva webu i pro okna mimo strom webu (galerie, vybavení, podmínky — portály do <body>)
   const theme = site.themeColor;
+  const tone = site.surfaceTone;
   useEffect(() => {
     const root = document.documentElement;
-    const vars = themeVars(theme);
+    const vars = themeVars(theme, tone);
     for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
     return () => {
       for (const k of Object.keys(vars)) root.style.removeProperty(k);
     };
-  }, [theme]);
+  }, [theme, tone]);
 
   // Nadpis sekce: v editoru webu se přepisuje přímo v textu, jinak vlastní nebo výchozí
   const title = (key: TitleKey) =>
@@ -398,7 +401,7 @@ export function SiteView({
   };
 
   return (
-    <div className="min-h-dvh bg-cream" style={themeVars(theme) as React.CSSProperties}>
+    <div className="min-h-dvh bg-cream" style={themeVars(theme, tone) as React.CSSProperties}>
       {editing && <EditStyles />}
       {openKind && openedDoc && (
         <LegalModal

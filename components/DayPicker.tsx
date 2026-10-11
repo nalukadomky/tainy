@@ -40,7 +40,7 @@ type HalfState = "free" | "booked" | "selected";
 
 const HALF_COLOR: Record<HalfState, string> = {
   free: "transparent",
-  booked: "#ddd3c1",
+  booked: "var(--booked, #ddd3c1)",
   selected: "var(--pine)",
 };
 
@@ -255,12 +255,12 @@ export function DayPicker({ booked, start, end, onChange, minNights = 1, earlies
           <i className="h-3.5 w-3.5 rounded-[4px] bg-pine" /> tvůj pobyt
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="h-3.5 w-3.5 rounded-[4px]" style={{ background: "#ddd3c1" }} /> obsazeno
+          <i className="h-3.5 w-3.5 rounded-[4px]" style={{ background: "var(--booked, #ddd3c1)" }} /> obsazeno
         </span>
         <span className="flex items-center gap-1.5">
           <i
             className="h-3.5 w-3.5 rounded-[4px] border border-line"
-            style={{ background: "linear-gradient(to bottom right, #ddd3c1 50%, transparent 50%)" }}
+            style={{ background: "linear-gradient(to bottom right, var(--booked, #ddd3c1) 50%, transparent 50%)" }}
           />
           půlden — příjezd / odjezd
         </span>

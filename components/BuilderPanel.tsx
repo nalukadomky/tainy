@@ -34,6 +34,29 @@ export function BuilderPanel({
   move?: { up: boolean; down: boolean; onMove: (by: -1 | 1) => void };
 }) {
   const [menu, setMenu] = useState(false);
+  // Je pod viditelnou částí panelu ještě obsah? (obsah se mění — sleduje se i jeho velikost)
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const sync = () => setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 8);
+    sync();
+    el.addEventListener("scroll", sync, { passive: true });
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    const mo = new MutationObserver(() => {
+      for (const child of Array.from(el.children)) ro.observe(child);
+      sync();
+    });
+    mo.observe(el, { childList: true, subtree: true });
+    return () => {
+      el.removeEventListener("scroll", sync);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -123,7 +146,21 @@ export function BuilderPanel({
           </button>
         </div>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">{children}</div>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div ref={bodyRef} className="flex-1 space-y-4 overflow-y-auto p-5">
+          {children}
+        </div>
+        {/* Přechod dole: v panelu je ještě obsah níž (po doscrollování zmizí) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 transition-opacity duration-200"
+          style={{
+            height: 96,
+            opacity: more ? 1 : 0,
+            background: "linear-gradient(to bottom, transparent, var(--surface) 90%)",
+          }}
+        />
+      </div>
     </aside>
   );
 }

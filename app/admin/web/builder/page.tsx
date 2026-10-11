@@ -26,6 +26,7 @@ import { PhotoManager } from "@/components/PhotoManager";
 import { AmenityPicker } from "@/components/AmenityPicker";
 import { LocationSettings } from "@/components/LocationSettings";
 import { ThemePicker } from "@/components/ThemePicker";
+import { TonePicker } from "@/components/TonePicker";
 import { AboutSettings } from "@/components/AboutSettings";
 import { ReviewsSettings } from "@/components/ReviewsSettings";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
@@ -470,6 +471,11 @@ function SectionPanel({
           <div>
             <span className="mb-2 block text-sm font-medium">Barva webu</span>
             <ThemePicker value={form.themeColor} onChange={(key) => update({ themeColor: key })} />
+          </div>
+          <div>
+            <span className="mb-0.5 block text-sm font-medium">Tón podkladu</span>
+            <span className="mb-2 block text-xs text-soft">Jemné pozadí, linky a obsazené dny v kalendáři.</span>
+            <TonePicker value={form.surfaceTone} theme={form.themeColor} onChange={(tone) => update({ surfaceTone: tone })} />
           </div>
           {/* HeroPicker si změny ukládá sám — do formuláře je jen propíšeme */}
           <HeroPicker

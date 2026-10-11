@@ -81,6 +81,12 @@ export function HeroPicker({
     if (old !== src) dropStored(old);
   }
 
+  /** Klik do fotky: výběr z galerie, nebo nahrání, když je galerie prázdná. */
+  function choose() {
+    if (gallery.length) setPicking((p) => !p);
+    else fileInput.current?.click();
+  }
+
   // Fotka nahraná zvlášť (není v galerii) se při odebrání smaže i z úložiště.
   const removeDeletesFile = !!heroPhoto && !gallery.some((p) => p.src === heroPhoto) && !heroPhoto.startsWith("/");
 
@@ -119,9 +125,59 @@ export function HeroPicker({
       <div className="overflow-hidden rounded-2xl border border-line">
         {heroStyle === "photo" ? (
           heroPhoto ? (
-            // Jen samotná fotka — nadpis a tlačítko jsou vidět ve webu vedle panelu
-            <div className="relative min-h-56 bg-ink sm:min-h-0 sm:aspect-[16/7]">
-              <Image src={heroPhoto} alt="Úvodní fotka" fill sizes="(max-width: 640px) 100vw, 800px" className="object-cover" />
+            // Jen samotná fotka (nadpis je vidět ve webu vedle panelu). Klik do fotky = výběr
+            // jiné z galerie (nebo nahrání, když je galerie prázdná); ovládání je přímo ve fotce.
+            <div className="group relative min-h-56 bg-ink sm:min-h-0 sm:aspect-[16/7]">
+              <button
+                type="button"
+                onClick={choose}
+                disabled={uploading}
+                aria-label={gallery.length ? "Vybrat jinou úvodní fotku z galerie" : "Nahrát jinou úvodní fotku"}
+                aria-expanded={gallery.length ? picking : undefined}
+                className="absolute inset-0 cursor-pointer"
+              >
+                <Image src={heroPhoto} alt="" fill sizes="(max-width: 640px) 100vw, 800px" className="object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center bg-ink/0 text-sm font-semibold text-white opacity-0 transition group-hover:bg-ink/35 group-hover:opacity-100">
+                  {uploading ? "Nahrávám…" : "Vybrat jinou fotku"}
+                </span>
+                {uploading && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-sm font-semibold text-white">
+                    Nahrávám…
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(true)}
+                aria-label="Odebrat úvodní fotku"
+                title="Odebrat fotku"
+                className="absolute right-2 top-2 flex items-center justify-center rounded-full bg-ink/55 text-white backdrop-blur transition hover:bg-coral"
+                style={{ width: 30, height: 30 }}
+              >
+                ✕
+              </button>
+              <div className="absolute bottom-2 left-2 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={uploading}
+                  className="rounded-full bg-surface/95 px-3 py-1.5 text-xs font-semibold text-ink shadow backdrop-blur transition hover:bg-surface"
+                >
+                  ⤒ Nahrát jinou
+                </button>
+                {gallery.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPicking((p) => !p)}
+                    aria-expanded={picking}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold shadow backdrop-blur transition ${
+                      picking ? "bg-pine text-white" : "bg-surface/95 text-ink hover:bg-surface"
+                    }`}
+                  >
+                    Z galerie
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <button
@@ -157,16 +213,19 @@ export function HeroPicker({
             }}
           />
 
+          {/* Bez fotky: tlačítka pod prázdným boxem (s fotkou je ovládání přímo ve fotce) */}
           <div className="flex flex-wrap gap-2">
+            {!heroPhoto && (
             <button
               type="button"
               className="btn-primary h-10 !px-4 !py-0 text-sm"
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
             >
-              {uploading ? "Nahrávám…" : heroPhoto ? "Nahrát jinou fotku" : "Nahrát fotku"}
+              {uploading ? "Nahrávám…" : "Nahrát fotku"}
             </button>
-            {gallery.length > 0 && (
+            )}
+            {!heroPhoto && gallery.length > 0 && (
               <button
                 type="button"
                 className="btn-ghost h-10 !px-4 !py-0 text-sm"
@@ -174,15 +233,6 @@ export function HeroPicker({
                 onClick={() => setPicking((p) => !p)}
               >
                 Vybrat z galerie
-              </button>
-            )}
-            {heroPhoto && (
-              <button
-                type="button"
-                className="h-10 px-2 text-sm font-medium text-soft transition hover:text-coral"
-                onClick={() => setConfirmRemove(true)}
-              >
-                Odebrat
               </button>
             )}
             {confirmRemove && (

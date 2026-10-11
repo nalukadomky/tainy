@@ -71,6 +71,7 @@ export type SiteSource = {
   reviewsLayout?: string;
   sectionOrder?: string;
   sectionTitles?: string;
+  surfaceTone?: string;
   geo?: string;
   arrivalAddress?: string;
   /** Data jako ISO „YYYY-MM-DD". */
@@ -110,6 +111,7 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
     sleeping: parseSleeping(site.sleeping),
     location: publicLocation(site),
     themeColor: site.themeColor,
+    surfaceTone: site.surfaceTone ?? "",
     about:
       site.aboutEnabled && site.aboutText?.trim()
         ? {

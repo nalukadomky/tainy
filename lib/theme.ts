@@ -66,8 +66,74 @@ export function themeHex(value: string | undefined): string {
   return hex ? readable(hex) : THEMES[0].hex;
 }
 
-/** CSS proměnné, které přebarví celý web (Tailwind `pine` = var(--pine)). */
-export function themeVars(value: string | undefined): Record<string, string> {
+// Tón podkladu: jemné pozadí sekcí, krémové plochy, linky a obsazené dny
+// v kalendáři. Béžová ladí k zelené, k modré se hodí spíš modravá nebo šedá —
+// výchozí „Automaticky“ proto vybere tón podle hlavní barvy.
+
+export type ToneKey = "bezova" | "pisek" | "sed" | "bila" | "modra" | "salvej" | "pudr";
+
+/** ink/soft = barva písma; jen u neutrálních tónů (jinak zůstává lesní nádech z globals.css). */
+export const TONES: { key: ToneKey; label: string; bg: string; cream: string; line: string; booked: string; ink?: string; soft?: string }[] = [
+  { key: "bezova", label: "Béžová", bg: "#f6f3ec", cream: "#fdfbf6", line: "#e4ddcf", booked: "#ddd3c1" },
+  { key: "pisek", label: "Písková", bg: "#f7f2e6", cream: "#fdfaf2", line: "#e8dcc2", booked: "#e0d0b0" },
+  { key: "sed", label: "Šedá", bg: "#f3f3f1", cream: "#fbfbfa", line: "#e2e2de", booked: "#d8d8d3", ink: "#1f2124", soft: "#5d6166" },
+  // Černobílá varianta: bílé plochy, sekce oddělené jen nádechem šedé
+  { key: "bila", label: "Bílá", bg: "#f7f7f7", cream: "#ffffff", line: "#e5e5e5", booked: "#dadada", ink: "#1a1a1a", soft: "#5c5c5c" },
+  { key: "modra", label: "Modravá", bg: "#f1f4f8", cream: "#fafbfd", line: "#dde3ec", booked: "#d1d9e5" },
+  { key: "salvej", label: "Šalvěj", bg: "#f1f4ef", cream: "#fafbf8", line: "#dde4d7", booked: "#d0dbc9" },
+  { key: "pudr", label: "Pudrová", bg: "#f8f2f1", cream: "#fdfafa", line: "#ebdcdb", booked: "#e3cfce" },
+];
+
+/** Uložená hodnota: klíč tónu, nebo "" = automaticky podle hlavní barvy. */
+export const cleanTone = (v: unknown): string => (TONES.some((t) => t.key === v) ? (v as string) : "");
+
+const AUTO_TONE: Record<ThemeKey, ToneKey> = {
+  pine: "bezova",
+  jehlici: "salvej",
+  mech: "pisek",
+  noc: "modra",
+  boruvka: "modra",
+  svestka: "pudr",
+  vino: "pudr",
+  terakota: "pisek",
+  hlina: "bezova",
+  grafit: "sed",
+};
+
+/** Tón, který ladí k hlavní barvě (předvolba podle tabulky, vlastní barva podle odstínu). */
+export function autoTone(theme: string | undefined): ToneKey {
+  const preset = THEMES.find((t) => t.key === theme);
+  if (preset) return AUTO_TONE[preset.key];
+  const [r, g, b] = rgb(themeHex(theme)).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d / (max || 1) < 0.2) return "sed";
+  const hue = (max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+  const h = (hue + 360) % 360;
+  if (h < 20 || h >= 290) return "pudr";
+  if (h < 50) return "pisek";
+  if (h < 80) return "bezova";
+  if (h < 175) return "salvej";
+  return "modra";
+}
+
+/** Tón webu: zvolený, nebo automaticky podle hlavní barvy. */
+export const toneOf = (theme: string | undefined, tone: string | undefined) =>
+  TONES.find((t) => t.key === (cleanTone(tone) || autoTone(theme)))!;
+
+/** CSS proměnné, které přebarví celý web (Tailwind `pine` = var(--pine), `bg`, `cream`, `line`). */
+export function themeVars(value: string | undefined, tone?: string): Record<string, string> {
   const hex = themeHex(value);
-  return { "--pine": hex, "--pine-dark": `color-mix(in srgb, ${hex} 80%, #000)` };
+  const t = toneOf(value, tone);
+  return {
+    "--pine": hex,
+    "--pine-dark": `color-mix(in srgb, ${hex} 80%, #000)`,
+    "--bg": t.bg,
+    "--cream": t.cream,
+    "--line": t.line,
+    "--booked": t.booked,
+    ...(t.ink && { "--ink": t.ink }),
+    ...(t.soft && { "--soft": t.soft }),
+  };
 }

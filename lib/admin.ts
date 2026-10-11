@@ -99,6 +99,8 @@ export type Site = {
   sectionOrder: string;
   /** Vlastní nadpisy sekcí (JSON, lib/sections.ts). */
   sectionTitles: string;
+  /** Tón podkladu webu (lib/theme.ts), "" = automaticky. */
+  surfaceTone: string;
 };
 
 /** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */
