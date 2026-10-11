@@ -27,6 +27,7 @@ const MAIN: Item[] = [
 ];
 const MORE: Item[] = [
   { href: "/admin/kalendar/uklid", label: "Úklid", icon: "broom" },
+  { href: "/admin/ukoly", label: "Úkoly", icon: "clipboard" },
   { href: "/admin/naklady", label: "Náklady", icon: "receipt" },
   { href: "/admin/vouchery", label: "Vouchery", icon: "ticket" },
   { href: "/admin/nastaveni", label: "Nastavení", icon: "settings" },
@@ -343,7 +344,7 @@ function TabLink({ item, active }: { item: Item; active: boolean }) {
 }
 
 // Jednotné kreslené ikony (místo emoji, které každý systém kreslí jinak)
-type IconName = "home" | "calendar" | "list" | "users" | "web" | "broom" | "receipt" | "ticket" | "settings" | "dots" | "menu" | "close" | "logout";
+type IconName = "home" | "calendar" | "list" | "users" | "web" | "broom" | "clipboard" | "receipt" | "ticket" | "settings" | "dots" | "menu" | "close" | "logout";
 const PATHS: Record<IconName, React.ReactNode> = {
   home: (
     <>
@@ -383,6 +384,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M14.5 3.5 10 12" />
       <path d="M6.5 13h7l2.5 7.5H4z" />
       <path d="M8 17v3.5M12 17v3.5" />
+    </>
+  ),
+  clipboard: (
+    <>
+      <rect x="5" y="4.5" width="14" height="16.5" rx="2.5" />
+      <path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 14h7M8.5 18h4" />
     </>
   ),
   receipt: (

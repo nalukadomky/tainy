@@ -11,6 +11,7 @@ import {
   parseCleanerFields,
 } from "@/lib/cleaning";
 import { addDays, fromISO, isTime, todayISO } from "@/lib/stay";
+import { TODO_INCLUDE, toTodoItem, trashSince } from "@/lib/todos";
 
 // Kalendář úklidů pro uklízečku (přístup přes tajný odkaz, bez přihlášení).
 // Odpověď obsahuje jen to, co uklízečka potřebuje — žádné ceny pobytů, e-maily
@@ -21,7 +22,16 @@ async function cleanerByToken(token: string) {
     where: { token },
     include: {
       site: {
-        select: { id: true, name: true, guestMode: true, pricingMode: true, guestCategories: true, cleanerFields: true, cleaningChecklist: true },
+        select: {
+          id: true,
+          name: true,
+          guestMode: true,
+          pricingMode: true,
+          guestCategories: true,
+          cleanerFields: true,
+          cleaningChecklist: true,
+          staffSeesOwnerTodos: true,
+        },
       },
     },
   });
@@ -36,7 +46,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const fields = parseCleanerFields(cleaner.site.cleanerFields);
   const since = fromISO(addDays(todayISO(), -45));
   // Jen pobyty, které drží termín — zrušený nebo propadlý pobyt úklid nemá.
-  const [stays, manual, blackouts] = await Promise.all([
+  const todoSince = new Date(Date.now() - 14 * 86_400_000);
+  const [stays, manual, blackouts, todos, staff] = await Promise.all([
     prisma.reservation.findMany({
       where: { siteId: cleaner.site.id, ...holdsDates() },
       select: {
@@ -62,6 +73,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       where: { siteId: cleaner.site.id, endDate: { gte: since } },
       select: { startDate: true, endDate: true },
     }),
+    // Úkoly: její a majitelovy (ostatních uklízeček ne), hotové jen poslední 2 týdny
+    prisma.todo.findMany({
+      where: {
+        siteId: cleaner.site.id,
+        // Majitelovy vlastní úkoly jen když to majitel povolil; co mu nahlásila ona, vidí vždy
+        OR: [
+          { cleanerId: cleaner.id },
+          ...(cleaner.site.staffSeesOwnerTodos ? [{ cleanerId: null }] : [{ cleanerId: null, createdById: cleaner.id }]),
+        ],
+        AND: [
+          { OR: [{ deletedAt: null }, { deletedAt: { gte: trashSince() } }] },
+          { OR: [{ done: false }, { doneAt: { gte: todoSince } }, { deletedAt: { not: null } }] },
+        ],
+      },
+      include: TODO_INCLUDE,
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.cleaner.findMany({ where: { siteId: cleaner.site.id }, select: { id: true, name: true } }),
   ]);
 
   const common = (c: (typeof manual)[number], window: ReturnType<typeof manualWindow>) => ({
@@ -120,6 +149,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     site: { name: cleaner.site.name },
     cleanings,
     calendar,
+    me: cleaner.id,
+    todos: todos.map((t) => toTodoItem(t, new Map(staff.map((c) => [c.id, c.name])))),
   });
 }
 

@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Wordmark } from "@/components/Logo";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConfirmDialog, useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { greetingName } from "@/lib/vocative";
 import { cleaningAmount, cleaningStart, finishedEarly, fmtFinished, fmtMinutes, fmtStart, type ChecklistItem } from "@/lib/cleaning";
@@ -11,6 +11,8 @@ import { addDays, todayISO } from "@/lib/stay";
 import { Skeleton, CardsSkeleton } from "@/components/Skeleton";
 import { HATCH, Legend, StayCalendar, currentMonth, monthBounds, shortRange } from "@/components/StayCalendar";
 import { createPortal } from "react-dom";
+import { TodoBoard } from "@/components/TodoBoard";
+import { cleanerCanRemove, isOpen, type TodoCategory, type TodoItem } from "@/lib/todos";
 import { Icon } from "@/components/Icon";
 
 // Kalendář úklidů uklízečky (tajný odkaz, bez přihlášení). Vidí jen své úklidy,
@@ -62,9 +64,12 @@ type Data = {
   site: { name: string };
   cleanings: Cleaning[];
   calendar: { stays: CalStay[]; blocks: { id: string; start: string; end: string }[] };
+  /** ID uklízečky (pro práva u úkolů). */
+  me: string;
+  todos: TodoItem[];
 };
 
-type Tab = "list" | "calendar";
+type Tab = "list" | "calendar" | "todos";
 const TAB_KEY = "tainy.cleaner-tab";
 
 const day = (iso: string, long = false) =>
@@ -84,7 +89,8 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
   const [tab, setTab] = useState<Tab>("list");
   useEffect(() => {
     try {
-      if (localStorage.getItem(TAB_KEY) === "calendar") setTab("calendar");
+      const saved = localStorage.getItem(TAB_KEY);
+      if (saved === "calendar" || saved === "todos") setTab(saved);
     } catch {}
   }, []);
   function switchTab(t: Tab) {
@@ -187,6 +193,7 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
     );
 
   const todo = groups.today.length + groups.upcoming.length;
+  const myOpenTodos = data.todos.filter((t) => isOpen(t) && t.cleanerId === data.me).length;
   const earnedTotal = groups.done.reduce((sum, c) => sum + (c.earned ?? 0), 0);
 
   return (
@@ -210,6 +217,7 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
           [
             ["list", "Úklidy", "broom"],
             ["calendar", "Kalendář", "calendar"],
+            ["todos", "Úkoly", "clipboard"],
           ] as const
         ).map(([id, label, icon]) => (
           <button
@@ -222,13 +230,18 @@ export default function CleanerPage({ params }: { params: Promise<{ token: strin
               tab === id ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"
             }`}
           >
-            <Icon name={icon} className="mr-1.5" />
+            <Icon name={icon} className="mr-1.5 max-[380px]:hidden" />
             {label}
+            {id === "todos" && myOpenTodos > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber px-1.5 text-[11px] font-bold text-white">{myOpenTodos}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {tab === "calendar" ? (
+      {tab === "todos" ? (
+        <CleanerTodos token={token} data={data} setData={setData} toast={toast.show} />
+      ) : tab === "calendar" ? (
         <CleanerCalendar
           data={data}
           onOpenCleaning={(id) => {
@@ -922,5 +935,201 @@ function StayDetail({ s, onClose, onOpenCleaning }: { s: CalStay; onClose: () =>
       </div>
     </div>,
     document.body
+  );
+}
+
+/* ------------------------------- Úkoly (To-Do) ------------------------------- */
+
+/**
+ * Úkoly uklízečky: vidí své a majitelovy. Přidá úkol pro sebe nebo pro majitele,
+ * odškrtne jen své, smaže jen ty, které sama přidala (server to hlídá znovu).
+ */
+function CleanerTodos({
+  token,
+  data,
+  setData,
+  toast,
+}: {
+  token: string;
+  data: Data;
+  setData: React.Dispatch<React.SetStateAction<Data | null>>;
+  toast: (text: string, tone?: "error" | "success") => void;
+}) {
+  const me = data.me;
+  const confirmDlg = useConfirm();
+  const setTodos = (fn: (list: TodoItem[]) => TodoItem[]) => setData((d) => d && { ...d, todos: fn(d.todos) });
+  const replace = (id: string, next: TodoItem | null) => setTodos((list) => list.flatMap((t) => (t.id === id ? (next ? [next] : []) : [t])));
+
+  async function add(category: TodoCategory, title: string, assignee: string | null, urgent: boolean) {
+    const tmp: TodoItem = {
+      id: `tmp-${Date.now()}`,
+      title,
+      category,
+      cleanerId: assignee,
+      cleanerName: assignee ? data.cleaner.name : "",
+      createdBy: "cleaner",
+      createdById: me,
+      createdByName: data.cleaner.name,
+      urgent,
+      done: false,
+      doneAt: null,
+      doneBy: "",
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    setTodos((list) => [...list, tmp]);
+    const res = await fetch(`/api/uklid/${token}/todos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, category, forOwner: !assignee, urgent }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(tmp.id, null);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Úkol se nepodařilo přidat.");
+    }
+    replace(tmp.id, await res.json());
+    if (!assignee) toast("Majitel úkol uvidí ve svém přehledu.", "success");
+  }
+
+  async function toggle(t: TodoItem) {
+    replace(t.id, { ...t, done: !t.done, doneBy: t.done ? "" : data.cleaner.name, doneAt: t.done ? null : new Date().toISOString() });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: !t.done }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Nepodařilo se uložit.");
+    }
+    replace(t.id, await res.json());
+  }
+
+  async function setUrgent(t: TodoItem) {
+    replace(t.id, { ...t, urgent: !t.urgent });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urgent: !t.urgent }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Nepodařilo se uložit.");
+    }
+    replace(t.id, await res.json());
+  }
+
+  // Upravit text / sekci (jen svůj zápis)
+  async function edit(t: TodoItem, patch: { title?: string; category?: TodoCategory }) {
+    replace(t.id, { ...t, ...patch });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Nepodařilo se uložit.");
+    }
+    replace(t.id, await res.json());
+  }
+
+  // Přeřadit (jen svůj zápis): pro mě ↔ pro majitele
+  async function reassign(t: TodoItem, assignee: string | null) {
+    replace(t.id, { ...t, cleanerId: assignee, cleanerName: assignee ? data.cleaner.name : "" });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ forOwner: !assignee }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Nepodařilo se uložit.");
+    }
+    replace(t.id, await res.json());
+  }
+
+  // Smazat: otevřený úkol do karantény (jde vrátit); hotový, nebo natrvalo z karantény, hned pryč
+  async function remove(t: TodoItem, final = false) {
+    if (t.id.startsWith("tmp-")) return;
+    const gone = final || t.done;
+    replace(t.id, gone ? null : { ...t, deletedAt: new Date().toISOString() });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}${final ? "?final=1" : ""}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      if (gone) setTodos((list) => (list.some((x) => x.id === t.id) ? list : [...list, t]));
+      const json = await res?.json().catch(() => ({}));
+      toast(json?.error || "Úkol se nepodařilo smazat.");
+    }
+  }
+
+  async function restore(t: TodoItem) {
+    replace(t.id, { ...t, deletedAt: null });
+    const res = await fetch(`/api/uklid/${token}/todos/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restore: true }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      replace(t.id, t);
+      const json = await res?.json().catch(() => ({}));
+      return toast(json?.error || "Nepodařilo se vrátit.");
+    }
+    replace(t.id, await res.json());
+  }
+
+  return (
+    <div className="mt-5 space-y-3">
+      <p className="text-sm text-soft">
+        Tvoje úkoly a úkoly pro majitele. Když něco dojde nebo se rozbije, napiš to sem a vyber „Majitel“.
+      </p>
+      {confirmDlg.node}
+      <TodoBoard
+        stacked
+        todos={data.todos}
+        assignees={[
+          { id: me, label: "Já" },
+          { id: null, label: "Majitel" },
+        ]}
+        defaultAssignee={me}
+        can={(t) => ({
+          toggle: t.cleanerId === me,
+          remove: cleanerCanRemove(t, me),
+          urgent: true,
+          assign: t.createdBy === "cleaner" && t.createdById === me,
+          edit: t.createdBy === "cleaner" && t.createdById === me,
+        })}
+        onUrgent={setUrgent}
+        onAssign={reassign}
+        onEdit={edit}
+        forLabel={(t) => (t.cleanerId === me ? "Já" : "Majitel")}
+        onAdd={add}
+        onToggle={toggle}
+        onDelete={(t) => remove(t)}
+        onRestore={restore}
+        onClearDone={async (category) => {
+          const list = data.todos.filter((t) => t.category === category && t.done && !t.deletedAt && cleanerCanRemove(t, me));
+          const ok = await confirmDlg.ask({
+            title: "Smazat hotové úkoly?",
+            message: `${list.length} ${list.length === 1 ? "hotový úkol se smaže" : "hotové úkoly se smažou"} natrvalo.`,
+            confirmLabel: "Smazat",
+          });
+          if (ok) list.forEach((t) => remove(t));
+        }}
+        onPurgeAll={async (list) => {
+          const ok = await confirmDlg.ask({
+            title: "Smazat natrvalo?",
+            message: `${list.length} ${list.length === 1 ? "smazaný úkol" : "smazané úkoly"} už nepůjde vrátit.`,
+            confirmLabel: "Smazat natrvalo",
+          });
+          if (ok) list.forEach((t) => remove(t, true));
+        }}
+      />
+    </div>
   );
 }

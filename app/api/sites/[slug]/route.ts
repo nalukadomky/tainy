@@ -175,6 +175,7 @@ export async function PATCH(
     data[key] = body[key];
   }
   if (body.themeColor !== undefined) data.themeColor = cleanTheme(body.themeColor);
+  if (typeof body.staffSeesOwnerTodos === "boolean") data.staffSeesOwnerTodos = body.staffSeesOwnerTodos;
   if (body.surfaceTone !== undefined) data.surfaceTone = cleanTone(body.surfaceTone);
   // Sekce „O nás“
   if (typeof body.aboutEnabled === "boolean") data.aboutEnabled = body.aboutEnabled;

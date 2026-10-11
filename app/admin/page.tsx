@@ -18,6 +18,7 @@ import { hasDoc } from "@/lib/legal";
 import { CleaningAlerts, CleaningBadge } from "@/components/CleaningAlert";
 import { SourceMix } from "@/components/SourceMix";
 import { Icon } from "@/components/Icon";
+import { TodoSummary } from "@/components/TodoSummary";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`;
@@ -200,6 +201,9 @@ function Dashboard() {
 
       {/* Úklid po předchozím pobytu není hotový a dnes/zítra přijíždějí další hosté */}
       <CleaningAlerts reservations={reservations} />
+
+      {/* Otevřené úkoly (To-Do) majitele a personálu */}
+      <TodoSummary slug={site.slug} />
 
       {/* Chybějící údaje webu (provozovatel, podmínky, účet pro platby) */}
       {missing.length > 0 && (

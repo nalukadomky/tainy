@@ -106,6 +106,8 @@ model Site {
   sectionTitles  String  @default("")
   // Tón podkladu (lib/theme.ts TONES), prázdné = automaticky podle hlavní barvy
   surfaceTone    String  @default("")
+  // Vidí personál úkoly, které si majitel zapsal sám pro sebe?
+  staffSeesOwnerTodos Boolean @default(true)
   // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
   // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
   locationMode   String @default("area")
@@ -121,6 +123,7 @@ model Site {
   vouchers     Voucher[]
   cleaners     Cleaner[]
   cleanings    Cleaning[]
+  todos        Todo[]
   feeds        CalendarFeed[]
 
   @@index([ownerId])
@@ -277,6 +280,7 @@ model Cleaner {
   active    Boolean    @default(true)
   createdAt DateTime   @default(now())
   cleanings Cleaning[]
+  todos     Todo[]
 }
 
 // Úklid: buď po odjezdu hostů z jedné rezervace (vzniká při přiřazení uklízečky),
@@ -304,4 +308,28 @@ model Cleaning {
   amount        Int?        // částka v době zaplacení
   costId        String?     // záznam v Nákladech vytvořený při zaplacení
   createdAt     DateTime    @default(now())
+}
+
+// Úkoly (To-Do) majitele a personálu: Nákupy, Opravy, Provoz. Úkol patří
+// majiteli (cleanerId = null), nebo konkrétní uklízečce. Uklízečka vidí své
+// a majitelovy, odškrtnout smí své, smazat jen ty, které sama přidala.
+model Todo {
+  id          String    @id @default(cuid())
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  title       String
+  note        String    @default("")
+  category    String    @default("provoz") // nakup | oprava | provoz
+  cleanerId   String?
+  cleaner     Cleaner?  @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+  createdBy   String    @default("owner") // owner | cleaner
+  createdById String?   // ID uklízečky, která úkol přidala
+  urgent      Boolean   @default(false) // „Hoří“ — priorita, v seznamu nahoře
+  done        Boolean   @default(false)
+  doneAt      DateTime?
+  doneBy      String    @default("") // jméno toho, kdo úkol odškrtl
+  deletedAt   DateTime? // smazaný = v „karanténě“ (jde vrátit), po 30 dnech se smaže natrvalo
+  createdAt   DateTime  @default(now())
+
+  @@index([siteId, done])
 }

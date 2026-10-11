@@ -112,6 +112,23 @@ const PATHS = {
     </>
   ),
   star: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />,
+  cart: (
+    <>
+      <path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.6" />
+      <circle cx="9.5" cy="19" r="1.4" />
+      <circle cx="17" cy="19" r="1.4" />
+    </>
+  ),
+  wrench: <path d="M14.7 6.3a4 4 0 0 0 5 5L21 10a5.5 5.5 0 0 1-6.6 6.6L7.5 23.5l-3-3 6.9-6.9A5.5 5.5 0 0 1 18 3l-1.3 1.3a4 4 0 0 0-2 2z" />,
+  clipboard: (
+    <>
+      <rect x="5" y="4.5" width="14" height="16.5" rx="2.5" />
+      <path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 14h7M8.5 18h4" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  // Plamen (tvar podle ikon Lucide, licence ISC)
+  flame: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" />,
 } as const;
 
 export type IconName = keyof typeof PATHS;
