@@ -31,7 +31,7 @@ export function AuthForm({
   const router = useRouter();
   const isRegister = mode === "register";
   const fromUrl = useSearchParams().get("next");
-  const next = nextProp || fromUrl || "/admin";
+  const next = nextProp || fromUrl || "/admin/vyber";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

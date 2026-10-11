@@ -27,7 +27,7 @@ export default async function LoginPage({
         {devLoginEnabled() && (
           <form
             method="post"
-            action={`/auth/dev?next=${encodeURIComponent(next || "/admin")}`}
+            action={`/auth/dev?next=${encodeURIComponent(next || "/admin/vyber")}`}
             className="mb-6 rounded-2xl border border-dashed border-amber bg-amber/10 p-4"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-[#92600a]">Jen při vývoji</p>

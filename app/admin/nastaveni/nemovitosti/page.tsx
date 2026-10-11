@@ -42,6 +42,9 @@ export default function PropertiesPage() {
   const [renaming, setRenaming] = useState<Property | null>(null);
   const [deleting, setDeleting] = useState<Property | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  // Po přihlášení s více nemovitostmi (?vyber=1): nejdřív výběr, karta se nezvýrazňuje
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => setChoosing(new URLSearchParams(window.location.search).get("vyber") === "1"), []);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/sites/overview").catch(() => null);
@@ -99,11 +102,19 @@ export default function PropertiesPage() {
       {toast.node}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href="/admin/nastaveni" className="text-sm text-soft hover:text-ink">
-            ← Nastavení
-          </Link>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Nemovitosti</h1>
-          <p className="mt-1 text-sm text-soft">Každá nemovitost má vlastní web, rezervace a nastavení.</p>
+          {!choosing && (
+            <Link href="/admin/nastaveni" className="text-sm text-soft hover:text-ink">
+              ← Nastavení
+            </Link>
+          )}
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">
+            {choosing ? "Kterou nemovitost chceš spravovat?" : "Nemovitosti"}
+          </h1>
+          <p className="mt-1 text-sm text-soft">
+            {choosing
+              ? "Vyber nemovitost — mezi ostatními pak přepneš kdykoli v horní liště."
+              : "Každá nemovitost má vlastní web, rezervace a nastavení."}
+          </p>
         </div>
         <button
           type="button"
@@ -132,7 +143,7 @@ export default function PropertiesPage() {
             <PropertyCard
               key={p.slug}
               p={p}
-              active={p.slug === current}
+              active={!choosing && p.slug === current}
               busy={duplicating === p.slug}
               onOpen={() => open(p.slug, "/admin")}
               onEditWeb={() => open(p.slug, "/admin/web/builder")}

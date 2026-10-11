@@ -385,9 +385,10 @@ export function SiteView({
 
       <EditSection editing={editing} section="rezervace">
       <section id="rezervace" className="scroll-mt-16 border-t border-line bg-bg">
-        <div className="mx-auto max-w-4xl lg:max-w-6xl 2xl:max-w-7xl px-5 lg:px-8 py-10 sm:py-14">
-          <h2 className="font-display text-3xl font-semibold tracking-tight">Rezervace</h2>
-          <p className="mt-2 text-soft">
+        {/* Rezervace v užším vystředěném sloupci — kalendář se vejde, nic se zbytečně neroztahuje */}
+        <div className="mx-auto px-5 py-10 sm:py-14" style={{ maxWidth: 760 }}>
+          <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-center">Rezervace</h2>
+          <p className="mt-2 text-soft sm:text-center">
             Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.
           </p>
           <div className="mt-6">

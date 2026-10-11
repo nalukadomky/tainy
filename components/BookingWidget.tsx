@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   czk,
-  nightPrice,
   perGuestNightPrice,
   plural,
   pricedCategories,
@@ -203,11 +202,6 @@ export function BookingWidget({
     return quote.nights > 0 ? quote : null;
   }, [startDate, endDate, counts, pricingCfg]);
 
-  const priceOf = useCallback(
-    (iso: string) => nightPrice(pricingCfg, iso, counts).price,
-    [pricingCfg, counts]
-  );
-
   // Cena za osobu se počítá k prvnímu vybranému dni, ať host vidí, co platí
   // pro svůj termín, ne obecnou sazbu.
   const priceHint = useCallback(
@@ -406,7 +400,7 @@ export function BookingWidget({
           })}
         </ol>
 
-        <div className="p-4 sm:p-7">
+        <div className="px-3 py-4 sm:p-7">
           {step === "termin" && (
             <div className="space-y-5">
               <DayPicker
@@ -415,7 +409,6 @@ export function BookingWidget({
                 end={endDate}
                 minNights={site.minNights}
                 earliest={earliest}
-                priceOf={priceOf}
                 onChange={({ start, end }) => {
                   setStartDate(start);
                   setEndDate(end);
@@ -424,11 +417,12 @@ export function BookingWidget({
               />
 
               <p className="text-xs text-soft">
-                Krajní dny se počítají jako půldny — dopoledne odjíždí předchozí host, odpoledne přijíždíš ty.
-                Příjezd od {site.checkInTime}, odjezd do {site.checkOutTime}. Klikem na den příjezdu
-                nebo odjezdu výběr zrušíš.
-                {site.minNights > 1 &&
-                  ` Nejkratší pobyt je ${site.minNights} ${plural(site.minNights, "noc", "noci", "nocí")}.`}
+                Příjezd od {site.checkInTime}, odjezd do {site.checkOutTime}
+                {site.minNights > 1 && ` · nejkratší pobyt ${site.minNights} ${plural(site.minNights, "noc", "noci", "nocí")}`}.
+                <span className="max-sm:hidden">
+                  {" "}
+                  Krajní dny jsou půldny — dopoledne odjíždí předchozí host, odpoledne přijíždíš ty.
+                </span>
               </p>
 
               {startDate && endDate && price && (

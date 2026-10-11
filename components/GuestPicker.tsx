@@ -57,7 +57,7 @@ export function GuestPicker({
           return (
             <div
               key={c.key}
-              className={`flex items-center justify-between gap-3 ${jedina ? "" : "px-4 py-3"}`}
+              className={`flex items-center justify-between gap-3 ${jedina ? "" : "px-3 py-2.5 sm:px-4 sm:py-3"}`}
             >
               {!jedina && (
                 <div className="min-w-0">
@@ -66,11 +66,11 @@ export function GuestPicker({
                 </div>
               )}
 
-              <div className="flex items-center gap-4">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-4">
                 <button
                   type="button"
                   aria-label={`Ubrat: ${c.label}`}
-                  className="btn-ghost !px-5 !py-2"
+                  className="btn-ghost h-10 w-10 !p-0 sm:w-auto sm:!px-5"
                   disabled={value <= minimum}
                   onClick={() => set(c.key, value - 1)}
                 >
@@ -86,7 +86,7 @@ export function GuestPicker({
                 <button
                   type="button"
                   aria-label={`Přidat: ${c.label}`}
-                  className="btn-ghost !px-5 !py-2"
+                  className="btn-ghost h-10 w-10 !p-0 sm:w-auto sm:!px-5"
                   disabled={value >= max}
                   onClick={() => set(c.key, value + 1)}
                 >

@@ -49,7 +49,16 @@ export function AdminNav() {
       setCurrent(localStorage.getItem("tainy.site") ?? "");
       fetch("/api/sites")
         .then((r) => (r.ok ? r.json() : []))
-        .then((list) => setSites(Array.isArray(list) ? list : []))
+        .then((list) => {
+          const all = Array.isArray(list) ? list : [];
+          setSites(all);
+          // Neplatnou uloženou nemovitost nahradit první, ať se data i přepínač shodují
+          const saved = localStorage.getItem("tainy.site");
+          if (all.length && !all.some((s: { slug: string }) => s.slug === saved)) {
+            localStorage.setItem("tainy.site", all[0].slug);
+            setCurrent(all[0].slug);
+          }
+        })
         .catch(() => {});
     };
     load();
@@ -179,7 +188,8 @@ export function AdminNav() {
               <Dropdown
                 label="Nemovitost"
                 size="sm"
-                value={current || sites[0]?.slug}
+                // Uložená nemovitost už nemusí existovat (změna adresy, smazání) — pak první
+                value={sites.some((s) => s.slug === current) ? current : sites[0]?.slug}
                 onChange={switchSite}
                 items={sites.map((s) => ({ value: s.slug, label: s.name }))}
                 actions={[
