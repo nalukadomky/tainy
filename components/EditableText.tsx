@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { createContext, useContext, useLayoutEffect, useRef } from "react";
+import type { MovableSection, TitleKey } from "@/lib/sections";
 
 // Úpravy přímo ve webu (builder): text, do kterého se dá kliknout a psát,
 // a obal sekce s tlačítkem „Upravit". Bez `editing` se vykreslí jako obyčejný
@@ -15,14 +16,20 @@ export type EditableField =
   | "contactPhone"
   | "aboutTitle"
   | "aboutText"
-  | "aboutSignature";
+  | "aboutSignature"
+  // Nadpisy sekcí (lib/sections.ts) — jen v editoru webu
+  | `title:${TitleKey}`;
 
 /** Sekce webu (id v SiteView), které mají vlastní nastavení v bočním panelu. */
-export type EditableSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "o-nas" | "poloha" | "rezervace" | "paticka";
+export type EditableSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "o-nas" | "recenze" | "poloha" | "rezervace" | "paticka";
 
 export type SiteEditing = {
   text: (field: EditableField, value: string) => void;
   open: (section: EditableSection) => void;
+  /** Posun sekce v pořadí (jen v editoru webu, jinde šipky nejsou). */
+  move?: (section: EditableSection, by: -1 | 1) => void;
+  /** Nadpisy sekcí jdou přepsat (jen v editoru webu, ne v onboardingu). */
+  titles?: boolean;
 };
 
 export function EditableText({
@@ -88,10 +95,21 @@ const EDIT_CSS = `
 .editable:empty::before{content:attr(data-placeholder);opacity:.5;pointer-events:none}
 .edit-section{position:relative;cursor:pointer;outline:calc(2px / var(--edit-scale)) dashed transparent;outline-offset:calc(-2px / var(--edit-scale));transition:outline-color .15s}
 .edit-section:hover{outline-color:rgba(44,94,63,.4)}
-.edit-chip{position:absolute;top:12px;right:12px;z-index:35;zoom:calc(1 / var(--edit-scale));display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:#2c5e3f;color:#fff;padding:7px 14px;font:600 13px/1.2 var(--font-instrument),system-ui,sans-serif;box-shadow:0 4px 14px rgba(30,42,32,.25);cursor:pointer;opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s,background-color .15s}
+.edit-chip-row{position:absolute;top:12px;right:12px;z-index:35;zoom:calc(1 / var(--edit-scale));display:flex;align-items:center;gap:6px}
+.edit-chip{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:#2c5e3f;color:#fff;padding:7px 14px;font:600 13px/1.2 var(--font-instrument),system-ui,sans-serif;box-shadow:0 4px 14px rgba(30,42,32,.25);cursor:pointer;opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s,background-color .15s}
 .edit-chip:hover{background:#21492f}
-.edit-section:hover>.edit-chip,.edit-chip:focus-visible{opacity:1;transform:none}
-@media (hover:none){.edit-chip{opacity:1;transform:none}}
+.edit-section:hover>.edit-chip-row>.edit-chip,.edit-chip:focus-visible{opacity:1;transform:none}
+.move-block{position:relative}
+.move-block::after{content:"";position:absolute;inset:0;z-index:34;pointer-events:none;outline:calc(2px / var(--edit-scale)) solid transparent;outline-offset:calc(-2px / var(--edit-scale));transition:outline-color .15s,background-color .15s}
+.move-block:has(.move-row:hover)::after{outline-color:#2c5e3f;background:rgba(44,94,63,.06)}
+.move-row{display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:#fff;box-shadow:0 4px 14px rgba(30,42,32,.25);font:600 12px/1.2 var(--font-instrument),system-ui,sans-serif;color:#2c5e3f;opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s}
+.move-row>span{padding:0 8px 0 4px;white-space:nowrap}
+.move-row>button{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:999px;background:transparent;color:#2c5e3f;font-size:15px;cursor:pointer}
+.move-row>button:hover{background:#eef2ea}
+.move-row>button:disabled{cursor:default;color:rgba(44,94,63,.3);background:transparent}
+.move-block:hover .move-row,.move-row:focus-within{opacity:1;transform:none}
+@media (max-width:639px){.move-row>span{display:none}}
+@media (hover:none){.edit-chip,.move-row{opacity:1;transform:none}}
 `;
 
 /** Styly režimu úprav — vykreslí se jednou na stránce, jen když se upravuje. */
@@ -118,6 +136,7 @@ const SECTION_LABEL: Record<EditableSection, string> = {
   vybaveni: "Upravit vybavení",
   poloha: "Upravit polohu",
   "o-nas": "Upravit O nás",
+  recenze: "Upravit recenze",
   paticka: "Upravit patičku",
   rezervace: "Ceník a pobyt",
 };
@@ -131,6 +150,7 @@ export function EditSection({
   section: EditableSection;
   children: React.ReactNode;
 }) {
+  const mv = useContext(MoveContext);
   if (!editing) return <>{children}</>;
   return (
     <div
@@ -146,9 +166,60 @@ export function EditSection({
       }}
     >
       {children}
-      <button type="button" className="edit-chip" onClick={() => editing.open(section)}>
-        ✎ {SECTION_LABEL[section]}
-      </button>
+      <span className="edit-chip-row">
+        {/* Šipky pro posun celého bloku — u první sekce bloku, vedle „Upravit" */}
+        {mv?.block === section && !mv.split && <MoveArrows mv={mv} />}
+        <button type="button" className="edit-chip" onClick={() => editing.open(section)}>
+          ✎ {SECTION_LABEL[section]}
+        </button>
+      </span>
     </div>
+  );
+}
+
+type MoveInfo = {
+  move: (block: MovableSection, by: -1 | 1) => void;
+  block: MovableSection;
+  label: string;
+  first: boolean;
+  last: boolean;
+  /** Blok z více sekcí vedle sebe (Popis + Vybavení): šipky vpravo nahoře celého bloku. */
+  split?: boolean;
+};
+const MoveContext = createContext<MoveInfo | null>(null);
+
+/**
+ * Obal sekce (nebo více sekcí, např. Popis + Vybavení), který jde v editoru
+ * webu posunout. Šipky vykreslí EditSection první sekce bloku vedle „Upravit“;
+ * při najetí na ně se orámuje celý blok.
+ */
+export function MoveBlock({ move, children, ...info }: Omit<MoveInfo, "move"> & { move?: MoveInfo["move"]; children: React.ReactNode }) {
+  if (!move) return <>{children}</>;
+  return (
+    <MoveContext.Provider value={{ move, ...info }}>
+      <div className="move-block">
+        {children}
+        {info.split && (
+          <span className="edit-chip-row">
+            <MoveArrows mv={{ move, ...info }} />
+          </span>
+        )}
+      </div>
+    </MoveContext.Provider>
+  );
+}
+
+/** Šipky ↑↓ s názvem bloku (vedle „Upravit“, u bloku z více sekcí vpravo nahoře). */
+function MoveArrows({ mv }: { mv: MoveInfo }) {
+  return (
+    <span className="move-row" role="group" aria-label={`Pořadí sekce ${mv.label}`}>
+      <button type="button" aria-label={`Posunout ${mv.label} výš`} title="Posunout výš" disabled={mv.first} onClick={() => mv.move(mv.block, -1)}>
+        ↑
+      </button>
+      <button type="button" aria-label={`Posunout ${mv.label} níž`} title="Posunout níž" disabled={mv.last} onClick={() => mv.move(mv.block, 1)}>
+        ↓
+      </button>
+      <span>{mv.label}</span>
+    </span>
   );
 }

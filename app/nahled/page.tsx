@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SiteEditing } from "@/components/EditableText";
 import { SiteView, type SiteViewData } from "@/components/SiteView";
 import type { BookedRange } from "@/components/DayPicker";
@@ -12,7 +12,9 @@ import { Skeleton } from "@/components/Skeleton";
 // Díky iframe platí breakpointy a výška okna jako na skutečném webu.
 
 export default function PreviewFrame() {
-  const [data, setData] = useState<{ site: SiteViewData; booked: BookedRange[]; editable: boolean } | null>(null);
+  const [data, setData] = useState<{ site: SiteViewData; booked: BookedRange[]; editable: boolean; movable: boolean } | null>(null);
+  // Posunutá sekce — po překreslení na ni web sjede
+  const moved = useRef<string | null>(null);
 
   // Builder: úpravy se posílají rodiči, ten je uloží a pošle zpět nová data.
   const editing = useMemo<SiteEditing>(() => {
@@ -20,6 +22,11 @@ export default function PreviewFrame() {
     return {
       text: (field, value) => post({ type: "edit", field, value }),
       open: (section) => post({ type: "select", section }),
+      titles: true,
+      move: (section, by) => {
+        moved.current = section;
+        post({ type: "move", section, by });
+      },
     };
   }, []);
 
@@ -27,7 +34,12 @@ export default function PreviewFrame() {
     function onMessage(e: MessageEvent<PreviewMessage>) {
       if (e.origin !== window.location.origin) return;
       const msg = e.data;
-      if (msg?.type === "site") setData({ site: msg.site, booked: msg.booked, editable: !!msg.editable });
+      if (msg?.type === "site") {
+        setData({ site: msg.site, booked: msg.booked, editable: !!msg.editable, movable: !!msg.movable });
+        const section = moved.current;
+        moved.current = null;
+        if (section) window.setTimeout(() => flash(section), 50);
+      }
       if (msg?.type === "focus") flash(msg.section);
     }
     window.addEventListener("message", onMessage);
@@ -55,7 +67,7 @@ export default function PreviewFrame() {
         <Skeleton className="h-5 w-1/2" />
       </div>
     );
-  return <SiteView site={data.site} booked={data.booked} preview editing={data.editable ? editing : undefined} />;
+  return <SiteView site={data.site} booked={data.booked} preview editing={data.editable ? (data.movable ? editing : { ...editing, move: undefined, titles: false }) : undefined} />;
 }
 
 /** Plynule odscrolluje na sekci webu a krátce ji zvýrazní. */

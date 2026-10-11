@@ -115,14 +115,13 @@ export function HeroPicker({
         ))}
       </div>
 
-      {/* Živý náhled úvodu — zmenšená verze toho, co uvidí hosté */}
+      {/* Náhled úvodu: u fotky jen fotka, u minimalistického zmenšený text */}
       <div className="overflow-hidden rounded-2xl border border-line">
         {heroStyle === "photo" ? (
           heroPhoto ? (
-            <div className="relative flex min-h-56 items-end bg-ink sm:min-h-0 sm:aspect-[16/7]">
-              <Image src={heroPhoto} alt="" fill sizes="(max-width: 640px) 100vw, 800px" className="object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent" />
-              <PreviewText name={siteName} tagline={tagline} type={propertyType} light />
+            // Jen samotná fotka — nadpis a tlačítko jsou vidět ve webu vedle panelu
+            <div className="relative min-h-56 bg-ink sm:min-h-0 sm:aspect-[16/7]">
+              <Image src={heroPhoto} alt="Úvodní fotka" fill sizes="(max-width: 640px) 100vw, 800px" className="object-cover" />
             </div>
           ) : (
             <button

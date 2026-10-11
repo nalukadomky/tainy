@@ -9,7 +9,16 @@ import { toSiteViewData } from "@/lib/siteView";
 import { parsePhotoLines } from "@/lib/photos";
 import { AMENITY_SUGGESTIONS } from "@/lib/listing";
 import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage";
-import { usePreviewFrame } from "@/components/LivePreview";
+import { usePreviewFrame, type PreviewMessage } from "@/components/LivePreview";
+import {
+  blockOf,
+  moveSection,
+  parseSectionOrder,
+  parseSectionTitles,
+  serializeSectionOrder,
+  serializeSectionTitles,
+  type TitleKey,
+} from "@/lib/sections";
 import { BuilderHint, BuilderPanel } from "@/components/BuilderPanel";
 import type { EditableField, EditableSection } from "@/components/EditableText";
 import { HeroPicker } from "@/components/HeroPicker";
@@ -18,6 +27,7 @@ import { AmenityPicker } from "@/components/AmenityPicker";
 import { LocationSettings } from "@/components/LocationSettings";
 import { ThemePicker } from "@/components/ThemePicker";
 import { AboutSettings } from "@/components/AboutSettings";
+import { ReviewsSettings } from "@/components/ReviewsSettings";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
@@ -30,6 +40,18 @@ import { Skeleton } from "@/components/Skeleton";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+/** Sekce webu v pořadí, v jakém jsou na stránce. */
+
+// Nepovinné sekce, které jdou v nabídce sekcí vypnout a zapnout
+const SECTION_SWITCH = {
+  "o-nas": { isOn: (f: Site) => f.aboutEnabled, set: (on: boolean): Partial<Site> => ({ aboutEnabled: on }) },
+  recenze: { isOn: (f: Site) => f.reviewsEnabled, set: (on: boolean): Partial<Site> => ({ reviewsEnabled: on }) },
+  poloha: {
+    isOn: (f: Site) => f.locationMode !== "none",
+    set: (on: boolean): Partial<Site> => ({ locationMode: on ? "area" : "none" }),
+  },
+};
+
 const PANEL_TITLE: Record<EditableSection, string> = {
   uvod: "Úvod webu",
   galerie: "Fotky",
@@ -37,6 +59,7 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   vybaveni: "Vybavení",
   poloha: "Kde nás najdete",
   "o-nas": "O nás",
+  recenze: "Recenze",
   paticka: "Patička",
   rezervace: "Ceník a pobyt",
 };
@@ -198,9 +221,36 @@ export default function BuilderPage() {
     booked,
     editable: !previewing,
     focus: panel,
-    onEdit: (field, value) => update({ [field]: value } as Pick<Site, EditableField>),
+    onEdit: (field, value) => {
+      // Nadpis sekce → JSON s vlastními nadpisy, ostatní texty rovnou do pole webu
+      if (field.startsWith("title:")) {
+        const key = field.slice(6) as TitleKey;
+        update({ sectionTitles: serializeSectionTitles({ ...parseSectionTitles(form?.sectionTitles), [key]: value }) });
+      } else update({ [field]: value } as Pick<Site, Exclude<EditableField, `title:${string}`>>);
+    },
     onSelect: setPanel,
+    onMove: (section, by) => moveBlock(section, by),
   });
+
+  // Pořadí sekcí (lib/sections.ts); v editoru jsou vidět všechny, i vypnuté jako ukázka
+  const order = parseSectionOrder(form?.sectionOrder);
+  function moveBlock(section: EditableSection, by: -1 | 1, scroll = false) {
+    const block = blockOf(section);
+    const next = block && moveSection(order, block, by);
+    if (!next) return;
+    update({ sectionOrder: serializeSectionOrder(next) });
+    // Z panelu: web sjede na posunutou sekci, až se překreslí
+    if (scroll)
+      window.setTimeout(
+        () =>
+          frameRef.current?.contentWindow?.postMessage(
+            { type: "focus", section } satisfies PreviewMessage,
+            window.location.origin,
+          ),
+        250,
+      );
+  }
+  const panelBlock = panel && blockOf(panel);
 
   const closePanel = useCallback(() => setPanel(null), []);
 
@@ -264,7 +314,17 @@ export default function BuilderPage() {
             previewing ? "border-ink bg-ink text-white" : "border-line bg-bg text-ink"
           }`}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
             <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
@@ -303,7 +363,42 @@ export default function BuilderPage() {
 
         {/* Boční panel sekce (na mobilu spodní sheet) */}
         {panel && form && !previewing && (
-          <BuilderPanel title={PANEL_TITLE[panel]} onClose={closePanel}>
+          <BuilderPanel
+            title={PANEL_TITLE[panel]}
+            onClose={closePanel}
+            current={panel}
+            // Sekce v pořadí jako na webu: přetahují se bloky, nepovinné jdou vypnout
+            sections={(
+              ["uvod", ...order.flatMap((k) => (k === "o-miste" ? ["o-miste", "vybaveni"] : [k])), "paticka"] as EditableSection[]
+            ).map((key) => ({
+              key,
+              label: PANEL_TITLE[key],
+              block: blockOf(key) ?? undefined,
+              optional: key in SECTION_SWITCH,
+              off: key in SECTION_SWITCH && !SECTION_SWITCH[key as keyof typeof SECTION_SWITCH].isOn(form),
+            }))}
+            onReorder={(blocks) => {
+              // Vypnuté sekce zůstávají za zapnutými
+              const hidden = order.filter((k) => !blocks.includes(k));
+              update({ sectionOrder: serializeSectionOrder(parseSectionOrder([...blocks, ...hidden].join(","))) });
+            }}
+            onToggle={(key, on) => {
+              const sw = SECTION_SWITCH[key as keyof typeof SECTION_SWITCH];
+              // Vypnutá sekce jde na konec pořadí, po zapnutí se objeví nad patičkou
+              const next = [...order.filter((k) => k !== key), key].join(",");
+              update({ ...sw.set(on), sectionOrder: serializeSectionOrder(parseSectionOrder(next)) });
+            }}
+            onSwitch={(key) => setPanel(key as EditableSection)}
+            move={
+              panelBlock
+                ? {
+                    up: order[0] !== panelBlock,
+                    down: order[order.length - 1] !== panelBlock,
+                    onMove: (by) => moveBlock(panel, by, true),
+                  }
+                : undefined
+            }
+          >
             <SectionPanel section={panel} form={form} update={update} onLeave={leave} />
           </BuilderPanel>
         )}
@@ -315,35 +410,27 @@ export default function BuilderPage() {
 
 /** Stav ukládání v horní liště builderu — ať je pořád vidět, že se změny ukládají. */
 function SaveIndicator({ state, savedAt, onRetry }: { state: SaveState; savedAt: Date | null; onRetry: () => void }) {
-  const time = savedAt?.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-  const base =
-    "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold";
+  const time = savedAt?.toLocaleTimeString("cs-CZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const base = "inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold";
   return (
     <div aria-live="polite" className="shrink-0">
       {state === "saving" ? (
         <span className={`${base} border-amber/40 bg-amber/10 text-[#92600a]`}>
-          <span
-            className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
-            aria-hidden
-          />
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
           Ukládám…
         </span>
       ) : state === "error" ? (
         <span className={`${base} border-coral/40 bg-coral/10 text-coral`}>
           ⚠ <span className="max-sm:hidden">Neuloženo</span>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="rounded-full bg-coral px-2 py-0.5 text-white hover:bg-coral/90"
-          >
+          <button type="button" onClick={onRetry} className="rounded-full bg-coral px-2 py-0.5 text-white hover:bg-coral/90">
             Zkusit znovu
           </button>
         </span>
       ) : state === "saved" ? (
-        <span
-          className={`${base} border-pine/30 bg-pine/10 text-pine`}
-          title="Změny jsou uložené a hosté je vidí na webu"
-        >
+        <span className={`${base} border-pine/30 bg-pine/10 text-pine`} title="Změny jsou uložené a hosté je vidí na webu">
           ✓ Uloženo<span className="max-sm:hidden"> v {time}</span>
         </span>
       ) : (
@@ -473,6 +560,8 @@ function SectionPanel({
           />
         </>
       );
+    case "recenze":
+      return <ReviewsSettings value={form} onChange={(patch) => update(patch)} />;
     case "o-nas":
       return <AboutSettings value={form} onChange={(patch) => update(patch)} inlineText />;
     case "poloha":

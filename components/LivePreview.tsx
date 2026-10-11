@@ -12,15 +12,17 @@ import { DeviceStage, DeviceSwitch, type Device } from "@/components/DeviceStage
 // a editor mu posílá neuložený formulář přes postMessage.
 
 /** Sekce webu, na které umí náhled odscrollovat (id v SiteView). */
-export type PreviewSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "o-nas" | "poloha" | "rezervace" | "paticka";
+export type PreviewSection = "uvod" | "galerie" | "o-miste" | "vybaveni" | "o-nas" | "recenze" | "poloha" | "rezervace" | "paticka";
 
 export type PreviewMessage =
   | { type: "ready" }
-  | { type: "site"; site: SiteViewData; booked: BookedRange[]; editable?: boolean }
+  | { type: "site"; site: SiteViewData; booked: BookedRange[]; editable?: boolean; movable?: boolean }
   | { type: "focus"; section: PreviewSection }
   // Builder: úprava textu přímo ve webu a klik na „Upravit" u sekce
   | { type: "edit"; field: EditableField; value: string }
-  | { type: "select"; section: EditableSection };
+  | { type: "select"; section: EditableSection }
+  // Builder: šipky ↑↓ u sekce ve webu
+  | { type: "move"; section: EditableSection; by: -1 | 1 };
 
 /**
  * Komunikace s webem v iframe (/nahled) pro editory přímo ve webu (builder,
@@ -35,6 +37,7 @@ export function usePreviewFrame({
   focus,
   onEdit,
   onSelect,
+  onMove,
 }: {
   site: SiteViewData | null;
   booked: BookedRange[];
@@ -43,11 +46,14 @@ export function usePreviewFrame({
   focus: PreviewSection | null;
   onEdit?: (field: EditableField, value: string) => void;
   onSelect?: (section: EditableSection) => void;
+  /** Posun sekce šipkami ve webu (bez něj se šipky neukážou). */
+  onMove?: (section: EditableSection, by: -1 | 1) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(0);
-  const handlers = useRef({ onEdit, onSelect });
-  handlers.current = { onEdit, onSelect };
+  const handlers = useRef({ onEdit, onSelect, onMove });
+  handlers.current = { onEdit, onSelect, onMove };
+  const movable = !!onMove;
 
   useEffect(() => {
     function onMessage(e: MessageEvent<PreviewMessage>) {
@@ -56,6 +62,7 @@ export function usePreviewFrame({
       if (msg?.type === "ready") setReady((n) => n + 1);
       if (msg?.type === "edit") handlers.current.onEdit?.(msg.field, msg.value);
       if (msg?.type === "select") handlers.current.onSelect?.(msg.section);
+      if (msg?.type === "move") handlers.current.onMove?.(msg.section, msg.by);
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -68,9 +75,9 @@ export function usePreviewFrame({
 
   useEffect(() => {
     if (!ready || !site) return;
-    const t = window.setTimeout(() => send({ type: "site", site, booked, editable }), 60);
+    const t = window.setTimeout(() => send({ type: "site", site, booked, editable, movable }), 60);
     return () => window.clearTimeout(t);
-  }, [ready, site, booked, editable, send]);
+  }, [ready, site, booked, editable, movable, send]);
 
   useEffect(() => {
     if (ready && focus) send({ type: "focus", section: focus });

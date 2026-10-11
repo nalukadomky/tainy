@@ -8,6 +8,8 @@ import { parseSleeping } from "@/lib/sleeping";
 import { vatRateOf } from "@/lib/vat";
 import { publicLocation } from "@/lib/location";
 import { cleanAboutLayout, cleanPhotoShape } from "@/lib/about";
+import { cleanReviewsLayout, parseReviews } from "@/lib/reviews";
+import { parseSectionOrder, parseSectionTitles } from "@/lib/sections";
 import { hasDoc, privacyTextOf, termsTextOf, type LegalSource } from "@/lib/legal";
 import type { LegalDocData } from "@/components/LegalModal";
 
@@ -64,6 +66,11 @@ export type SiteSource = {
   aboutPhotoCrop?: string;
   aboutPhotoShape?: string;
   aboutSignature?: string;
+  reviewsEnabled?: boolean;
+  reviews?: string;
+  reviewsLayout?: string;
+  sectionOrder?: string;
+  sectionTitles?: string;
   geo?: string;
   arrivalAddress?: string;
   /** Data jako ISO „YYYY-MM-DD". */
@@ -126,6 +133,12 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
           signature: site.aboutSignature?.trim() ?? "",
         }
       : null,
+    // Recenze: zapnuté s alespoň jednou vyplněnou recenzí; reviewsDraft = zapnuté (pro úpravy webu)
+    reviews: site.reviewsEnabled ? parseReviews(site.reviews).filter((r) => r.name.trim() && r.text.trim()) : [],
+    reviewsDraft: !!site.reviewsEnabled,
+    reviewsLayout: cleanReviewsLayout(site.reviewsLayout),
+    sectionOrder: parseSectionOrder(site.sectionOrder),
+    sectionTitles: parseSectionTitles(site.sectionTitles),
     vatRate: vatRateOf(site),
     provider: {
       name: site.businessName ?? "",

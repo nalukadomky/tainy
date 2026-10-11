@@ -95,6 +95,15 @@ model Site {
   aboutPhotoCrop String  @default("")
   aboutPhotoShape String @default("auto") // auto (výška podle textu) | portrait | square | landscape // výřez fotky „x,y,zoom“ (lib/crop.ts), prázdné = střed
   aboutSignature String  @default("")
+  // Sekce Recenze: zapnutí a recenze hostů (JSON, lib/reviews.ts)
+  reviewsEnabled Boolean @default(false)
+  reviews        String  @default("")
+  // Vzhled recenzí: grid = mřížka, slider = posuvník do stran
+  reviewsLayout  String  @default("grid")
+  // Pořadí sekcí mezi Úvodem a Patičkou (lib/sections.ts), prázdné = výchozí
+  sectionOrder   String  @default("")
+  // Vlastní nadpisy sekcí (JSON, lib/sections.ts), prázdné = výchozí
+  sectionTitles  String  @default("")
   // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
   // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
   locationMode   String @default("area")

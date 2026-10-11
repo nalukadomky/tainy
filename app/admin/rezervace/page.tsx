@@ -109,7 +109,7 @@ export default function ReservationsPage() {
     try {
       await saveStatus(id, status);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Změna selhala.");
+      toast.show(e instanceof Error ? e.message : "Změna selhala.");
     }
     setBusy(null);
   }

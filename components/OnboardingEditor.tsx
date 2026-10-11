@@ -28,6 +28,7 @@ const PANEL_TITLE: Record<EditableSection, string> = {
   vybaveni: "Vybavení",
   poloha: "Kde nás najdete",
   "o-nas": "O nás",
+  recenze: "Recenze",
   paticka: "Patička",
   rezervace: "Kapacita a ceny",
 };
@@ -233,6 +234,12 @@ function SectionPanel({ section, form, set }: { section: EditableSection; form: 
       return (
         <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
           Provozovatele, IČ a obchodní podmínky do patičky doplníš po vytvoření účtu v Nastavení → Firma a platby.
+        </p>
+      );
+    case "recenze":
+      return (
+        <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">
+          Recenze hostů s hodnocením a fotkou přidáš po vytvoření účtu v úpravách webu.
         </p>
       );
     case "o-nas":

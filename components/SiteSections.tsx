@@ -147,7 +147,15 @@ function AmenityDialog({ amenities, onClose }: { amenities: string[]; onClose: (
 
 /* ---------- Kde nás najdete ---------- */
 
-export function LocationSection({ location, theme }: { location: PublicLocation; theme?: string }) {
+export function LocationSection({
+  location,
+  theme,
+  title = "Kde nás najdete",
+}: {
+  location: PublicLocation;
+  theme?: string;
+  title?: React.ReactNode;
+}) {
   const exact = location.mode === "exact";
   const town = encodeURIComponent(location.label.split(",")[0]);
   // Přesná poloha: odkazy vedou na bod (špendlík), přibližná jen na obec
@@ -161,7 +169,7 @@ export function LocationSection({ location, theme }: { location: PublicLocation;
       : `https://www.google.com/maps/search/?api=1&query=${town}`;
   return (
     <section id="poloha" className="mx-auto max-w-4xl scroll-mt-20 px-5 py-12 lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
-      <h2 className="font-display text-2xl font-semibold">Kde nás najdete</h2>
+      <h2 className="font-display text-2xl font-semibold">{title}</h2>
       <p className="mt-2 text-soft">
         {location.label}
         {!exact && <span className="block text-sm">Přesnou adresu a pokyny k příjezdu pošleme po rezervaci.</span>}
@@ -190,10 +198,10 @@ export function LocationSection({ location, theme }: { location: PublicLocation;
 }
 
 /** Úpravy přímo ve webu: místo pro polohu, dokud ji majitel nenastaví. */
-export function LocationPlaceholder() {
+export function LocationPlaceholder({ title = "Kde nás najdete" }: { title?: React.ReactNode }) {
   return (
     <section id="poloha" className="mx-auto max-w-4xl scroll-mt-20 px-5 py-12 lg:max-w-6xl lg:px-8 2xl:max-w-7xl">
-      <h2 className="font-display text-2xl font-semibold">Kde nás najdete</h2>
+      <h2 className="font-display text-2xl font-semibold">{title}</h2>
       <p className="mt-2 rounded-2xl border border-dashed border-line px-5 py-8 text-center text-soft">
         Doplň adresu a vyber, jak ukázat polohu — přibližně, nebo přesně na mapě.
       </p>

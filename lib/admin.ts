@@ -91,6 +91,14 @@ export type Site = {
   aboutPhotoCrop: string;
   aboutPhotoShape: string;
   aboutSignature: string;
+  /** Sekce Recenze (lib/reviews.ts). */
+  reviewsEnabled: boolean;
+  reviews: string;
+  reviewsLayout: string;
+  /** Pořadí sekcí webu (lib/sections.ts). */
+  sectionOrder: string;
+  /** Vlastní nadpisy sekcí (JSON, lib/sections.ts). */
+  sectionTitles: string;
 };
 
 /** Jak smazat hosta: anonymizovat (GDPR), ponechat částky, nebo úplně. */
