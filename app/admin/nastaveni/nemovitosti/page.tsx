@@ -246,7 +246,7 @@ function PropertyCard({
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold">{p.name}</p>
             <p className="truncate text-sm text-soft">
-              {p.propertyType} · tainy.cz/w/{p.slug}
+              {p.propertyType} · tainy.cz/{p.slug}
             </p>
           </div>
           <div ref={ref} className="relative shrink-0">
@@ -313,7 +313,7 @@ function PropertyCard({
           <button type="button" onClick={onEditWeb} className="btn-ghost !px-4 !py-2 text-sm">
             Upravit web
           </button>
-          <a href={`/w/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
+          <a href={`/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
             Zobrazit ↗
           </a>
         </div>
@@ -399,7 +399,7 @@ function RenameDialog({
             </button>
           </span>
           <div className="flex items-center overflow-hidden rounded-xl border border-line bg-surface focus-within:border-pine">
-            <span className="shrink-0 pl-4 text-sm text-soft">tainy.cz/w/</span>
+            <span className="shrink-0 pl-4 text-sm text-soft">tainy.cz/</span>
             <input
               className="min-w-0 flex-1 bg-transparent py-3 pr-4 text-[15px] outline-none"
               value={slug}
@@ -411,7 +411,7 @@ function RenameDialog({
         </label>
         {changedSlug && !problem && (
           <p className="rounded-xl bg-amber/15 px-4 py-3 text-xs text-[#92600a]">
-            Stará adresa <strong>tainy.cz/w/{p.slug}</strong> přestane fungovat — pošli hostům a na sociální sítě nový
+            Stará adresa <strong>tainy.cz/{p.slug}</strong> přestane fungovat — pošli hostům a na sociální sítě nový
             odkaz. Kalendář pro Airbnb a Booking se nemění.
           </p>
         )}
@@ -455,7 +455,7 @@ function DeleteDialog({ p, onClose, onDone }: { p: Property; onClose: () => void
     <Modal title={`Smazat ${p.name}?`} onClose={onClose}>
       <form onSubmit={remove} className="space-y-4">
         <div className="rounded-xl bg-coral/10 px-4 py-3 text-sm text-ink">
-          Trvale se smaže web <strong>tainy.cz/w/{p.slug}</strong> a s ním{" "}
+          Trvale se smaže web <strong>tainy.cz/{p.slug}</strong> a s ním{" "}
           <strong>
             {p.reservations} {plural(p.reservations, "rezervace", "rezervace", "rezervací")}
           </strong>

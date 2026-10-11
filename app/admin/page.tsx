@@ -176,7 +176,7 @@ function Dashboard() {
             <Link href="/admin/web/builder?panel=galerie" className="btn-primary !px-5 !py-2 text-sm">
               📷 Přidat fotky
             </Link>
-            <Link href={`/w/${site.slug}`} className="btn-ghost !px-5 !py-2 text-sm" target="_blank">
+            <Link href={`/${site.slug}`} className="btn-ghost !px-5 !py-2 text-sm" target="_blank">
               Otevřít můj web ↗
             </Link>
           </div>
@@ -188,8 +188,8 @@ function Dashboard() {
           <h1 className="font-display text-3xl font-semibold tracking-tight">Přehled</h1>
           <p className="mt-1 text-sm text-soft">
             {site.name} ·{" "}
-            <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={`/w/${site.slug}`} target="_blank">
-              /w/{site.slug} ↗
+            <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={`/${site.slug}`} target="_blank">
+              /{site.slug} ↗
             </Link>
           </p>
         </div>

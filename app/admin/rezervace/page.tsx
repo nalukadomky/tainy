@@ -81,14 +81,6 @@ export default function ReservationsPage() {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [codeFor, setCodeFor] = useState<Reservation | null>(null);
   // Rozkliknuté rezervace — časy příjezdu a odjezdu a skladba hostů
-  const [details, setDetails] = useState<Set<string>>(new Set());
-  const toggleDetail = (id: string) =>
-    setDetails((d) => {
-      const next = new Set(d);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   const [filter, setFilter] = useState<Filter>("all");
   // Odkaz z Přehledu (?detail=ID) otevře detail konkrétní rezervace — jednou, až jsou data
@@ -99,12 +91,7 @@ export default function ReservationsPage() {
     if (!id || !reservations.some((r) => r.id === id)) return;
     openedFromLink.current = true;
     setFilter("all");
-    if (window.matchMedia("(min-width: 640px)").matches) {
-      setDetails(new Set([id]));
-      requestAnimationFrame(() =>
-        document.getElementById(`rez-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
-      );
-    } else setSheetId(id);
+    setSheetId(id);
   }, [reservations]);
   // Odkaz z Přehledu (?stav=pending) otevře rovnou čekající rezervace
   useEffect(() => {
@@ -433,8 +420,7 @@ export default function ReservationsPage() {
                         if (!e.currentTarget.contains(e.target as Node)) return;
                         if ((e.target as HTMLElement).closest("button, a, input, select, [role=menu], [role=dialog]")) return;
                         if (window.getSelection()?.toString()) return;
-                        if (window.matchMedia("(min-width: 640px)").matches) toggleDetail(r.id);
-                        else setSheetId(r.id);
+                        setSheetId(r.id);
                       }}
                       className={`cursor-pointer bg-surface px-4 py-3 transition hover:bg-bg/60 sm:px-5 ${
                         r.status === "cancelled" ? "opacity-60" : ""
@@ -513,7 +499,7 @@ export default function ReservationsPage() {
                                   label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
                                   run: () => setCodeFor(r),
                                 },
-                              { label: details.has(r.id) ? "Skrýt detail" : "Zobrazit detail", run: () => (window.matchMedia("(min-width: 640px)").matches ? toggleDetail(r.id) : setSheetId(r.id)) },
+                              { label: "Zobrazit detail", run: () => setSheetId(r.id) },
                               r.status !== "cancelled"
                                 ? { label: "✕ Zrušit rezervaci", run: () => cancelStay(r), danger: true }
                                 : { label: "↺ Obnovit", run: () => setStatus(r.id, "pending") },
@@ -521,11 +507,6 @@ export default function ReservationsPage() {
                           />
                         </div>
                       </div>
-                      {details.has(r.id) && (
-                        <div className="hidden sm:block">
-                          <StayDetail r={r} site={site} />
-                        </div>
-                      )}
                     </div>
                   </SwipeToPay>
                 );
@@ -764,12 +745,15 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
 
   // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Rezervace ${r.guestName}`}
-        className="rise flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl"
+        className="rise flex max-h-[88dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
@@ -791,7 +775,7 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
             ×
           </button>
         </div>
-        <div className="overflow-y-auto overscroll-contain px-5 pb-8 pt-1">
+        <div className="overflow-y-auto overscroll-contain px-5 pb-8 pt-1 sm:px-6">
           <StayDetail r={r} site={site} />
           {sendAt && r.endDate.slice(0, 10) >= todayISO() && (
             <p

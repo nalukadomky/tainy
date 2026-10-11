@@ -651,7 +651,7 @@ function LegalDocCard({
         </div>
         {published && (
           <a
-            href={`/w/${form.slug}/${LEGAL_PATH[kind]}`}
+            href={`/${form.slug}/${LEGAL_PATH[kind]}`}
             target="_blank"
             className="text-sm font-medium text-pine underline decoration-line underline-offset-4"
           >

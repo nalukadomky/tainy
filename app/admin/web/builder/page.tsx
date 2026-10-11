@@ -21,7 +21,7 @@ import { AboutSettings } from "@/components/AboutSettings";
 import { PropertyTypePicker } from "@/components/PropertyTypePicker";
 import type { BookedRange } from "@/components/DayPicker";
 import { SITES_CHANGED } from "@/components/AdminNav";
-import { FLASH_KEY } from "@/components/Toast";
+import { FLASH_KEY, useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
 
 // Builder (varianta B): web se upravuje přímo v sobě. Texty se přepisují
@@ -51,6 +51,8 @@ export default function BuilderPage() {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [leaving, setLeaving] = useState(false);
   const confirmDlg = useConfirm();
+  // Potvrzení po změně adresy (zobrazí se po znovunačtení editoru)
+  const toast = useToast();
   const router = useRouter();
   const [hint, setHint] = useState(false);
   const [booked, setBooked] = useState<BookedRange[]>([]);
@@ -189,16 +191,38 @@ export default function BuilderPage() {
   }, [slug]);
 
   const siteView = useMemo(() => (form ? toSiteViewData(form) : null), [form]);
+  // Náhled: web bez rámečků a tlačítek úprav, jak ho uvidí hosté (hlavně pro mobil)
+  const [previewing, setPreviewing] = useState(false);
   const frameRef = usePreviewFrame({
     site: siteView,
     booked,
-    editable: true,
+    editable: !previewing,
     focus: panel,
     onEdit: (field, value) => update({ [field]: value } as Pick<Site, EditableField>),
     onSelect: setPanel,
   });
 
   const closePanel = useCallback(() => setPanel(null), []);
+
+  // Nová adresa webu z lišty prohlížeče: dopsat rozpracované změny, uložit
+  // adresu a načíst editor znovu (data administrace jsou vázaná na adresu).
+  async function changeSlug(next: string): Promise<string | null> {
+    if (!slug) return "Web se ještě načítá.";
+    await flush();
+    const res = await fetch(`/api/sites/${slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newSlug: next }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    if (!res?.ok) return data?.error ?? "Adresu se nepodařilo změnit.";
+    try {
+      localStorage.setItem("tainy.site", data.slug);
+      sessionStorage.setItem(FLASH_KEY, `Adresa webu je teď tainy.cz/${data.slug}`);
+    } catch {}
+    window.location.reload();
+    return null;
+  }
 
   function dismissHint() {
     setHint(false);
@@ -214,6 +238,7 @@ export default function BuilderPage() {
   return createPortal(
     <div className="fixed inset-0 z-[60] flex flex-col bg-bg">
       {confirmDlg.node}
+      {toast.node}
       {/* Horní lišta */}
       <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2.5 sm:px-4">
         <button
@@ -228,10 +253,29 @@ export default function BuilderPage() {
           Můj web{form ? ` · ${form.name || "bez názvu"}` : ""}
         </p>
         <SaveIndicator state={save} savedAt={savedAt} onRetry={() => flush()} />
-        <DeviceSwitch value={device} onChange={setDevice} />
+        <button
+          type="button"
+          onClick={() => {
+            setPanel(null);
+            setPreviewing((v) => !v);
+          }}
+          aria-pressed={previewing}
+          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition lg:hidden ${
+            previewing ? "border-ink bg-ink text-white" : "border-line bg-bg text-ink"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          {previewing ? "Upravit" : "Náhled"}
+        </button>
+        <span className="max-sm:hidden">
+          <DeviceSwitch value={device} onChange={setDevice} />
+        </span>
         {slug && (
           <a
-            href={`/w/${slug}`}
+            href={`/${slug}`}
             target="_blank"
             className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium text-pine hover:bg-pine/10 max-lg:hidden"
           >
@@ -243,7 +287,7 @@ export default function BuilderPage() {
       <div className="relative flex min-h-0 flex-1">
         <div className="relative flex min-w-0 flex-1 flex-col">
           {/* Nápověda je v toku stránky, ne nad iframe — jinak ji některé prohlížeče schovají pod web */}
-          {hint && (
+          {hint && !previewing && (
             <BuilderHint onDismiss={dismissHint}>
               ✍️ Klikni na text a piš. Fotky a další nastavení sekce otevřeš tlačítkem <strong>Upravit</strong>.
             </BuilderHint>
@@ -253,12 +297,12 @@ export default function BuilderPage() {
               <Skeleton className="h-[70%] w-full max-w-3xl rounded-xl" />
             </div>
           ) : (
-            <DeviceStage device={device} slug={form.slug} frameRef={frameRef} title="Úpravy webu" />
+            <DeviceStage device={device} slug={form.slug} frameRef={frameRef} title="Úpravy webu" onSlugChange={changeSlug} />
           )}
         </div>
 
         {/* Boční panel sekce (na mobilu spodní sheet) */}
-        {panel && form && (
+        {panel && form && !previewing && (
           <BuilderPanel title={PANEL_TITLE[panel]} onClose={closePanel}>
             <SectionPanel section={panel} form={form} update={update} onLeave={leave} />
           </BuilderPanel>
@@ -500,7 +544,7 @@ function SettingsLinks({
           key={l.label}
           type="button"
           onClick={() => onLeave(l.to)}
-          className="flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-pine/40"
+          className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-pine/40"
         >
           <span className="min-w-0">
             <span className="block text-sm font-semibold">{l.label}</span>

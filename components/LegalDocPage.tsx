@@ -1,3 +1,4 @@
+import { siteWhere } from "@/lib/demo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -6,16 +7,16 @@ import { Wordmark } from "@/components/Logo";
 import { LEGAL_TITLE, privacyTextOf, providerLine, termsTextOf, type LegalKind } from "@/lib/legal";
 
 // Veřejná stránka obchodních podmínek / zásad ochrany osobních údajů webu
-// (/w/[slug]/podminky, /w/[slug]/ochrana-udaju). Text, nebo PDF s náhledem.
+// (/[slug]/podminky, /[slug]/ochrana-udaju). Text, nebo PDF s náhledem.
 
 export async function legalDocMetadata(slug: string, kind: LegalKind) {
-  const site = await prisma.site.findUnique({ where: { slug }, select: { name: true } });
+  const site = await prisma.site.findFirst({ where: siteWhere(slug), select: { name: true } });
   return { title: `${LEGAL_TITLE[kind]} — ${site?.name || "tainy"}` };
 }
 
 export async function LegalDocPage({ slug, kind }: { slug: string; kind: LegalKind }) {
-  const site = await prisma.site.findUnique({
-    where: { slug },
+  const site = await prisma.site.findFirst({
+    where: siteWhere(slug),
     select: {
       name: true,
       businessName: true,
@@ -68,7 +69,7 @@ export async function LegalDocPage({ slug, kind }: { slug: string; kind: LegalKi
     <div className="min-h-dvh bg-bg">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
-          <Link href={`/w/${slug}`} className="text-sm font-medium text-soft hover:text-ink">
+          <Link href={`/${slug}`} className="text-sm font-medium text-soft hover:text-ink">
             ← {site.name || "Zpět na web"}
           </Link>
         </div>

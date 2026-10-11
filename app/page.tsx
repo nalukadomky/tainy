@@ -50,7 +50,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3.5">
           <Logo className="text-[26px]" />
           <nav className="flex items-center gap-2 sm:gap-4">
-            <Link href="/w/demo" className="hidden text-sm font-medium text-soft hover:text-ink sm:block">
+            <Link href="/demo" className="hidden text-sm font-medium text-soft hover:text-ink sm:block">
               Demo web
             </Link>
             <Link href="/login" className="text-sm font-medium text-soft hover:text-ink">
@@ -81,7 +81,7 @@ export default function Home() {
               i přehled výdělků na jednom místě.
             </p>
             <div className="rise rise-3 mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/w/demo" className="btn-primary">
+              <Link href="/demo" className="btn-primary">
                 Vyzkoušet demo →
               </Link>
               <Link href="/onboarding" className="btn-ghost">

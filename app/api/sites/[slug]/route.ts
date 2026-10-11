@@ -262,7 +262,7 @@ export async function PATCH(
     }
   }
 
-  // Nová adresa webu (/w/[slug]) — tvar, rezervovaná slova, nesmí být obsazená
+  // Nová adresa webu (/[slug]) — tvar, rezervovaná slova, nesmí být obsazená
   if (typeof body.newSlug === "string" && body.newSlug.trim() !== slug) {
     const next = body.newSlug.trim().toLowerCase();
     const problem = slugProblem(next);

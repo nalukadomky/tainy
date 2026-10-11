@@ -242,3 +242,15 @@ body {
 
 /* O nás — fotka „podle textu“: na širší obrazovce stejně vysoká jako text vedle */
 @media (min-width: 640px) { .about-photo-auto { aspect-ratio: auto !important; height: 100%; } }
+
+/* Ukazatel ruky u všeho klikacího (Tailwind 4 ho tlačítkům už sám nedává) */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label:has(> input[type="checkbox"], > input[type="radio"]),
+select {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}

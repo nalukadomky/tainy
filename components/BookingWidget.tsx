@@ -772,7 +772,7 @@ function DocLink({
 }) {
   return (
     <a
-      href={`/w/${slug}/${LEGAL_PATH[kind]}`}
+      href={`/${slug}/${LEGAL_PATH[kind]}`}
       target="_blank"
       rel="noopener"
       onClick={(e) => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/Logo";
 
-// Lišta nad ukázkovým webem (/w/demo): návštěvník z úvodní stránky
+// Lišta nad ukázkovým webem (/demo): návštěvník z úvodní stránky
 // se má kam vrátit a rovnou vidí cestu k vlastnímu webu.
 
 export function DemoBar() {

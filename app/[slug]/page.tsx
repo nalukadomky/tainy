@@ -3,6 +3,7 @@ import { ensureGeo } from "@/lib/geocode";
 import { prisma } from "@/lib/prisma";
 import { SiteView } from "@/components/SiteView";
 import { DemoBar } from "@/components/DemoBar";
+import { DEMO_SITE_ID, siteWhere } from "@/lib/demo";
 import { blockedRanges } from "@/lib/availability";
 import { addDays, toISO, todayISO } from "@/lib/stay";
 import { toSiteViewData } from "@/lib/siteView";
@@ -15,8 +16,8 @@ export default async function SitePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const site = await prisma.site.findUnique({
-    where: { slug },
+  const site = await prisma.site.findFirst({
+    where: siteWhere(slug),
     include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
   if (!site) notFound();
@@ -28,7 +29,7 @@ export default async function SitePage({
 
   return (
     <>
-      {slug === "demo" && <DemoBar />}
+      {site.id === DEMO_SITE_ID && <DemoBar />}
       <SiteView
         booked={booked}
         site={toSiteViewData({

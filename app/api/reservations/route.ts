@@ -207,8 +207,8 @@ export async function POST(req: NextRequest) {
     checkOutTime: created.checkOutTime,
     legal: {
       provider: providerLine(site),
-      termsUrl: hasTerms ? `${appUrl()}/w/${site.slug}/${LEGAL_PATH.terms}` : undefined,
-      privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/w/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
+      termsUrl: hasTerms ? `${appUrl()}/${site.slug}/${LEGAL_PATH.terms}` : undefined,
+      privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
     },
   };
   const pay = payment === "qr" ? buildPayment(site.bankAccount, created.totalPrice, site.name, created.publicId) : null;

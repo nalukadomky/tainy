@@ -20,7 +20,7 @@ import { themeVars } from "@/lib/theme";
 import { AboutPlaceholder, AboutSection, type AboutData } from "@/components/AboutSection";
 import { ABOUT_SAMPLE } from "@/lib/about";
 
-// Vizuál veřejného webu nemovitosti. Používá se jednak na /w/[slug] (data z DB),
+// Vizuál veřejného webu nemovitosti. Používá se jednak na /[slug] (data z DB),
 // jednak jako živý náhled v průvodci (data z draftu, preview=true).
 
 export type SiteViewData = {
@@ -66,7 +66,7 @@ export type SiteViewData = {
   location?: PublicLocation | null;
   /** Identifikace provozovatele do patičky. */
   provider?: { name: string; id: string; vatId: string; address: string; register?: string };
-  /** Má web obchodní podmínky / zásady (stránky /w/[slug]/podminky, /ochrana-udaju)? */
+  /** Má web obchodní podmínky / zásady (stránky /[slug]/podminky, /ochrana-udaju)? */
   hasTerms?: boolean;
   hasPrivacy?: boolean;
   /** Obsah podmínek a zásad pro okno nad webem. */
@@ -461,7 +461,7 @@ export function SiteView({
                 {site.hasTerms && site.slug && (
                   <li>
                     <Link
-                      href={`/w/${site.slug}/${LEGAL_PATH.terms}`}
+                      href={`/${site.slug}/${LEGAL_PATH.terms}`}
                       onClick={(e) => openDocFrom(e, "terms")}
                       className="text-[15px] text-ink/80 hover:text-ink"
                     >
@@ -472,7 +472,7 @@ export function SiteView({
                 {site.hasPrivacy && site.slug && (
                   <li>
                     <Link
-                      href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}
+                      href={`/${site.slug}/${LEGAL_PATH.privacy}`}
                       onClick={(e) => openDocFrom(e, "privacy")}
                       className="text-[15px] text-ink/80 hover:text-ink"
                     >

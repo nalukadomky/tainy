@@ -227,7 +227,7 @@ export function LivePreview({
         <DeviceSwitch value={device} onChange={pickDevice} />
 
         <a
-          href={`/w/${site.slug}`}
+          href={`/${site.slug}`}
           target="_blank"
           className="rounded-full px-2 py-1.5 text-sm font-medium text-pine hover:bg-pine/10 max-sm:hidden"
           title="Otevřít uložený web v nové záložce"

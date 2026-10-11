@@ -82,7 +82,7 @@ export default async function ReservationPage({
     <div className="min-h-dvh bg-bg">
       <header className="border-b border-line/70 bg-cream">
         <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5 md:max-w-5xl">
-          <Link href={`/w/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
+          <Link href={`/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
             {site.name}
           </Link>
           <span className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export default async function ReservationPage({
             {reservation.status === "cancelled" || expired ? (
               <>
                 Termín je zase volný.{" "}
-                <Link href={`/w/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
+                <Link href={`/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
                   Zkusit jiný termín
                 </Link>
               </>
@@ -260,7 +260,7 @@ export default async function ReservationPage({
             {reservation.termsAcceptedAt && (
               <p>
                 Souhlas s{" "}
-                <Link className="underline underline-offset-2 hover:text-ink" href={`/w/${site.slug}/${LEGAL_PATH.terms}`}>
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.terms}`}>
                   obchodními podmínkami
                 </Link>{" "}
                 udělen{" "}
@@ -277,7 +277,7 @@ export default async function ReservationPage({
             )}
             {hasDoc(site, "privacy") && (
               <p>
-                <Link className="underline underline-offset-2 hover:text-ink" href={`/w/${site.slug}/${LEGAL_PATH.privacy}`}>
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.privacy}`}>
                   Zásady ochrany osobních údajů
                 </Link>
               </p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
+import { slugProblem } from "@/lib/site-slug";
 
 // Plocha s webem v rámu zařízení (okno prohlížeče / telefon). Web běží v iframe
 // (/nahled) ve skutečné šířce zařízení a zmenší se do plochy — breakpointy
@@ -29,9 +30,12 @@ export function DeviceStage({
   slug,
   frameRef,
   title,
+  onSlugChange,
 }: {
   device: Device;
   slug: string;
+  /** Úpravy webu: adresu v liště prohlížeče jde přepsat (vrací chybu, nebo null). */
+  onSlugChange?: (slug: string) => Promise<string | null>;
   frameRef: RefObject<HTMLIFrameElement | null>;
   title: string;
 }) {
@@ -91,9 +95,13 @@ export function DeviceStage({
               <span className="h-2.5 w-2.5 rounded-full bg-amber/70" />
               <span className="h-2.5 w-2.5 rounded-full bg-pine/60" />
             </span>
-            <span className="mx-auto max-w-[60%] truncate rounded-md bg-surface px-3 py-0.5 text-center text-[11px] text-soft">
-              🔒 tainy.cz/w/{slug}
-            </span>
+            {onSlugChange ? (
+              <SlugBar slug={slug} onSave={onSlugChange} />
+            ) : (
+              <span className="mx-auto max-w-[60%] truncate rounded-md bg-surface px-3 py-0.5 text-center text-[11px] text-soft">
+                🔒 tainy.cz/{slug}
+              </span>
+            )}
             <span className="w-[42px]" aria-hidden />
           </div>
           <div className="overflow-hidden" onScroll={unscroll} style={{ width: screenW, height: screenH }}>
@@ -156,5 +164,91 @@ export function DeviceSwitch({ value, onChange }: { value: Device; onChange: (d:
         </button>
       ))}
     </div>
+  );
+}
+
+/** Adresa webu v liště prohlížeče — klik ji otevře k úpravě (část za tainy.cz/). */
+function SlugBar({ slug, onSave }: { slug: string; onSave: (slug: string) => Promise<string | null> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(slug);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setValue(slug), [slug]);
+  const problem = value !== slug ? slugProblem(value) : null;
+
+  async function save() {
+    if (value === slug) return setEditing(false);
+    if (problem) return setError(problem);
+    setSaving(true);
+    const err = await onSave(value);
+    setSaving(false);
+    if (err) setError(err);
+    else setEditing(false);
+  }
+
+  if (!editing)
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setError("");
+          setEditing(true);
+        }}
+        title="Změnit adresu webu"
+        className="group mx-auto flex max-w-[60%] items-center gap-1.5 truncate rounded-md bg-surface px-3 py-0.5 text-[11px] text-soft transition hover:text-ink hover:ring-1 hover:ring-pine/40"
+      >
+        🔒 tainy.cz/<span className="font-semibold text-ink">{slug}</span>
+        <span aria-hidden className="text-pine opacity-60 group-hover:opacity-100">✎</span>
+      </button>
+    );
+
+  return (
+    <span className="relative mx-auto flex max-w-[70%] items-center gap-1">
+      <span className="flex min-w-0 items-center rounded-md bg-surface px-2 py-0.5 text-[11px] text-soft ring-1 ring-pine">
+        🔒 tainy.cz/
+        <input
+          autoFocus
+          aria-label="Adresa webu"
+          value={value}
+          maxLength={48}
+          disabled={saving}
+          onChange={(e) => {
+            setError("");
+            setValue(e.target.value.toLowerCase().replace(/\s+/g, "-"));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") {
+              setValue(slug);
+              setEditing(false);
+            }
+          }}
+          className="min-w-0 bg-transparent font-semibold text-ink outline-none"
+          style={{ width: `${Math.max(6, value.length + 1)}ch` }}
+        />
+      </span>
+      <button type="button" onClick={save} disabled={saving} className="rounded-md bg-pine px-2 py-0.5 text-[11px] font-semibold text-white">
+        {saving ? "…" : "Uložit"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setValue(slug);
+          setEditing(false);
+        }}
+        className="rounded-md px-1.5 py-0.5 text-[11px] text-soft hover:text-ink"
+      >
+        Zrušit
+      </button>
+      {(error || problem || value !== slug) && (
+        <span
+          className={`absolute left-0 top-full z-10 mt-1.5 w-max max-w-[22rem] rounded-lg px-3 py-1.5 text-[11px] shadow-lg ${
+            error || problem ? "bg-coral text-white" : "bg-ink text-white"
+          }`}
+        >
+          {error || problem || `Stará adresa tainy.cz/${slug} přestane fungovat.`}
+        </span>
+      )}
+    </span>
   );
 }

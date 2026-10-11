@@ -11,3 +11,12 @@ export function demoPaymentsEnabled(): boolean {
   if (flag === "0" || flag === "false") return false;
   return process.env.NODE_ENV !== "production";
 }
+
+// Ukázkový web pro návštěvníky úvodní stránky: adresa tainy.cz/demo vede vždy
+// na tenhle web, i když má jinou vlastní adresu (zatím Chata Olinka). Do
+// budoucna samostatné demo pro všechny — pak stačí změnit DEMO_SITE_ID.
+export const DEMO_SLUG = "demo";
+export const DEMO_SITE_ID = process.env.DEMO_SITE_ID || "cmuhj8ull0000p7weas2jd7u7";
+
+/** Podmínka pro hledání webu podle adresy — „demo“ = ukázkový web. */
+export const siteWhere = (slug: string) => (slug === DEMO_SLUG ? { id: DEMO_SITE_ID } : { slug });

@@ -91,7 +91,7 @@ export function LegalModal({
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 sm:px-6">
           {slug ? (
             <a
-              href={`/w/${slug}/${LEGAL_PATH[kind]}`}
+              href={`/${slug}/${LEGAL_PATH[kind]}`}
               target="_blank"
               rel="noopener"
               className="text-xs text-soft underline-offset-2 hover:text-ink hover:underline"

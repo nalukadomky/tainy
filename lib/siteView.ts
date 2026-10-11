@@ -1,5 +1,5 @@
 // Převod uloženého webu na data pro <SiteView>. Používá veřejný web
-// (/w/[slug], data z DB) i živý náhled v administraci (neuložený formulář),
+// (/[slug], data z DB) i živý náhled v administraci (neuložený formulář),
 // aby náhled vypadal přesně jako to, co uvidí hosté.
 
 import type { SiteViewData } from "@/components/SiteView";
