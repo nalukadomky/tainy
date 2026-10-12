@@ -100,6 +100,9 @@ export type Site = {
   sectionOrder: string;
   /** Vlastní nadpisy sekcí (JSON, lib/sections.ts). */
   sectionTitles: string;
+  /** Vlastní doména webu a její stav (lib/domains.ts). */
+  customDomain: string | null;
+  domainStatus: string;
   /** Tón podkladu webu (lib/theme.ts), "" = automaticky. */
   surfaceTone: string;
 };

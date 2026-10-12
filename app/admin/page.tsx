@@ -19,6 +19,7 @@ import { CleaningAlerts, CleaningBadge } from "@/components/CleaningAlert";
 import { SourceMix } from "@/components/SourceMix";
 import { Icon } from "@/components/Icon";
 import { TodoSummary } from "@/components/TodoSummary";
+import { siteUrl } from "@/lib/domains";
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`;
@@ -180,7 +181,7 @@ function Dashboard() {
             <Link href="/admin/web/builder?panel=galerie" className="btn-primary !px-5 !py-2 text-sm">
               <Icon name="camera" className="mr-1.5" />Přidat fotky
             </Link>
-            <Link href={`/${site.slug}`} className="btn-ghost !px-5 !py-2 text-sm" target="_blank">
+            <Link href={siteUrl(site)} className="btn-ghost !px-5 !py-2 text-sm" target="_blank">
               Otevřít můj web ↗
             </Link>
           </div>
@@ -192,8 +193,8 @@ function Dashboard() {
           <h1 className="font-display text-3xl font-semibold tracking-tight">Přehled</h1>
           <p className="mt-1 text-sm text-soft">
             {site.name} ·{" "}
-            <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={`/${site.slug}`} target="_blank">
-              /{site.slug} ↗
+            <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={siteUrl(site)} target="_blank">
+              {site.customDomain && site.domainStatus === "active" ? site.customDomain : `/${site.slug}`} ↗
             </Link>
           </p>
         </div>

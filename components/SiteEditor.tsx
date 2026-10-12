@@ -27,12 +27,14 @@ import { AutomationSettings } from "@/components/AutomationSettings";
 import { ExternalCalendars } from "@/components/ExternalCalendars";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 import { Icon } from "@/components/Icon";
+import { DomainSettings } from "@/components/DomainSettings";
 
-type Tab = "zakladni" | "cenik" | "pravni" | "portaly" | "automatizace";
+type Tab = "zakladni" | "cenik" | "pravni" | "domena" | "portaly" | "automatizace";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
   pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
+  domena: { label: "Doména", short: "Doména", hint: "Vlastní adresa webu" },
   portaly: { label: "Externí rezervace", short: "Portály", hint: "Airbnb, Booking.com a iCal" },
   automatizace: { label: "Automatizace", short: "E-maily", hint: "E-maily hostům a zámky" },
 };
@@ -41,7 +43,10 @@ const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 // Nastavení webu (název, ceník, firma, portály, e-maily). Vzhled a obsah webu
 // se upravuje přímo ve webu (/admin/web/builder).
 export type EditorArea = "settings";
-const TAB_ORDER: Tab[] = ["zakladni", "cenik", "pravni", "portaly", "automatizace"];
+// Hlavní záložky vlevo; méně časté jsou vpravo pod „Další“
+const MAIN_TABS: Tab[] = ["zakladni", "cenik", "pravni", "domena", "automatizace"];
+const MORE_TABS: Tab[] = ["portaly"];
+const TAB_ORDER: Tab[] = [...MAIN_TABS, ...MORE_TABS];
 
 export function SiteEditor(_props: { area?: EditorArea }) {
   const router = useRouter();
@@ -300,16 +305,22 @@ export function SiteEditor(_props: { area?: EditorArea }) {
         </Link>
       </div>
 
-      {tabs.length > 1 && (
-        <div className="flex rounded-2xl border border-line bg-bg p-1" role="tablist" aria-label="Části nastavení">
-          {tabs.map((t) => (
+      <div className="flex items-stretch gap-2">
+        {/* Na mobilu se hlavní záložky posouvají do strany (všechny se nevejdou) */}
+        <div
+          className="flex min-w-0 flex-1 rounded-2xl border border-line bg-bg p-1 max-sm:overflow-x-auto"
+          style={{ scrollbarWidth: "none" }}
+          role="tablist"
+          aria-label="Části nastavení"
+        >
+          {MAIN_TABS.map((t) => (
             <button
               key={t}
               type="button"
               role="tab"
               aria-selected={tab === t}
               onClick={() => switchTab(t)}
-              className={`flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:text-center sm:px-4 ${
+              className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:flex-none max-sm:px-3 max-sm:text-center sm:px-4 ${
                 tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
               }`}
             >
@@ -321,7 +332,9 @@ export function SiteEditor(_props: { area?: EditorArea }) {
             </button>
           ))}
         </div>
-      )}
+        {/* Méně časté části — vpravo, oddělené */}
+        <MoreTabs current={tab} onPick={switchTab} />
+      </div>
 
       {tab === "zakladni" ? (
         <div id="pole-kontakt" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
@@ -372,6 +385,17 @@ export function SiteEditor(_props: { area?: EditorArea }) {
             requestSave={() => setSaveRequested(true)}
           />
         </>
+      ) : tab === "domena" ? (
+        <DomainSettings
+          slug={slug ?? form.slug}
+          domain={form.customDomain}
+          status={form.domainStatus}
+          onChange={(patch) => {
+            // Doménu ukládá API samo — tady ji jen propíšeme do dat administrace
+            setSite((s) => (s ? { ...s, ...patch } : s));
+            setForm((f) => (f ? { ...f, ...patch } : f));
+          }}
+        />
       ) : tab === "portaly" ? (
         <ExternalCalendars />
       ) : tab === "automatizace" ? (
@@ -835,5 +859,58 @@ function LeaveDialog({
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** Záložka „Další ▾“ vpravo: méně časté části nastavení (teď Externí rezervace). */
+function MoreTabs({ current, onPick }: { current: Tab; onPick: (t: Tab) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const active = MORE_TABS.includes(current);
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-full items-center gap-1.5 rounded-2xl border px-3 text-sm font-semibold transition sm:px-4 ${
+          active ? "border-line bg-surface text-ink shadow-sm" : "border-line bg-bg text-soft hover:text-ink"
+        }`}
+      >
+        <span className="max-w-[9rem] truncate">{active ? TABS[current].label : "Další"}</span>
+        <span aria-hidden className={`text-xs transition ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-lg">
+          {MORE_TABS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onPick(t);
+              }}
+              className={`block w-full rounded-xl px-3 py-2 text-left transition hover:bg-bg ${current === t ? "bg-bg" : ""}`}
+            >
+              <span className="block text-sm font-semibold">{TABS[t].label}</span>
+              <span className="block text-xs text-soft">{TABS[t].hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

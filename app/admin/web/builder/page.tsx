@@ -35,6 +35,7 @@ import { SITES_CHANGED } from "@/components/AdminNav";
 import { FLASH_KEY, useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
+import { siteUrl } from "@/lib/domains";
 
 // Builder (varianta B): web se upravuje přímo v sobě. Texty se přepisují
 // kliknutím do webu, sekce mají „Upravit", které otevře boční panel.
@@ -337,7 +338,7 @@ export default function BuilderPage() {
         </span>
         {slug && (
           <a
-            href={`/${slug}`}
+            href={form ? siteUrl(form) : `/${slug}`}
             target="_blank"
             className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium text-pine hover:bg-pine/10 max-lg:hidden"
           >

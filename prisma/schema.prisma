@@ -108,6 +108,10 @@ model Site {
   surfaceTone    String  @default("")
   // Vidí personál úkoly, které si majitel zapsal sám pro sebe?
   staffSeesOwnerTodos Boolean @default(true)
+  // Vlastní doména webu (např. chata-olinka.cz), připojená přes Vercel (lib/domains.ts)
+  customDomain     String?   @unique
+  domainStatus     String    @default("") // pending | active | error
+  domainVerifiedAt DateTime?
   // Poloha na webu: none | area (jen obec, kruh na mapě) | exact (adresa se špendlíkem).
   // geo = souřadnice dohledané z adresy při uložení (JSON, lib/location.ts)
   locationMode   String @default("area")

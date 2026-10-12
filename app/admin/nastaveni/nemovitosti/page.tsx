@@ -24,6 +24,8 @@ type Property = {
   upcoming: number;
   reservations: number;
   revenueYear: number;
+  /** Veřejná adresa (vlastní doména, nebo /adresa). */
+  url: string;
 };
 
 const currentSlug = () => {
@@ -324,7 +326,7 @@ function PropertyCard({
           <button type="button" onClick={onEditWeb} className="btn-ghost !px-4 !py-2 text-sm">
             Upravit web
           </button>
-          <a href={`/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
+          <a href={p.url || `/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
             Zobrazit ↗
           </a>
         </div>

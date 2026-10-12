@@ -1,10 +1,11 @@
 import { siteWhere } from "@/lib/demo";
+import { redirectToCustomDomain } from "@/lib/domain-redirect";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { RichText } from "@/components/RichText";
 import { Wordmark } from "@/components/Logo";
-import { LEGAL_TITLE, privacyTextOf, providerLine, termsTextOf, type LegalKind } from "@/lib/legal";
+import { LEGAL_PATH, LEGAL_TITLE, privacyTextOf, providerLine, termsTextOf, type LegalKind } from "@/lib/legal";
 
 // Veřejná stránka obchodních podmínek / zásad ochrany osobních údajů webu
 // (/[slug]/podminky, /[slug]/ochrana-udaju). Text, nebo PDF s náhledem.
@@ -46,9 +47,12 @@ export async function LegalDocPage({ slug, kind }: { slug: string; kind: LegalKi
       privacyText: true,
       privacyPdf: true,
       privacyUpdatedAt: true,
+      customDomain: true,
+      domainStatus: true,
     },
   });
   if (!site) notFound();
+  await redirectToCustomDomain(site, `/${LEGAL_PATH[kind]}`);
   const doc =
     kind === "terms"
       ? {

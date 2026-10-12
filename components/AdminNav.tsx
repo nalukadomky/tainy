@@ -136,17 +136,6 @@ export function AdminNav() {
   // Builder má vlastní horní lištu přes celou obrazovku — navigace by tam jen překážela.
   if (pathname.startsWith("/admin/web/builder")) return null;
 
-  const signOutButton = (
-    <button
-      type="button"
-      onClick={signOut}
-      className="whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium text-soft transition hover:bg-line/50 hover:text-ink"
-      title="Odhlásit se"
-    >
-      Odhlásit
-    </button>
-  );
-
   // Plné menu do horní lišty (a jeho skrytá kopie pro měření)
   const fullNav = (measuring: boolean) => (
     <>
@@ -171,10 +160,18 @@ export function AdminNav() {
             {MORE.map((item) => (
               <MenuLink key={item.href} item={item} active={isActive(item.href)} />
             ))}
+            {/* Odhlášení oddělené čarou pod ostatními položkami */}
+            <div className="my-1 border-t border-line" />
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm text-soft transition hover:bg-bg hover:text-ink"
+            >
+              <Icon name="logout" /> Odhlásit
+            </button>
           </MenuPanel>
         )}
       </div>
-      {signOutButton}
     </>
   );
 

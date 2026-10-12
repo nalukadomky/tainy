@@ -7,8 +7,16 @@ import { DEMO_SITE_ID, siteWhere } from "@/lib/demo";
 import { blockedRanges } from "@/lib/availability";
 import { addDays, toISO, todayISO } from "@/lib/stay";
 import { toSiteViewData } from "@/lib/siteView";
+import { redirectToCustomDomain } from "@/lib/domain-redirect";
 
 export const dynamic = "force-dynamic";
+
+// Titulek podle názvu webu (důležité hlavně na vlastní doméně a ve vyhledávačích)
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const site = await prisma.site.findFirst({ where: siteWhere((await params).slug), select: { name: true, tagline: true } });
+  if (!site) return {};
+  return { title: site.name || "tainy", description: site.tagline || undefined };
+}
 
 export default async function SitePage({
   params,
@@ -21,6 +29,7 @@ export default async function SitePage({
     include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
   if (!site) notFound();
+  await redirectToCustomDomain(site);
 
   // Obsazenost se načítá spolu se stránkou, takže kalendář je vyplněný
   // hned v prvním renderu a neprobliká prázdný.

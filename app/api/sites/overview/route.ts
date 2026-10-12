@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { siteUrl } from "@/lib/domains";
 import { getUser, deny } from "@/lib/auth";
 import { holdsDates } from "@/lib/availability";
 import { parsePhotoLines } from "@/lib/photos";
@@ -11,7 +12,17 @@ export async function GET() {
   const sites = await prisma.site.findMany({
     where: { ownerId: user.id },
     orderBy: { createdAt: "asc" },
-    select: { id: true, slug: true, name: true, propertyType: true, photos: true, heroPhoto: true, themeColor: true },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      propertyType: true,
+      photos: true,
+      heroPhoto: true,
+      themeColor: true,
+      customDomain: true,
+      domainStatus: true,
+    },
   });
   const now = new Date();
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
@@ -40,6 +51,8 @@ export async function GET() {
       upcoming: count(upcoming, s.id),
       reservations: count(total, s.id),
       revenueYear: revenue.find((x) => x.siteId === s.id)?._sum.totalPrice ?? 0,
+      // Veřejná adresa: aktivní vlastní doména, jinak /adresa
+      url: siteUrl(s),
     }))
   );
 }

@@ -17,7 +17,7 @@ const RESERVED = new Set([
   "admin", "api", "auth", "login", "register", "onboarding", "nahled", "uklid", "r", "w",
   "zapomenute-heslo", "favicon.ico", "robots.txt", "sitemap.xml", "_next",
   "app", "demo", "tainy", "www", "cenik", "kontakt", "podpora", "napoveda", "blog", "o-nas",
-  "podminky", "ochrana-udaju", "gdpr", "dashboard", "ucet", "nastaveni", "static", "public",
+  "podminky", "ochrana-udaju", "gdpr", "dashboard", "ucet", "nastaveni", "static", "public", "domena-nenalezena",
 ]);
 
 /** Problém s adresou (hláška pro majitele), nebo null. */
