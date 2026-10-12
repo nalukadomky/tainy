@@ -82,6 +82,8 @@ model Site {
   // kódy k zámkům (JSON [{name, code}]) a informace k příjezdu
   emailSettings  String @default("")
   locks          String @default("")
+  // Předání klíčů: code = elektronický zámek / kódy, key = fyzický klíč (kódy se nedoplňují)
+  keyHandover    String @default("code")
   arrivalAddress String @default("")
   arrivalInfo    String @default("")
   wifiName       String @default("")

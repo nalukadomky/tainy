@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAdminData, fmtDate, fmtStay, type Reservation, type Site } from "@/lib/admin";
+import { useAdminData, fmtDate, fmtStay, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
 import { AccessCode, accessCodeSavedMessage } from "@/components/AccessCode";
 import { accessCodeMail } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
@@ -474,7 +474,7 @@ function NextStay({
         </div>
       </div>
       <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-        {r.status !== "cancelled" ? (
+        {r.status !== "cancelled" && usesLockCodes(site) ? (
           <AccessCode
             compact
             key={r.accessCode}

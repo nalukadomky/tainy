@@ -77,6 +77,8 @@ export type Site = {
   /** Automatizace: e-maily hostům (JSON, lib/email-templates.ts), kódy k zámkům a příjezd. */
   emailSettings: string;
   locks: string;
+  /** code = elektronický zámek / kódy, key = fyzický klíč (kódy k rezervacím se nedoplňují). */
+  keyHandover: string;
   arrivalAddress: string;
   arrivalInfo: string;
   wifiName: string;
@@ -164,6 +166,9 @@ export type Reservation = {
   arrivalMailAt?: string | null;
   arrivalCodeMailAt?: string | null;
 };
+
+/** Předává se kód k zámku (ne fyzický klíč) — jen pak má smysl kód u rezervace. */
+export const usesLockCodes = (site: Pick<Site, "keyHandover"> | null | undefined) => site?.keyHandover !== "key";
 
 /** Hláška po změně stavu, že hostovi za chvíli odejde e-mail (stejné podmínky jako lib/guest-mails.ts). */
 export function statusMailNote(r: Reservation, status: Reservation["status"], site: Pick<Site, "emailSettings"> | null): string | null {

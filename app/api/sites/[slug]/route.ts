@@ -199,6 +199,7 @@ export async function PATCH(
   // Automatizace: e-maily a zámky projdou parserem (výchozí hodnoty, limity, jen http odkazy)
   if (typeof body.emailSettings === "string") data.emailSettings = serializeEmailSettings(parseEmailSettings(body.emailSettings));
   if (typeof body.locks === "string") data.locks = JSON.stringify(parseLocks(body.locks));
+  if (body.keyHandover === "code" || body.keyHandover === "key") data.keyHandover = body.keyHandover;
   if (body.heroStyle !== undefined) {
     data.heroStyle = body.heroStyle === "photo" ? "photo" : "text";
   }

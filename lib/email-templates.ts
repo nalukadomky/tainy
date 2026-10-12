@@ -297,6 +297,8 @@ export type EmailSite = {
   wifiName: string;
   wifiPassword: string;
   locks: string;
+  /** code = elektronický zámek (kódy v e-mailu), key = fyzický klíč (bez kódů). */
+  keyHandover?: string;
   emailSettings: string;
   /** Souřadnice (lib/location.ts) — ručně určený bod má v odkazu na mapu přednost před adresou. */
   geo?: string;
@@ -460,8 +462,10 @@ function arrivalBlock(d: StayMail, site: EmailSite, x: EmailExtras, t: Tone): st
   rows.push(
     `<strong>Příjezd:</strong> ${fmt(d.startDate)} od ${esc(d.checkInTime)} · <strong>odjezd:</strong> ${fmt(d.endDate)} do ${esc(d.checkOutTime)}`,
   );
-  const locks = parseLocks(site.locks);
-  if (x.accessCode)
+  // Fyzický klíč: žádné kódy (jak se klíč předá, píše majitel do informací k příjezdu)
+  const keys = site.keyHandover === "key";
+  const locks = keys ? [] : parseLocks(site.locks);
+  if (x.accessCode && !keys)
     rows.push(
       `<strong>Kód k zámku:</strong> <span style="font-size:17px;letter-spacing:.08em"><strong>${esc(x.accessCode)}</strong></span>`,
     );

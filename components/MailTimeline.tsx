@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { guestsLabel, type Reservation, type Site } from "@/lib/admin";
+import { guestsLabel, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
 import {
   arrivalDaysOf,
   parseEmailSettings,
+  parseLocks,
   renderEmail,
   SCHEDULED_TIME,
   type EmailKind,
@@ -26,7 +27,8 @@ import { Icon } from "@/components/Icon";
 
 type Kind = EmailKind | "arrivalCode" | "dateChange";
 type Sent = { id: string; kind: Kind; subject: string; html: string; sentAt: string };
-type Step = { key: string; kind: Kind; label: string; at?: string; plan?: string; mail?: Sent };
+/** sendNow = naplánovaný e-mail jde poslat hned na klik (host chce údaje dřív). */
+type Step = { key: string; kind: Kind; label: string; at?: string; plan?: string; mail?: Sent; sendNow?: boolean };
 
 const LABEL: Record<Kind, string> = {
   booking: "Přijetí rezervace",
@@ -60,7 +62,7 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
   for (const [kind, at] of older) if (at && !logged.has(kind)) sent.push({ key: kind, kind, label: LABEL[kind], at });
   sent.sort((a, b) => a.at!.localeCompare(b.at!));
   for (const s of sent) {
-    if (s.kind === "arrival" && r.accessCode && (!r.accessCodeSetAt || r.accessCodeSetAt <= s.at!))
+    if (s.kind === "arrival" && usesLockCodes(site) && r.accessCode && (!r.accessCodeSetAt || r.accessCodeSetAt <= s.at!))
       s.label = "Před příjezdem, s kódem k zámku";
   }
 
@@ -72,7 +74,7 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
         planned.push({ key: "plan-paid", kind: "paid", label: LABEL.paid, plan: "po označení „Zaplaceno“" });
       else if (r.paidAt) planned.push({ key: "plan-paid", kind: "paid", label: LABEL.paid, plan: "odchází…" });
     }
-    if (!r.arrivalMailAt && settings.arrival.enabled && (r.status === "pending" || r.paidAt)) {
+    if (!r.arrivalMailAt && !logged.has("arrival") && settings.arrival.enabled) {
       const due = cleaningStart(addDays(r.startDate.slice(0, 10), -arrivalDaysOf(site)), SCHEDULED_TIME);
       const future = due > new Date();
       const plan =
@@ -80,10 +82,12 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
           ? future
             ? `${fmtSendAt(due)}, jen po zaplacení`
             : "hned po zaplacení"
-          : future
-            ? fmtSendAt(due)
-            : "odchází…";
-      planned.push({ key: "plan-arrival", kind: "arrival", label: LABEL.arrival, plan });
+          : !r.paidAt
+            ? "neodejde samo — pošli ručně" // zaplaceno před zavedením automatických e-mailů
+            : future
+              ? fmtSendAt(due)
+              : "odchází…";
+      planned.push({ key: "plan-arrival", kind: "arrival", label: LABEL.arrival, plan, sendNow: r.status === "paid" });
     }
   }
   return [...sent, ...planned];
@@ -114,7 +118,9 @@ function stayOf(r: Reservation, site: Site): StayMail {
     demo: r.source === "demo",
     checkInTime: r.checkInTime || site.checkInTime,
     checkOutTime: r.checkOutTime || site.checkOutTime,
-    legal: site.businessName ? { provider: providerLine(site), short: providerShort(site), address: site.businessAddress } : undefined,
+    legal: site.businessName
+      ? { provider: providerLine(site), short: providerShort(site), address: site.businessAddress }
+      : undefined,
   };
 }
 
@@ -163,21 +169,44 @@ function MailDialog({
   content,
   loading,
   onClose,
+  onSendNow,
+  needsCode,
 }: {
   step: Step;
   content: { subject: string; html: string } | null;
   loading: boolean;
   onClose: () => void;
+  /** Poslat naplánovaný e-mail hned (případně s doplněným kódem k zámku); vrací chybovou hlášku, nebo null. */
+  onSendNow?: (accessCode?: string) => Promise<string | null>;
+  /** Rezervace ani ubytování nemají kód k zámku — před odesláním se na něj zeptat. */
+  needsCode?: boolean;
 }) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [askCode, setAskCode] = useState(false);
+  const [code, setCode] = useState("");
+
+  async function send(accessCode?: string) {
+    if (!onSendNow) return;
+    setSending(true);
+    setError("");
+    const err = await onSendNow(accessCode);
+    setSending(false);
+    if (err) {
+      setError(err);
+      setAskCode(false);
+    } else onClose();
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation();
-      onClose();
+      if (askCode) setAskCode(false);
+      else onClose();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [onClose, askCode]);
 
   const note = step.mail
     ? null
@@ -225,17 +254,111 @@ function MailDialog({
             <p className="p-5 text-sm text-soft">Obsah tohoto e-mailu není uložený.</p>
           )}
         </div>
+        {onSendNow && (
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-3">
+            {error && <p className="mr-auto text-sm text-red-700">{error}</p>}
+            <p className={`text-xs text-soft ${error ? "hidden" : "mr-auto"}`}>Host chce údaje dřív? E-mail můžeš poslat hned.</p>
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => (needsCode ? setAskCode(true) : send())}
+              className="btn-primary !px-5 !py-2 text-sm"
+            >
+              {sending ? "Odesílám…" : "Poslat hostovi hned"}
+            </button>
+          </div>
+        )}
       </div>
+      {askCode && (
+        <div
+          className="fixed inset-0 z-[95] flex items-end justify-center bg-ink/40 sm:items-center sm:p-6"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAskCode(false);
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Chybí kód k zámku"
+            className="rise w-full max-w-sm rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber/20 text-[#92600a]">
+                <Icon name="lock" size={20} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-display text-xl font-semibold">Chybí kód k zámku</h2>
+                <p className="text-xs text-soft">Host by v e-mailu dostal informace k příjezdu bez kódu.</p>
+              </div>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (code.trim()) send(code.trim());
+              }}
+            >
+              <label className="mt-4 block">
+                <span className="sr-only">Kód k zámku</span>
+                <input
+                  autoFocus
+                  className="field text-center font-mono text-xl tracking-[0.2em]"
+                  placeholder="např. 4821#"
+                  maxLength={40}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={!code.trim() || sending} className="btn-primary mt-4 w-full !py-2.5">
+                {sending ? "Odesílám…" : "Uložit kód a poslat"}
+              </button>
+            </form>
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => send()}
+              className="mt-3 w-full text-center text-sm text-soft hover:text-ink hover:underline"
+            >
+              Poslat bez kódu (klíče předávám jinak)
+            </button>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );
 }
 
-export function MailTimeline({ r, site }: { r: Reservation; site: Site | null }) {
+export function MailTimeline({
+  r,
+  site,
+  onChange,
+}: {
+  r: Reservation;
+  site: Site | null;
+  /** Rezervace se změnila na serveru (kód k zámku doplněný při odeslání). */
+  onChange?: (r: Reservation) => void;
+}) {
   const [log, setLog] = useState<Sent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [shown, setShown] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  async function sendNow(kind: Kind, accessCode?: string): Promise<string | null> {
+    const res = await fetch(`/api/reservations/${r.id}/mails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, accessCode }),
+    }).catch(() => null);
+    if (!res) return "Nepodařilo se spojit se serverem.";
+    if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "E-mail se nepodařilo odeslat.";
+    // Hned v administraci: e-mail odešel (a případně s nově doplněným kódem)
+    const now = new Date().toISOString();
+    onChange?.({ ...r, ...(accessCode && { accessCode, accessCodeSetAt: now }), ...(kind === "arrival" && { arrivalMailAt: now }) });
+    setReloadKey((k) => k + 1); // archiv načte nově odeslaný e-mail
+    return null;
+  }
   useEffect(() => {
     let alive = true;
     fetch(`/api/reservations/${r.id}/mails`)
@@ -250,7 +373,7 @@ export function MailTimeline({ r, site }: { r: Reservation; site: Site | null })
       alive = false;
     };
     // Znovu po změně stavu / odeslání (časy u rezervace se mění)
-  }, [r.id, r.status, r.paidMailAt, r.arrivalMailAt, r.arrivalCodeMailAt, r.cancelMailAt]);
+  }, [r.id, r.status, r.paidMailAt, r.arrivalMailAt, r.arrivalCodeMailAt, r.cancelMailAt, reloadKey]);
 
   const list = useMemo(() => steps(r, site, log), [r, site, log]);
   // Po načtení archivu se klíč odeslaného e-mailu změní (druh → id záznamu)
@@ -314,7 +437,10 @@ export function MailTimeline({ r, site }: { r: Reservation; site: Site | null })
                     </span>
                     <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-4">
                       <span className={`group-hover:underline ${s.at ? "" : "text-soft"}`}>{s.label}</span>
-                      <span className="tabular-nums text-soft">{s.at ? fmt(s.at) : s.plan}</span>
+                      <span className="tabular-nums text-soft">
+                        {s.at ? fmt(s.at) : s.plan}
+                        {s.sendNow && <span className="ml-2 font-medium text-pine">· poslat hned</span>}
+                      </span>
                     </span>
                     <Icon name="chevronDown" size={14} className="mt-1 -rotate-90 text-soft/70" />
                   </button>
@@ -329,6 +455,8 @@ export function MailTimeline({ r, site }: { r: Reservation; site: Site | null })
           step={current}
           content={current.mail ?? preview(current, r, site)}
           loading={!!current.at && !current.mail && !loaded}
+          onSendNow={current.sendNow ? (code) => sendNow(current.kind, code) : undefined}
+          needsCode={usesLockCodes(site) && !r.accessCode.trim() && !parseLocks(site?.locks).some((l) => l.code.trim())}
           onClose={() => setOpen(null)}
         />
       )}

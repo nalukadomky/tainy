@@ -26,6 +26,8 @@ import { nightsBetween, plural } from "@/lib/pricing";
 import { addDays, todayISO } from "@/lib/stay";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { AddressInput } from "@/components/AddressInput";
+import { Icon } from "@/components/Icon";
+import { KeyIcon } from "@/components/AccessCode";
 
 // Nastavení → Automatizace: e-maily hostům (informativní / komerční / pro tebe),
 // kódy k zámkům a informace k příjezdu. Ukládá se společným tlačítkem editoru.
@@ -144,7 +146,8 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
         title="Příjezd a zámky"
         hint={`Posílá se hostům v e-mailu Před příjezdem (${settings.arrival.days} ${plural(settings.arrival.days, "den", "dny", "dní")} předem).`}
       >
-        <LocksCard value={form.locks} onChange={(v) => set("locks", v)} />
+        <KeyHandoverCard value={form.keyHandover === "key" ? "key" : "code"} onChange={(v) => set("keyHandover", v)} />
+        {form.keyHandover !== "key" && <LocksCard value={form.locks} onChange={(v) => set("locks", v)} />}
         <ArrivalCard form={form} set={set} />
       </Section>
 
@@ -457,6 +460,45 @@ function NumberField({
         if (n !== value) onChange(n);
       }}
     />
+  );
+}
+
+const HANDOVER = [
+  { value: "code", title: "Elektronický zámek", text: "Host dostane kód (u rezervace nebo stálé kódy níže) v e-mailu Před příjezdem." },
+  { value: "key", title: "Fyzický klíč", text: "Klíče předáváš osobně nebo jinak — kódy se u rezervací nedoplňují." },
+] as const;
+
+function KeyHandoverCard({ value, onChange }: { value: "code" | "key"; onChange: (v: "code" | "key") => void }) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+      <div>
+        <h3 className="font-semibold">Předání klíčů</h3>
+        <p className="text-sm text-soft">Podle toho se u rezervací doplňuje kód k zámku, nebo ne.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Předání klíčů">
+        {HANDOVER.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={`flex flex-col items-start justify-start rounded-xl border px-4 py-3 text-left transition ${
+              value === o.value ? "border-pine bg-pine/5 ring-1 ring-pine" : "border-line hover:border-ink/30"
+            }`}
+          >
+            <span className="flex items-center gap-2 font-medium">
+              {o.value === "code" ? <Icon name="lock" size={16} className="text-pine" /> : <KeyIcon className="h-4 w-4 text-pine" />}
+              {o.title}
+            </span>
+            <span className="mt-1 block text-xs text-soft">{o.text}</span>
+          </button>
+        ))}
+      </div>
+      {value === "key" && (
+        <p className="text-xs text-soft">Jak a kde si host klíče vyzvedne, napiš do Informací k příjezdu — pošlou se mu v e-mailu.</p>
+      )}
+    </div>
   );
 }
 

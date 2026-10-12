@@ -83,6 +83,26 @@ async function arrivalMail(r: Loaded) {
   });
 }
 
+/**
+ * „Před příjezdem“ hned na pokyn majitele (host chce údaje dřív) — bez čekání
+ * na plánovaný den. Vrací chybovou hlášku, nebo null, když e-mail odešel.
+ */
+export async function sendArrivalNow(id: string, accessCode?: string): Promise<string | null> {
+  // Kód k zámku doplněný těsně před odesláním — uložit dřív, ať je v e-mailu
+  const code = accessCode?.trim().slice(0, 40);
+  if (code) await prisma.reservation.updateMany({ where: { id, arrivalMailAt: null }, data: { accessCode: code, accessCodeSetAt: new Date() } });
+  const r = await loadReservation(id);
+  if (!r) return "Rezervace nenalezena.";
+  if (!mailable(r)) return "Tahle rezervace nemá e-mail, na který by šlo psát.";
+  // Informace k příjezdu (kódy, Wi-Fi) až po zaplacení
+  if (r.status !== "paid") return "Informace k příjezdu jde poslat až u zaplacené rezervace.";
+  if (r.arrivalMailAt) return "E-mail „Před příjezdem“ už odešel.";
+  const ok = await claimAndSend(r, { arrivalMailAt: null, status: "paid" }, "arrivalMailAt", "arrival", {
+    accessCode: r.accessCode.trim() || undefined,
+  });
+  return ok ? null : "E-mail se nepodařilo odeslat. Zkus to prosím znovu.";
+}
+
 /** Pošle hostovi všechny e-maily, které jsou pro rezervaci právě na řadě. */
 export async function sendDueMails(id: string): Promise<void> {
   const r = await loadReservation(id);

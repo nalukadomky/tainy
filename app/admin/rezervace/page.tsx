@@ -6,6 +6,7 @@ import {
   useAdminData,
   fmtDate,
   guestsLabel,
+  usesLockCodes,
   norm,
   SOURCE_LABEL,
   STATUS_LABEL,
@@ -183,7 +184,7 @@ export default function ReservationsPage() {
     if (editable(r) && r.guestName.startsWith("Host z ")) return { label: "✎ Doplnit údaje", run: () => setEditing(r) };
     // Kód k zámku až když se příjezd blíží (do 14 dnů) — dřív by to byl jen šum
     const start = r.startDate.slice(0, 10);
-    if (r.status !== "cancelled" && start >= todayISO() && start <= addDays(todayISO(), 14) && !r.accessCode)
+    if (usesLockCodes(site) && r.status !== "cancelled" && start >= todayISO() && start <= addDays(todayISO(), 14) && !r.accessCode)
       return { label: "Doplnit kód", run: () => setCodeFor(r) };
     return null;
   }
@@ -419,7 +420,8 @@ export default function ReservationsPage() {
                               },
                               editable(r) && { label: "✎ Doplnit údaje", run: () => setEditing(r) },
                               r.status !== "cancelled" && !r.feedId && { label: "Změnit termín", run: () => setRescheduling(r) },
-                              r.status !== "cancelled" &&
+                              usesLockCodes(site) &&
+                                r.status !== "cancelled" &&
                                 r.endDate.slice(0, 10) >= todayISO() && {
                                   label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
                                   run: () => setCodeFor(r),
@@ -446,7 +448,7 @@ export default function ReservationsPage() {
       {sheetId &&
         (() => {
           const r = reservations.find((x) => x.id === sheetId);
-          return r ? <DetailSheet r={r} site={site} onClose={() => setSheetId(null)} /> : null;
+          return r ? <DetailSheet r={r} site={site} onClose={() => setSheetId(null)} onChange={replaceReservation} /> : null;
         })()}
       {codeFor && (
         <AccessCodeDialog
@@ -478,7 +480,7 @@ export default function ReservationsPage() {
 const nightsOf = (r: Reservation) => nightsBetween(new Date(r.startDate), new Date(r.endDate));
 
 /** Rozkliknutý detail se všemi údaji rezervace: pobyt, host, cena, rezervace. */
-function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
+function StayDetail({ r, site, onChange }: { r: Reservation; site: Site | null; onChange?: (r: Reservation) => void }) {
   const times = site ? stayTimes(r, site) : r;
   const nights = nightsOf(r);
   const dateTime = (iso: string) =>
@@ -587,14 +589,14 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
         <Row label="Vytvořeno">{dateTime(r.createdAt)}</Row>
         {r.status === "pending" && r.expiresAt && <Row label="Držíme do">{dateTime(r.expiresAt)}</Row>}
         {r.termsAcceptedAt && <Row label="Souhlas s podmínkami">{dateTime(r.termsAcceptedAt)}</Row>}
-        {r.accessCode && (
+        {r.accessCode && usesLockCodes(site) && (
           <Row label="Kód k zámku">
             <span className="font-mono tracking-wider">{r.accessCode}</span>
           </Row>
         )}
       </Group>
 
-      <MailTimeline r={r} site={site} />
+      <MailTimeline r={r} site={site} onChange={onChange} />
     </div>
   );
 }
@@ -662,7 +664,18 @@ function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
 }
 
 /** Mobil: detail rezervace v okně zespodu. */
-function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; onClose: () => void }) {
+function DetailSheet({
+  r,
+  site,
+  onClose,
+  onChange,
+}: {
+  r: Reservation;
+  site: Site | null;
+  onClose: () => void;
+  /** Rezervace se změnila na serveru (např. kód k zámku doplněný při odeslání e-mailu). */
+  onChange?: (r: Reservation) => void;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -712,7 +725,7 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
           </button>
         </div>
         <div className="overflow-y-auto overscroll-contain px-5 pb-8 pt-1 sm:px-6">
-          <StayDetail r={r} site={site} />
+          <StayDetail r={r} site={site} onChange={onChange} />
         </div>
       </div>
     </div>,

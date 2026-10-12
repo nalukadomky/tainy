@@ -18,7 +18,7 @@ export function useToast() {
   const show = useCallback((text: string, tone: Tone = "error") => {
     if (timer.current) clearTimeout(timer.current);
     setMessage({ text, tone, id: Date.now() });
-    timer.current = setTimeout(() => setMessage(null), 3500);
+    timer.current = setTimeout(() => setMessage(null), 6500);
   }, []);
 
   useEffect(() => () => {
