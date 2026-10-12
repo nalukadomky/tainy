@@ -5,7 +5,7 @@ import type { Reservation, Site } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { pricedCategories } from "@/lib/pricing";
 import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
-import { LEGAL_PATH, hasDoc, providerLine } from "@/lib/legal";
+import { LEGAL_PATH, hasDoc, providerLine, providerShort } from "@/lib/legal";
 import { nightsOf, stayTimes, toISO } from "@/lib/stay";
 import { appUrl, type StayMail } from "@/lib/email";
 
@@ -50,6 +50,8 @@ export function stayMailOf(reservation: Reservation, site: Site): StayMail {
     ...stayTimes(reservation, site),
     legal: {
       provider: providerLine(site),
+      short: providerShort(site),
+      address: site.businessAddress,
       termsUrl: hasDoc(site, "terms") ? `${appUrl()}/${site.slug}/${LEGAL_PATH.terms}` : undefined,
       privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
     },

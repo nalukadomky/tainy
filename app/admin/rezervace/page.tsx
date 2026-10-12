@@ -26,6 +26,7 @@ import { arrivalDaysOf } from "@/lib/email-templates";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { SwipeToPay } from "@/components/SwipeToPay";
 import { MailTimeline } from "@/components/MailTimeline";
+import { Icon, type IconName } from "@/components/Icon";
 import { ListMore, usePaged } from "@/components/ListMore";
 
 /** Záložky seznamu — každá má své přirozené řazení (viz `shown`). */
@@ -496,17 +497,20 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
       <dd className="min-w-0 text-right font-medium">{children}</dd>
     </div>
   );
-  const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-soft">{title}</p>
+  const Group = ({ title, icon, children }: { title: string; icon: IconName; children: React.ReactNode }) => (
+    <section className="rounded-xl border border-line bg-surface px-4 py-3.5">
+      <h3 className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-soft">
+        <Icon name={icon} size={16} className="text-pine" />
+        {title}
+      </h3>
       <dl className="space-y-1.5">{children}</dl>
-    </div>
+    </section>
   );
   const link = "text-pine hover:underline";
 
   return (
-    <div className="mt-3 grid gap-4 rounded-xl bg-bg/60 px-4 py-3 text-sm sm:grid-cols-2 sm:gap-x-8">
-      <Group title="Pobyt">
+    <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+      <Group title="Pobyt" icon="home">
         <Row label="Příjezd">
           {fmtDate(r.startDate)}
           {times.checkInTime && ` od ${times.checkInTime}`}
@@ -521,7 +525,7 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
         <Row label="Hosté">{guestsLabel(r, site)}</Row>
       </Group>
 
-      <Group title="Host">
+      <Group title="Host" icon="user">
         {hidden ? (
           <Row label="Kontakt">
             <span className="font-normal text-soft">
@@ -554,7 +558,7 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
         )}
       </Group>
 
-      <Group title="Cena">
+      <Group title="Cena" icon="card">
         <Row label={`Ubytování (${nights} ${plural(nights, "noc", "noci", "nocí")})`}>{czk(r.nightsTotal)}</Row>
         {r.feesTotal > 0 && <Row label="Poplatky (úklid, pobyt)">{czk(r.feesTotal)}</Row>}
         {r.discount > 0 && (
@@ -562,7 +566,10 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
             <span className="text-pine">−{czk(r.discount)}</span>
           </Row>
         )}
-        <Row label="Celkem">{czk(r.totalPrice)}</Row>
+        <div className="mt-1 flex justify-between gap-4 border-t border-line pt-2 font-semibold">
+          <dt>Celkem</dt>
+          <dd>{czk(r.totalPrice)}</dd>
+        </div>
         {r.vatRate > 0 && (
           <Row label={`z toho DPH ${r.vatRate} %`}>
             <span className="font-normal">{czk(r.vatAmount)}</span>
@@ -570,7 +577,7 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
         )}
       </Group>
 
-      <Group title="Rezervace">
+      <Group title="Rezervace" icon="file">
         <Row label="Kód">
           <a href={`/r/${r.publicId}`} target="_blank" className={link}>
             {r.publicId} ↗
@@ -687,6 +694,10 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
               <span className="font-semibold">{czk(r.totalPrice)}</span>
               <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
                 {STATUS_LABEL[r.status]}
+              </span>
+              <span className="text-soft">
+                {shortRange(r.startDate, r.endDate)} · {nightsOf(r)}{" "}
+                {plural(nightsOf(r), "noc", "noci", "nocí")}
               </span>
               <CleaningBadge alert={r.cleaningAlert} withLink />
             </p>

@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
     sendGuestConfirmation(mail, site, {
       payment: pay ? { account: site.bankAccount, vs: pay.vs, amount: created.totalPrice } : null,
       holdUntil: created.expiresAt?.toISOString() ?? null,
-    }),
+    }, created.id),
     parseEmailSettings(site.emailSettings).ownerNotify && sendOwnerNotification(mail, site.contactEmail),
   ]);
 

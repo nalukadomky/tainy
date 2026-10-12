@@ -135,6 +135,11 @@ export function providerLine(p: Pick<Provider, "businessName" | "businessId" | "
     .join(" · ");
 }
 
+/** Krátký řádek provozovatele (jméno · IČ) do patičky provozních e-mailů. */
+export function providerShort(p: Pick<Provider, "businessName" | "businessId">): string {
+  return [p.businessName, p.businessId && `IČ ${p.businessId}`].filter(Boolean).join(" · ");
+}
+
 /** Výchozí znění zásad ochrany osobních údajů pro ubytování. */
 export function privacyTemplate(p: Provider, propertyName: string): string {
   const missing = (what: string) => `[doplň ${what}]`;

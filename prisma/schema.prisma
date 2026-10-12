@@ -193,6 +193,7 @@ model Reservation {
   termsVersion    String   @default("")
   createdAt  DateTime @default(now())
   cleaning   Cleaning?
+  mails      GuestMail[]
   // Stažené z kalendáře portálu (iCal): kalendář a UID události v něm
   feedId      String?
   feed        CalendarFeed? @relation(fields: [feedId], references: [id], onDelete: Cascade)
@@ -345,4 +346,17 @@ model Todo {
   createdAt   DateTime  @default(now())
 
   @@index([siteId, done])
+}
+
+// Odeslaný e-mail hostovi — přesně to, co odešlo (časová osa v detailu rezervace)
+model GuestMail {
+  id            String      @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  kind          String      // booking | paid | arrival | arrivalCode | cancelled
+  subject       String
+  html          String
+  sentAt        DateTime    @default(now())
+
+  @@index([reservationId])
 }

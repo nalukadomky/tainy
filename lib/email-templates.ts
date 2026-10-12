@@ -282,7 +282,8 @@ export type StayMail = {
   checkInTime: string;
   checkOutTime: string;
   /** Provozovatel a odkazy na obchodní podmínky / zásady (jen pokud je web má). */
-  legal?: { provider: string; termsUrl?: string; privacyUrl?: string };
+  /** provider = celý řádek (jméno · IČ · DIČ · sídlo), short = jen jméno · IČ (provozní e-maily). */
+  legal?: { provider: string; short?: string; address?: string; termsUrl?: string; privacyUrl?: string };
 };
 
 /** Údaje webu, ze kterých šablony berou kontakt, příjezd a podmínky. */
@@ -340,7 +341,8 @@ const MUTED = "color:#5a6557";
 const BOX = "margin:16px 0;padding:14px 16px;border-radius:12px;background:#f6f3ec;font-size:14px;line-height:1.6";
 
 export function layout(body: string, title?: string): string {
-  return `<!doctype html><html lang="cs"><body style="margin:0;background:#f6f3ec;padding:24px;font-family:system-ui,-apple-system,sans-serif;color:#1e2a20">
+  // Apple Mail dělá z adres a čísel modré odkazy — necháme je v barvě okolního textu
+  return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><style>a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-weight:inherit!important}</style></head><body style="margin:0;background:#f6f3ec;padding:24px;font-family:system-ui,-apple-system,sans-serif;color:#1e2a20">
   <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e4ddcf;border-radius:16px;padding:28px">
     <p style="margin:0 0 20px;font-size:18px;font-weight:700;letter-spacing:-.01em">tainy</p>
     ${title ? `<h1 style="margin:0 0 16px;font-size:21px;line-height:1.3">${title}</h1>` : ""}
@@ -361,15 +363,28 @@ export function stayBlock(r: StayMail): string {
   </table>`;
 }
 
-export function legalBlock(legal: StayMail["legal"]): string {
+/**
+ * Patička s provozovatelem. Potvrzení rezervace (smlouva na dálku) ji má celou
+ * i s podmínkami; ostatní e-maily jen nenápadný řádek se jménem a IČ.
+ */
+export function legalBlock(legal: StayMail["legal"], full = true): string {
   if (!legal) return "";
+  if (!full) {
+    const line = legal.short ?? legal.provider;
+    return line ? `<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e4ddcf;font-size:12px;line-height:1.6;${MUTED}">${esc(line)}</p>` : "";
+  }
   const links = [
     legal.termsUrl && `<a href="${esc(legal.termsUrl)}" style="${MUTED}">Obchodní podmínky</a>`,
     legal.privacyUrl && `<a href="${esc(legal.privacyUrl)}" style="${MUTED}">Ochrana osobních údajů</a>`,
   ].filter(Boolean);
   if (!legal.provider && !links.length) return "";
+  // Sídlo zvlášť a menším písmem — je povinné, ale nemusí být výrazné
+  const address = legal.address?.trim();
+  const provider = address && legal.provider.endsWith(` · ${address}`) ? legal.provider.slice(0, -` · ${address}`.length) : legal.provider;
   return `<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e4ddcf;font-size:12px;line-height:1.6;${MUTED}">
-    ${legal.provider ? `Provozovatel: ${esc(legal.provider)}<br>` : ""}${links.join(" · ")}
+    ${provider ? `Provozovatel: ${esc(provider)}<br>` : ""}${
+      address && provider !== legal.provider ? `<span style="font-size:11px;color:#8a9187">Sídlo: ${esc(address)}</span><br>` : ""
+    }${links.join(" · ")}
   </p>`;
 }
 
@@ -426,7 +441,7 @@ function paymentBlock(d: StayMail, x: EmailExtras, t: Tone): string {
     Účet: <strong>${esc(x.payment.account)}</strong><br>
     Částka: <strong>${czk(x.payment.amount)}</strong><br>
     Variabilní symbol: <strong>${esc(x.payment.vs)}</strong><br>
-    <span style="${MUTED}">QR kód pro platbu z mobilu ${t("najdeš", "najdete")} na stránce rezervace.</span>
+    <span style="${MUTED}">Platbu z mobilu ${t("vyřídíš", "vyřídíte")} nejrychleji přes QR kód — ${t("najdeš", "najdete")} ho pod tlačítkem níže.</span>
   </div>`;
 }
 
@@ -495,7 +510,7 @@ export function renderEmail(
   const code = `<p style="margin:20px 0 0;font-size:13px;${MUTED}">Kód rezervace: <strong>${esc(d.publicId)}</strong></p>`;
   let body = "";
   if (kind === "booking")
-    body = `${stayBlock(d)}${paymentBlock(d, x, t)}<p style="margin:0 0 20px;font-size:14px;${MUTED}">Příjezd od ${esc(d.checkInTime)}, odjezd do ${esc(d.checkOutTime)}.</p>${button(x.link, "Zobrazit rezervaci")}${code}`;
+    body = `${stayBlock(d)}${paymentBlock(d, x, t)}<p style="margin:0 0 20px;font-size:14px;${MUTED}">Příjezd od ${esc(d.checkInTime)}, odjezd do ${esc(d.checkOutTime)}.</p>${button(x.link, x.payment && !d.paid && !d.demo ? "Zobrazit platbu a QR kód" : "Zobrazit rezervaci")}${code}`;
   else if (kind === "paid")
     body = `${stayBlock(d)}<p style="margin:0 0 20px;font-size:14px;${MUTED}">Příjezd od ${esc(d.checkInTime)}, odjezd do ${esc(d.checkOutTime)}.</p>${button(x.link, "Zobrazit rezervaci")}${code}`;
   else if (kind === "arrival")
@@ -517,6 +532,6 @@ export function renderEmail(
 
   return {
     subject: fillVars(cfg.subject, d),
-    html: layout(`${intro}${body}${legalBlock(d.legal)}${unsubscribe}`),
+    html: layout(`${intro}${body}${legalBlock(d.legal, kind === "booking")}${unsubscribe}`),
   };
 }

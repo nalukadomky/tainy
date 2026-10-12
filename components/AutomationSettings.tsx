@@ -1,5 +1,6 @@
 "use client";
 
+import { providerLine, providerShort } from "@/lib/legal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAdminData, type Reservation, type Site } from "@/lib/admin";
@@ -615,7 +616,7 @@ function previewData(form: Site, reservations: Reservation[]): { stay: StayMail;
       demo: false,
       checkInTime: r?.checkInTime ?? form.checkInTime,
       checkOutTime: r?.checkOutTime ?? form.checkOutTime,
-      legal: form.businessName ? { provider: form.businessName } : undefined,
+      legal: form.businessName ? { provider: providerLine(form), short: providerShort(form), address: form.businessAddress } : undefined,
     },
   };
 }

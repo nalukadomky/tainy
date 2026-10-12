@@ -138,7 +138,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await sendGuestDateChange(
       stayMailOf(updated, site),
       old,
-      paid ? Math.max(0, updated.totalPrice - reservation.totalPrice) : 0
+      paid ? Math.max(0, updated.totalPrice - reservation.totalPrice) : 0,
+      id
     );
   }
 

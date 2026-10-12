@@ -2,6 +2,7 @@
 // Bez RESEND_API_KEY se zpráva jen vypíše do konzole, aby vývoj běžel dál.
 
 import { Resend } from "resend";
+import { prisma } from "@/lib/prisma";
 import { czk } from "@/lib/pricing";
 import { greetingName } from "@/lib/vocative";
 import {
@@ -49,9 +50,19 @@ export async function send({ to, subject, html }: Mail): Promise<boolean> {
 const titled = (title: string, body: string) => layout(body, title);
 
 /** Potvrzení přijetí rezervace hostovi — text podle Nastavení → Automatizace. */
-export async function sendGuestConfirmation(r: StayMail, site: EmailSite, extras: Omit<EmailExtras, "link">): Promise<void> {
+export async function sendGuestConfirmation(
+  r: StayMail,
+  site: EmailSite,
+  extras: Omit<EmailExtras, "link">,
+  reservationId?: string,
+): Promise<void> {
   const { subject, html } = renderEmail("booking", site, r, { ...extras, link: `${appUrl()}/r/${r.publicId}` });
-  await send({ to: r.email, subject, html });
+  if ((await send({ to: r.email, subject, html })) && reservationId) await logGuestMail(reservationId, "booking", subject, html);
+}
+
+/** Uloží odeslaný e-mail hostovi (časová osa v detailu rezervace). Selhání nevadí. */
+export async function logGuestMail(reservationId: string, kind: string, subject: string, html: string): Promise<void> {
+  await prisma.guestMail.create({ data: { reservationId, kind, subject, html } }).catch((e) => console.error("Záznam e-mailu se neuložil:", e));
 }
 
 /** Upozornění majiteli na novou rezervaci. */
@@ -74,7 +85,8 @@ export async function sendOwnerNotification(r: StayMail, ownerEmail: string): Pr
 export async function sendGuestDateChange(
   r: StayMail,
   old: { startDate: string; endDate: string },
-  doplatek: number
+  doplatek: number,
+  reservationId?: string
 ): Promise<void> {
   const link = `${appUrl()}/r/${r.publicId}`;
   const payment =
@@ -82,7 +94,7 @@ export async function sendGuestDateChange(
       ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Nový termín vychází dráž — <strong>doplatek ${czk(doplatek)}</strong>. Podrobnosti najdeš na stránce rezervace.</p>`
       : "";
 
-  await send({
+  const mail = {
     to: r.email,
     subject: `Změna termínu — ${r.siteName}, ${fmt(r.startDate)}`,
     html: titled(
@@ -95,5 +107,6 @@ export async function sendGuestDateChange(
        <a href="${link}" style="display:inline-block;background:#2c5e3f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;font-size:15px">Zobrazit rezervaci</a>
        <p style="margin:20px 0 0;font-size:13px;color:#5a6557">Kód rezervace: <strong>${r.publicId}</strong></p>`
     ),
-  });
+  };
+  if ((await send(mail)) && reservationId) await logGuestMail(reservationId, "dateChange", mail.subject, mail.html);
 }

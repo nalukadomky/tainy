@@ -12,7 +12,7 @@
 
 import type { Prisma, Reservation, Site } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { appUrl, send } from "@/lib/email";
+import { appUrl, logGuestMail, send } from "@/lib/email";
 import { arrivalDaysOf, parseEmailSettings, renderEmail, SCHEDULED_TIME, type EmailKind } from "@/lib/email-templates";
 import { cleaningStart } from "@/lib/cleaning";
 import { addDays, toISO, todayISO } from "@/lib/stay";
@@ -49,6 +49,7 @@ async function claimAndSend(
   const { subject, html } = renderEmail(kind, r.site, stayMailOf(r, r.site), { link: `${appUrl()}/r/${r.publicId}`, ...extras });
   const ok = await send({ to: r.email, subject, html });
   if (!ok) await prisma.reservation.update({ where: { id: r.id }, data: { [field]: r[field] } });
+  else await logGuestMail(r.id, field === "arrivalCodeMailAt" ? "arrivalCode" : kind, subject, html);
   return ok;
 }
 

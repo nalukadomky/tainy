@@ -8,6 +8,7 @@ import { blockedRanges } from "@/lib/availability";
 import { addDays, toISO, todayISO } from "@/lib/stay";
 import { toSiteViewData } from "@/lib/siteView";
 import { redirectToCustomDomain } from "@/lib/domain-redirect";
+import { getUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +36,12 @@ export default async function SitePage({
   // hned v prvním renderu a neprobliká prázdný.
   // Souřadnice pro „Kde nás najdete“ (u adresy zadané dřív se dohledají jednou)
   const [booked, geo] = await Promise.all([blockedRanges(site.id, addDays(todayISO(), -40)), ensureGeo(site)]);
+  // Lišta „ukázkový web“ jen pro návštěvníky — majitel (např. přes „Zobrazit web“) vidí čistý web
+  const demoBar = site.id === DEMO_SITE_ID && (await getUser())?.id !== site.ownerId;
 
   return (
     <>
-      {site.id === DEMO_SITE_ID && <DemoBar />}
+      {demoBar && <DemoBar />}
       <SiteView
         booked={booked}
         site={toSiteViewData({
