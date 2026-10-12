@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LEGAL_PATH, hasDoc, providerLine, termsTextOf, textFingerprint } from "@/lib/legal";
+import { hasDoc, termsTextOf, textFingerprint } from "@/lib/legal";
 import { prisma } from "@/lib/prisma";
 import { pricedCategories } from "@/lib/pricing";
 import { quoteForSite } from "@/lib/quote";
 import { applyVoucher } from "@/lib/voucher";
 import { findVoucher } from "@/lib/voucher-server";
-import { capacityCount, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
+import { capacityCount, parseCategories, parseCounts } from "@/lib/guests";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
 import { syncStale } from "@/lib/ical-sync";
-import { fromISO, isRangeFree, newPublicId, nightsOf, todayISO, toISO, validateStay } from "@/lib/stay";
+import { fromISO, isRangeFree, newPublicId, todayISO, toISO, validateStay } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { vatOfQuote, vatRateOf } from "@/lib/vat";
 import { buildPayment } from "@/lib/payment";
 import { parseEmailSettings } from "@/lib/email-templates";
-import { appUrl, sendGuestConfirmation, sendOwnerNotification, type StayMail } from "@/lib/email";
+import { sendGuestConfirmation, sendOwnerNotification } from "@/lib/email";
+import { stayMailOf } from "@/lib/stay-mail";
 
 // Jak dlouho držíme nezaplacenou rezervaci, než termín zase uvolní.
 const HOLD_HOURS = { qr: 24, onsite: 72, demo: 0 } as const;
@@ -185,33 +186,7 @@ export async function POST(req: NextRequest) {
   }
 
   // E-maily až po commitu — jejich selhání nesmí shodit hotovou rezervaci.
-  const mail: StayMail = {
-    publicId: created.publicId,
-    siteName: site.name,
-    guestName: created.guestName,
-    firstName: created.firstName,
-    email: created.email,
-    phone: created.phone,
-    guests: created.guests,
-    guestSummary: describeCounts(counts, categories),
-    startDate: startIso,
-    endDate: endIso,
-    nights: nightsOf(startIso, endIso),
-    total: created.totalPrice,
-    discount: created.discount,
-    vatRate: created.vatRate,
-    vatAmount: created.vatAmount,
-    voucherCode: created.voucherCode,
-    paid: created.status === "paid",
-    demo,
-    checkInTime: created.checkInTime,
-    checkOutTime: created.checkOutTime,
-    legal: {
-      provider: providerLine(site),
-      termsUrl: hasTerms ? `${appUrl()}/${site.slug}/${LEGAL_PATH.terms}` : undefined,
-      privacyUrl: hasDoc(site, "privacy") ? `${appUrl()}/${site.slug}/${LEGAL_PATH.privacy}` : undefined,
-    },
-  };
+  const mail = stayMailOf(created, site);
   const pay = payment === "qr" ? buildPayment(site.bankAccount, created.totalPrice, site.name, created.publicId) : null;
   await Promise.all([
     sendGuestConfirmation(mail, site, {

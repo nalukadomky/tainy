@@ -47,6 +47,10 @@ export default function CalendarPage() {
   const [cursor, setCursor] = useState(currentMonth);
   const toast = useToast();
   const confirmDlg = useConfirm();
+  const changeStatus = (id: string, status: Reservation["status"]) =>
+    setStatus(id, status).then((note) => {
+      if (note) toast.show(note, "success");
+    });
 
   // Blokace se v kalendáři ukáže hned, uloží se na pozadí. Když termín mezitím
   // obsadila rezervace (server vrátí 409), blokace zmizí a ozve se proč.
@@ -277,7 +281,7 @@ export default function CalendarPage() {
             <StayDetail
               r={reservations.find((x) => x.id === detail.id) ?? detail.r}
               guests={guestsLabel(detail.r, site)}
-              onStatus={(s) => setStatus(detail.id, s)}
+              onStatus={(s) => changeStatus(detail.id, s)}
               times={site ? stayTimes(reservations.find((x) => x.id === detail.id) ?? detail.r, site) : null}
               onTimes={(patch) => setTimes(detail.id, patch)}
               onReschedule={(r) => {

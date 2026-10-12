@@ -6,6 +6,7 @@ import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
 import { DELETED_GUEST, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { stayTimes } from "@/lib/stay";
+import { parseEmailSettings } from "@/lib/email-templates";
 
 export type Unit = "pct" | "czk";
 
@@ -155,7 +156,22 @@ export type Reservation = {
   accessCodeSetAt: string | null;
   /** Stažená z kalendáře portálu (iCal) — termín řídí portál, údaje jde doplnit. */
   feedId?: string | null;
+  /** Kdy odešly e-maily hostovi (lib/guest-mails.ts). */
+  paidMailAt?: string | null;
+  cancelMailAt?: string | null;
+  arrivalMailAt?: string | null;
+  arrivalCodeMailAt?: string | null;
 };
+
+/** Hláška po změně stavu, že hostovi za chvíli odejde e-mail (stejné podmínky jako lib/guest-mails.ts). */
+export function statusMailNote(r: Reservation, status: Reservation["status"], site: Pick<Site, "emailSettings"> | null): string | null {
+  if (!site || r.status === status || !r.email.trim() || ["airbnb", "booking", "demo"].includes(r.source)) return null;
+  if (r.endDate.slice(0, 10) <= new Date().toISOString().slice(0, 10)) return null;
+  const settings = parseEmailSettings(site.emailSettings);
+  if (status === "paid" && settings.paid.enabled) return "Potvrzení platby odejde hostovi za 30 s — do té doby jde stav vrátit.";
+  if (status === "cancelled" && settings.cancelled.enabled) return "E-mail o zrušení odejde hostovi za 30 s — do té doby jde rezervaci obnovit.";
+  return null;
+}
 
 export type Cost = {
   id: string;
@@ -283,25 +299,30 @@ export function useAdminData() {
   }, [reload]);
 
   // Změna stavu se ukáže hned, ukládá se na pozadí; při chybě se vrátí původní.
-  const setStatus = useCallback(async (id: string, status: Reservation["status"]) => {
-    let before: Reservation["status"] | undefined;
-    setReservations((list) =>
-      list.map((r) => {
-        if (r.id !== id) return r;
-        before = r.status;
-        return { ...r, status };
-      })
-    );
-    const res = await fetch(`/api/reservations/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    }).catch(() => null);
-    if (!res?.ok) {
-      if (before) setReservations((list) => list.map((r) => (r.id === id ? { ...r, status: before! } : r)));
-      throw new Error("Stav se nepodařilo změnit.");
-    }
-  }, []);
+  // Vrací hlášku o e-mailu, který hostovi za chvíli odejde (nebo null).
+  const setStatus = useCallback(
+    async (id: string, status: Reservation["status"]): Promise<string | null> => {
+      let before: Reservation | undefined;
+      setReservations((list) =>
+        list.map((r) => {
+          if (r.id !== id) return r;
+          before = r;
+          return { ...r, status };
+        })
+      );
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      }).catch(() => null);
+      if (!res?.ok) {
+        if (before) setReservations((list) => list.map((r) => (r.id === id ? { ...r, status: before!.status } : r)));
+        throw new Error("Stav se nepodařilo změnit.");
+      }
+      return before ? statusMailNote(before, status, site) : null;
+    },
+    [site]
+  );
 
   /** Změní check-in / check-out jedné rezervace — hned v seznamu, při chybě vrátí původní. */
   const setTimes = useCallback(

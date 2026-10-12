@@ -28,17 +28,20 @@ export function appUrl(): string {
 
 type Mail = { to: string; subject: string; html: string };
 
-async function send({ to, subject, html }: Mail): Promise<void> {
+/** Odešle e-mail; vrací, jestli ho Resend přijal (bez klíče = ukázkový režim, bere se jako odeslaný). */
+export async function send({ to, subject, html }: Mail): Promise<boolean> {
   if (!resend) {
     console.log(`[e-mail — ukázkový režim] pro ${to}: ${subject}`);
-    return;
+    return true;
   }
   try {
     const { error } = await resend.emails.send({ from: FROM, to, subject, html });
     if (error) console.error("Odeslání e-mailu selhalo:", error);
+    return !error;
   } catch (e) {
     // E-mail nikdy nesmí shodit rezervaci — host ji má potvrzenou i tak.
     console.error("Odeslání e-mailu selhalo:", e);
+    return false;
   }
 }
 

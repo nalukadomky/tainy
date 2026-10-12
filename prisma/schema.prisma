@@ -198,6 +198,15 @@ model Reservation {
   feed        CalendarFeed? @relation(fields: [feedId], references: [id], onDelete: Cascade)
   externalUid String?
 
+  // Kdy rezervace přešla do stavu zaplaceno / zrušeno (návrat stavu je vynuluje)
+  paidAt      DateTime?
+  cancelledAt DateTime?
+  // Kdy odešly e-maily hostovi (lib/guest-mails.ts) — každý nanejvýš jednou
+  paidMailAt        DateTime?
+  cancelMailAt      DateTime?
+  arrivalMailAt     DateTime?
+  arrivalCodeMailAt DateTime? // kód k zámku zadaný až po e-mailu „Před příjezdem“
+
   @@unique([feedId, externalUid])
   @@index([siteId, startDate, endDate])
 }

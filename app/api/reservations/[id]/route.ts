@@ -1,7 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerByReservationId, deny } from "@/lib/auth";
 import { isTime } from "@/lib/stay";
+import { sendDueMails, STATUS_MAIL_DELAY } from "@/lib/guest-mails";
+
+// Odklad e-mailu po změně stavu (30 s) + odeslání se vejde do limitu funkce
+export const maxDuration = 60;
 
 const STATUSES = ["pending", "paid", "cancelled"];
 
@@ -19,6 +23,8 @@ export async function PATCH(
   const body = await req.json();
   const data: {
     status?: string;
+    paidAt?: Date | null;
+    cancelledAt?: Date | null;
     checkInTime?: string;
     checkOutTime?: string;
     accessCode?: string;
@@ -67,6 +73,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Neplatný stav rezervace." }, { status: 400 });
     }
     data.status = body.status;
+    // Čas přechodu do stavu — podle něj odejde hostovi e-mail (lib/guest-mails.ts)
+    if (body.status !== guard.reservation.status) {
+      data.paidAt = body.status === "paid" ? new Date() : null;
+      data.cancelledAt = body.status === "cancelled" ? new Date() : null;
+    }
   }
   for (const key of ["checkInTime", "checkOutTime"] as const) {
     if (body[key] === undefined) continue;
@@ -85,6 +96,16 @@ export async function PATCH(
       if (data.status === "cancelled") await tx.cleaning.deleteMany({ where: { reservationId: id, paid: false } });
       return updated;
     });
+    // E-maily hostovi až po odpovědi. Po změně stavu s odkladem, aby šel omyl
+    // vrátit — sendDueMails si stav načte znovu, takže vrácený stav nic nepošle.
+    // Nový kód k zámku jde hned (je-li už e-mail „Před příjezdem“ na řadě).
+    const statusChanged = data.paidAt !== undefined;
+    if (statusChanged || data.accessCode) {
+      after(async () => {
+        if (statusChanged) await new Promise((r) => setTimeout(r, STATUS_MAIL_DELAY));
+        await sendDueMails(id);
+      });
+    }
     return NextResponse.json(reservation);
   } catch {
     return NextResponse.json({ error: "Rezervace nenalezena." }, { status: 404 });

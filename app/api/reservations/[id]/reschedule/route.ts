@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerByReservationId, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
-import { pricedCategories } from "@/lib/pricing";
-import { describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { quoteForSite } from "@/lib/quote";
-import { fromISO, isRangeFree, nightsOf, stayTimes, toISO, todayISO } from "@/lib/stay";
+import { fromISO, isRangeFree, nightsOf, toISO, todayISO } from "@/lib/stay";
 import { sendGuestDateChange } from "@/lib/email";
+import { guestCounts, stayMailOf } from "@/lib/stay-mail";
 import { discountBase, discountFor } from "@/lib/voucher";
 
 // Změna termínu existující rezervace majitelem.
@@ -23,17 +22,7 @@ async function load(id: string) {
   });
   if (!reservation) return null;
   const { site } = reservation;
-  const categories = pricedCategories({
-    guestMode: site.guestMode,
-    categories: parseCategories(site.guestCategories, site.pricingMode),
-  });
-  let raw: unknown = { adult: reservation.guests };
-  try {
-    if (reservation.guestBreakdown) raw = JSON.parse(reservation.guestBreakdown);
-  } catch {
-    // starší rezervace bez rozpisu — počítá se jako dospělí
-  }
-  return { reservation, site, categories, counts: parseCounts(raw, categories) };
+  return { reservation, site, ...guestCounts(reservation, site) };
 }
 
 /** Nová cena podle ceníku včetně voucheru ze snímku rezervace. */
@@ -103,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!guard.ok) return deny(guard.status);
   const data = await load(id);
   if (!data) return deny(404);
-  const { reservation, site, categories, counts } = data;
+  const { reservation, site, counts } = data;
   if (reservation.status === "cancelled") {
     return NextResponse.json({ error: "Zrušené rezervaci nejde měnit termín." }, { status: 400 });
   }
@@ -147,25 +136,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (body.notify === true) {
     const paid = updated.status === "paid";
     await sendGuestDateChange(
-      {
-        publicId: updated.publicId,
-        siteName: site.name,
-        guestName: updated.guestName,
-        firstName: updated.firstName,
-        email: updated.email,
-        phone: updated.phone,
-        guests: updated.guests,
-        guestSummary: describeCounts(counts, categories),
-        startDate: start,
-        endDate: end,
-        nights: nightsOf(start, end),
-        total: updated.totalPrice,
-        discount: updated.discount,
-        voucherCode: updated.voucherCode,
-        paid,
-        demo: updated.source === "demo",
-        ...stayTimes(updated, site),
-      },
+      stayMailOf(updated, site),
       old,
       paid ? Math.max(0, updated.totalPrice - reservation.totalPrice) : 0
     );

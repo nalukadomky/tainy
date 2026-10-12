@@ -42,6 +42,10 @@ function Dashboard() {
   const welcome = params.get("vitej") === "1";
   const { site, reservations, costs, loading, error, setStatus, setAccessCode } = useAdminData();
   const toast = useToast();
+  const changeStatus = (id: string, status: Reservation["status"]) =>
+    setStatus(id, status).then((note) => {
+      if (note) toast.show(note, "success");
+    });
   function saveAccessCode(r: Reservation, code: string) {
     toast.show(accessCodeSavedMessage(r, code, arrivalDaysOf(site)), "success");
     setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));
@@ -248,7 +252,7 @@ function Dashboard() {
               <NextStay
                 r={stats.upcoming[0]}
                 site={site}
-                onStatus={(s) => setStatus(stats.upcoming[0].id, s)}
+                onStatus={(s) => changeStatus(stats.upcoming[0].id, s)}
                 onAccessCode={(code) => saveAccessCode(stats.upcoming[0], code)}
               />
             </div>
@@ -391,7 +395,7 @@ function Dashboard() {
               </div>
               <div className="text-right">
                 <p className="font-semibold">{czk(r.totalPrice)}</p>
-                <StatusMenu status={r.status} guestName={r.guestName} onChange={(s) => setStatus(r.id, s)} />
+                <StatusMenu status={r.status} guestName={r.guestName} onChange={(s) => changeStatus(r.id, s)} />
               </div>
             </div>
           ))}

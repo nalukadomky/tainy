@@ -98,10 +98,15 @@ export default function ReservationsPage() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
+  const notify = (note: string | null) => {
+    if (note) toast.show(note, "success");
+  };
+
   async function setStatus(id: string, status: Reservation["status"]) {
     setBusy(id);
     try {
-      await saveStatus(id, status);
+      const note = await saveStatus(id, status);
+      if (note) toast.show(note, "success");
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Změna selhala.");
     }
@@ -391,13 +396,13 @@ export default function ReservationsPage() {
                         </div>
                         {/* Stav — klik na štítek ho přepne (počítač) */}
                         <div className="hidden w-32 shrink-0 sm:block">
-                          <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st)} />
+                          <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st).then(notify)} />
                         </div>
                         {/* Cena vpravo; na mobilu pod ní stav */}
                         <div className="shrink-0 text-right sm:w-28">
                           <p className="font-semibold tabular-nums">{czk(r.totalPrice)}</p>
                           <div className="mt-0.5 sm:hidden">
-                            <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st)} />
+                            <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st).then(notify)} />
                           </div>
                         </div>
                         <div className="w-9 shrink-0">
@@ -580,9 +585,28 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
             <span className="font-mono tracking-wider">{r.accessCode}</span>
           </Row>
         )}
+        {sentMails(r).length > 0 && (
+          <Row label="Odeslané e-maily">
+            {sentMails(r).map((m) => (
+              <span key={m.label} className="block">
+                {m.label} · {dateTime(m.at)}
+              </span>
+            ))}
+          </Row>
+        )}
       </Group>
     </div>
   );
+}
+
+/** Které e-maily hostovi už odešly (lib/guest-mails.ts). */
+function sentMails(r: Reservation) {
+  return [
+    r.paidMailAt && { label: "Potvrzení platby", at: r.paidMailAt },
+    r.arrivalMailAt && { label: "Před příjezdem", at: r.arrivalMailAt },
+    r.arrivalCodeMailAt && { label: "Kód k zámku", at: r.arrivalCodeMailAt },
+    r.cancelMailAt && { label: "Zrušení", at: r.cancelMailAt },
+  ].filter((m): m is { label: string; at: string } => !!m);
 }
 
 type MenuItem = { label: string; run: () => void; danger?: boolean };
