@@ -19,6 +19,32 @@ export function accessCodeSendAt(
   return setAt && setAt > planned ? setAt : planned;
 }
 
+/** Stav e-mailu s kódem: skutečně odeslaný (lib/guest-mails.ts), nebo kdy se pošle. */
+export type CodeMail = { at: Date; sent: boolean } | null;
+
+export function accessCodeMail(
+  r: {
+    startDate: string;
+    accessCode: string;
+    accessCodeSetAt: string | null;
+    status: string;
+    paidAt?: string | null;
+    arrivalMailAt?: string | null;
+    arrivalCodeMailAt?: string | null;
+  },
+  daysBefore = DEFAULT_DAYS_BEFORE
+): CodeMail {
+  if (!r.accessCode) return null;
+  if (r.arrivalCodeMailAt) return { at: new Date(r.arrivalCodeMailAt), sent: true };
+  const setAt = r.accessCodeSetAt ? new Date(r.accessCodeSetAt) : null;
+  if (r.arrivalMailAt && (!setAt || setAt <= new Date(r.arrivalMailAt))) return { at: new Date(r.arrivalMailAt), sent: true };
+  // Zrušené a starší zaplacené rezervace (bez času zaplacení) se automaticky neposílají
+  if (r.status === "cancelled" || (r.status === "paid" && !r.paidAt)) return null;
+  const planned = accessCodeSendAt(r, daysBefore);
+  if (!planned) return null;
+  return { at: planned > new Date() ? planned : new Date(), sent: false };
+}
+
 /** „31. 3. v 10:00“ v českém čase. */
 export function fmtSendAt(d: Date): string {
   const date = d.toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", timeZone: "Europe/Prague" });

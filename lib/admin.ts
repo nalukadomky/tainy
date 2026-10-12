@@ -156,6 +156,8 @@ export type Reservation = {
   accessCodeSetAt: string | null;
   /** Stažená z kalendáře portálu (iCal) — termín řídí portál, údaje jde doplnit. */
   feedId?: string | null;
+  /** Kdy rezervace přešla do stavu zaplaceno (null u starších a ukázkových). */
+  paidAt?: string | null;
   /** Kdy odešly e-maily hostovi (lib/guest-mails.ts). */
   paidMailAt?: string | null;
   cancelMailAt?: string | null;
@@ -307,7 +309,8 @@ export function useAdminData() {
         list.map((r) => {
           if (r.id !== id) return r;
           before = r;
-          return { ...r, status };
+          // Čas zaplacení hned, ať časová osa e-mailů ukáže „odchází…“
+          return { ...r, status, ...(r.status !== status && { paidAt: status === "paid" ? new Date().toISOString() : null }) };
         })
       );
       const res = await fetch(`/api/reservations/${id}`, {

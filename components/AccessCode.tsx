@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
+import { accessCodeSendAt, fmtSendAt, type CodeMail } from "@/lib/access-code";
 
 // Kód k zámku rezervace — tlačítko se stavem odeslání a okno pro zadání.
 // Používá se v Rezervacích i na Přehledu (nejbližší pobyt).
@@ -32,21 +32,22 @@ export function KeyIcon({ className = "h-4 w-4" }: { className?: string }) {
  */
 export function AccessCode({
   code,
-  sendAt,
+  mail,
   context,
   onSave,
   compact = false,
 }: {
   code: string;
-  /** Kdy se kód pošle hostovi (null = bez kódu). */
-  sendAt: Date | null;
+  /** E-mail s kódem: odeslaný, nebo kdy se pošle (null = bez kódu / neposílá se). */
+  mail: CodeMail;
   context: string;
   onSave: (code: string) => void;
   /** Nenápadná textová varianta (karta nejbližšího pobytu na Přehledu). */
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const sent = !!sendAt && sendAt <= new Date();
+  const sent = !!mail?.sent;
+  const sendAt = mail?.at ?? null;
   const dialog = open && (
     <AccessCodeDialog
       code={code}

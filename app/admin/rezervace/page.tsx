@@ -22,10 +22,10 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { CleaningBadge } from "@/components/CleaningAlert";
 import { StatusMenu, cancelReservationConfirm } from "@/components/StatusMenu";
-import { accessCodeSendAt, fmtSendAt } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { SwipeToPay } from "@/components/SwipeToPay";
+import { MailTimeline } from "@/components/MailTimeline";
 import { ListMore, usePaged } from "@/components/ListMore";
 
 /** Záložky seznamu — každá má své přirozené řazení (viz `shown`). */
@@ -585,28 +585,11 @@ function StayDetail({ r, site }: { r: Reservation; site: Site | null }) {
             <span className="font-mono tracking-wider">{r.accessCode}</span>
           </Row>
         )}
-        {sentMails(r).length > 0 && (
-          <Row label="Odeslané e-maily">
-            {sentMails(r).map((m) => (
-              <span key={m.label} className="block">
-                {m.label} · {dateTime(m.at)}
-              </span>
-            ))}
-          </Row>
-        )}
       </Group>
+
+      <MailTimeline r={r} site={site} />
     </div>
   );
-}
-
-/** Které e-maily hostovi už odešly (lib/guest-mails.ts). */
-function sentMails(r: Reservation) {
-  return [
-    r.paidMailAt && { label: "Potvrzení platby", at: r.paidMailAt },
-    r.arrivalMailAt && { label: "Před příjezdem", at: r.arrivalMailAt },
-    r.arrivalCodeMailAt && { label: "Kód k zámku", at: r.arrivalCodeMailAt },
-    r.cancelMailAt && { label: "Zrušení", at: r.cancelMailAt },
-  ].filter((m): m is { label: string; at: string } => !!m);
 }
 
 type MenuItem = { label: string; run: () => void; danger?: boolean };
@@ -683,8 +666,6 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
       document.body.style.overflow = overflow;
     };
   }, [onClose]);
-  const sendAt = accessCodeSendAt(r, arrivalDaysOf(site));
-  const sent = !!sendAt && sendAt <= new Date();
 
   // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
   return createPortal(
@@ -721,18 +702,6 @@ function DetailSheet({ r, site, onClose }: { r: Reservation; site: Site | null; 
         </div>
         <div className="overflow-y-auto overscroll-contain px-5 pb-8 pt-1 sm:px-6">
           <StayDetail r={r} site={site} />
-          {sendAt && r.endDate.slice(0, 10) >= todayISO() && (
-            <p
-              className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                sent ? "bg-pine/10 text-pine" : "bg-amber/15 text-[#92600a]"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${sent ? "bg-pine" : "bg-amber"}`} aria-hidden />
-              {sent
-                ? `Kód odeslán hostovi ${fmtSendAt(sendAt)}`
-                : `Kód čeká na odeslání · pošle se ${fmtSendAt(sendAt)}`}
-            </p>
-          )}
         </div>
       </div>
     </div>,

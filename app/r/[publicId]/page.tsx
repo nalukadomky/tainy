@@ -13,6 +13,9 @@ import { buildPayment, formatIBAN } from "@/lib/payment";
 import { paymentQrDataUrl } from "@/lib/payment-qr";
 import { Wordmark } from "@/components/Logo";
 import { Icon } from "@/components/Icon";
+import { parseEmailSettings } from "@/lib/email-templates";
+import { parsePhotos } from "@/lib/photos";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +61,10 @@ export default async function ReservationPage({
     skladba = "";
   }
   const ukazkova = reservation.source === "demo";
+  // Úvodní fotka webu, jinak první z galerie
+  const coverPhoto = site.heroPhoto
+    ? { src: site.heroPhoto, alt: site.name }
+    : (parsePhotos(site.photos, site.name)[0] ?? null);
 
   const expired =
     reservation.status === "pending" &&
@@ -178,6 +185,30 @@ export default async function ReservationPage({
             </div>
             <p className="text-right text-xs text-soft">{vatNote(reservation.vatRate, reservation.vatAmount)}</p>
           </dl>
+
+          {reservation.status === "paid" && (
+            <div className="mt-4 flex items-center gap-3 rounded-xl bg-pine/10 px-4 py-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pine text-white">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M5 12.5l4.5 4.5L19 7.5" />
+                </svg>
+              </span>
+              <div className="min-w-0 text-sm">
+                <p className="font-semibold text-pine">
+                  {ukazkova ? "Zaplaceno ukázkovou platbou" : "Zaplaceno"}
+                  {reservation.paidAt &&
+                    ` ${reservation.paidAt.toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", year: "numeric", timeZone: "Europe/Prague" })}`}
+                </p>
+                <p className="text-soft">
+                  Pobyt je potvrzený, nic dalšího platit nemusíš.
+                  {reservation.startDate.getTime() > Date.now() &&
+                    !ukazkova &&
+                    parseEmailSettings(site.emailSettings).arrival.enabled &&
+                    " Pár dní před příjezdem ti pošleme vše potřebné k příjezdu."}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Platební údaje */}
@@ -218,6 +249,25 @@ export default async function ReservationPage({
               </p>
             )}
           </div>
+        )}
+
+        {/* Zaplaceno — vpravo náhled úvodní fotky ubytování */}
+        {reservation.status === "paid" && coverPhoto && (
+          <Link
+            href={`/${site.slug}`}
+            className="group relative block aspect-[4/3] overflow-hidden rounded-2xl border border-line bg-line/40 md:aspect-auto md:min-h-64 md:self-stretch md:[grid-area:pay]"
+          >
+            <Image
+              src={coverPhoto.src}
+              alt={coverPhoto.alt}
+              fill
+              sizes="(min-width: 768px) 45vw, 100vw"
+              className="object-cover transition duration-500 group-hover:scale-[1.02]"
+            />
+            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-5 pb-4 pt-12 font-display text-lg font-semibold text-white">
+              {site.name}
+            </span>
+          </Link>
         )}
 
         {reservation.status === "pending" && !expired && !payment && (

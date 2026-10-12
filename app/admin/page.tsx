@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAdminData, fmtDate, fmtStay, type Reservation, type Site } from "@/lib/admin";
 import { AccessCode, accessCodeSavedMessage } from "@/components/AccessCode";
-import { accessCodeSendAt } from "@/lib/access-code";
+import { accessCodeMail } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
 import { useToast } from "@/components/Toast";
 import { StatusMenu } from "@/components/StatusMenu";
@@ -479,7 +479,7 @@ function NextStay({
             compact
             key={r.accessCode}
             code={r.accessCode}
-            sendAt={accessCodeSendAt(r, arrivalDaysOf(site))}
+            mail={accessCodeMail(r, arrivalDaysOf(site))}
             context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
             onSave={onAccessCode}
           />
