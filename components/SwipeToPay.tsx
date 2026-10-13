@@ -80,7 +80,9 @@ export function SwipeToPay({
 
   const width = start.current?.width ?? 1;
   const passed = -dx >= width * THRESHOLD;
-  const accent = undo ? "color-mix(in srgb, var(--amber) 75%, black)" : "var(--pine)";
+  // Před hranicí světlejší odstín, po překročení plná barva
+  const accent = undo ? "var(--amber)" : "var(--pine)";
+  const faint = undo ? "color-mix(in srgb, var(--amber) 55%, white)" : "color-mix(in srgb, var(--pine) 55%, var(--soft))";
 
   return (
     // Ořez jen během tažení — jinak by uřízl nabídku „⋯“, která přesahuje kartu
@@ -90,7 +92,7 @@ export function SwipeToPay({
           aria-hidden
           className="absolute inset-0 flex items-center justify-end rounded-2xl pr-6 text-sm font-semibold text-white"
           style={{
-            background: passed || !dragging ? accent : `color-mix(in srgb, ${accent} 55%, var(--soft))`,
+            background: passed || !dragging ? accent : faint,
             transition: "background 150ms",
           }}
         >
