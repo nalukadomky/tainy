@@ -12,6 +12,7 @@ import {
   STATUS_STYLE,
   type GuestDeleteMode,
   type Reservation,
+  type Site,
 } from "@/lib/admin";
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { todayISO } from "@/lib/stay";
@@ -21,6 +22,8 @@ import { Dropdown } from "@/components/Dropdown";
 import { VoucherBadge } from "@/components/VoucherBadge";
 import { ListPageSkeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
+import { Icon } from "@/components/Icon";
+import Link from "next/link";
 
 type Show = "all" | "returning" | "upcoming" | "once";
 type Sort = "spent" | "last" | "stays" | "name";
@@ -123,6 +126,9 @@ export default function GuestsPage() {
     return list.sort(by[sort]);
   }, [guests, query, show, sort]);
 
+  // Otevřený detail hosta — z aktuálních dat, ať se po změnách obnoví
+  const openGuest = open ? (guests.find((g) => g.key === open) ?? null) : null;
+
   const returning = guests.filter((g) => g.count > 1).length;
   // Postupné načítání po 20
   const paged = usePaged(`${query}|${show}|${sort}`);
@@ -188,6 +194,9 @@ export default function GuestsPage() {
   return (
     <div className="space-y-5">
       {toast.node}
+      {openGuest && (
+        <GuestSheet guest={openGuest} site={site} onClose={() => setOpen(null)} onDelete={() => setDeleting(openGuest)} />
+      )}
       {deleting && (
         <DeleteGuestDialog guest={deleting} onCancel={() => setDeleting(null)} onConfirm={(mode) => confirmDelete(deleting, mode)} />
       )}
@@ -298,7 +307,6 @@ export default function GuestsPage() {
         {visibleGuests.length > 0 && (
         <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
         {visibleGuests.map((g, gi) => {
-          const expanded = open === g.key;
           const first = gi === 0;
           const last = gi === visibleGuests.length - 1;
           return (
@@ -314,8 +322,8 @@ export default function GuestsPage() {
             >
               <button
                 type="button"
-                onClick={() => setOpen(expanded ? null : g.key)}
-                aria-expanded={expanded}
+                onClick={() => setOpen(g.key)}
+                aria-haspopup="dialog"
                 className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg/60 sm:gap-4"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pine/10 font-display text-base font-semibold text-pine sm:h-11 sm:w-11 sm:text-lg">
@@ -342,78 +350,11 @@ export default function GuestsPage() {
                 <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums sm:block">{g.count}×</span>
                 <span className="hidden w-28 shrink-0 text-right text-sm text-soft sm:block">{fmtDate(g.last)}</span>
                 <p className="shrink-0 text-right font-semibold tabular-nums sm:w-28">{czk(g.spent)}</p>
-                <span
-                  aria-hidden
-                  className={`w-4 shrink-0 text-center text-base leading-none text-soft transition-transform ${expanded ? "rotate-180" : ""}`}
-                >
-                  ▾
+                <span aria-hidden className="w-4 shrink-0 text-center text-lg leading-none text-soft">
+                  ›
                 </span>
               </button>
 
-              {expanded && (
-                <div className="border-t border-line bg-bg/40 px-4 pb-4 pt-3">
-                  <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-soft">
-                    <span>
-                      <strong className="text-ink">{g.count}</strong> {plural(g.count, "pobyt", "pobyty", "pobytů")}
-                    </span>
-                    <span>
-                      <strong className="text-ink">{g.nights}</strong> {plural(g.nights, "noc", "noci", "nocí")}
-                    </span>
-                    <span>
-                      poprvé <strong className="text-ink">{fmtDate(g.first)}</strong>
-                    </span>
-                    <span className="ml-auto flex gap-3">
-                      {g.email && (
-                        <a href={`mailto:${g.email}`} className="font-medium text-pine hover:underline">
-                          Napsat e-mail
-                        </a>
-                      )}
-                      {g.phone && (
-                        <a href={`tel:${g.phone.replace(/\s/g, "")}`} className="font-medium text-pine hover:underline">
-                          Zavolat
-                        </a>
-                      )}
-                      <button type="button" onClick={() => setDeleting(g)} className="font-medium text-coral hover:underline">
-                        Smazat hosta
-                      </button>
-                    </span>
-                  </div>
-                  <div className="divide-y divide-line rounded-xl border border-line bg-surface">
-                    {g.stays.map((r) => (
-                      <div
-                        key={r.id}
-                        className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 ${
-                          r.status === "cancelled" ? "opacity-55" : ""
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">
-                            {fmtDate(r.startDate)} – {fmtDate(r.endDate)}
-                            <span className="font-normal text-soft">
-                              {" "}
-                              · {nightsOf(r)} {plural(nightsOf(r), "noc", "noci", "nocí")}
-                            </span>
-                          </p>
-                          <p className="text-xs text-soft">
-                            {guestsLabel(r, site)} · {SOURCE_LABEL[r.source] ?? r.source} · kód {r.publicId}
-                          </p>
-                          {r.voucherCode && (
-                            <p className="mt-1">
-                              <VoucherBadge code={r.voucherCode} discount={r.discount} />
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-semibold">{czk(r.totalPrice)}</span>
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
-                            {STATUS_LABEL[r.status]}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -422,6 +363,171 @@ export default function GuestsPage() {
         <ListMore shown={visibleGuests.length} total={shown.length} onMore={paged.more} />
       </div>
     </div>
+  );
+}
+
+/** Detail hosta v okně (na mobilu zespodu): souhrn, kontakt a všechny pobyty. */
+function GuestSheet({
+  guest: g,
+  site,
+  onClose,
+  onDelete,
+}: {
+  guest: Guest;
+  site: Site | null;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  useEffect(() => {
+    // Escape v potvrzení smazání zavře jen potvrzení
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector("[role=alertdialog]") && onClose();
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+
+  const stats: [string, React.ReactNode][] = [
+    ["Útrata", czk(g.spent)],
+    [plural(g.count, "Pobyt", "Pobyty", "Pobytů"), g.count],
+    [plural(g.nights, "Noc", "Noci", "Nocí"), g.nights],
+    ["Poprvé", fmtDate(g.first)],
+  ];
+
+  // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Host ${g.name}`}
+        className="rise flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pine/10 font-display text-xl font-semibold text-pine">
+            {g.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-xl font-semibold leading-tight">{g.name}</h2>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-soft">
+              {g.next && (
+                <span className="rounded-full bg-pine/10 px-2.5 py-0.5 text-[11px] font-semibold text-pine">
+                  přijede {fmtDate(g.next)}
+                </span>
+              )}
+              {g.count > 1 && (
+                <span className="rounded-full bg-amber/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#92600a]">
+                  vrací se
+                </span>
+              )}
+              {g.ref && <span>Anonymizovaný na žádost (GDPR)</span>}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-soft hover:bg-bg hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-5 overflow-y-auto overscroll-contain px-5 pb-8 pt-4 sm:px-6">
+          {/* Kontakt */}
+          {(g.email || g.phone) && (
+            <div className="divide-y divide-line rounded-2xl border border-line">
+              {g.email && (
+                <a href={`mailto:${g.email}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-bg/60">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine">
+                    <Icon name="mail" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{g.email}</span>
+                  <span className="text-sm font-medium text-pine">Napsat</span>
+                </a>
+              )}
+              {g.phone && (
+                <a href={`tel:${g.phone.replace(/\s/g, "")}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-bg/60">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine">
+                    <Icon name="phone" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm tabular-nums">{g.phone}</span>
+                  <span className="text-sm font-medium text-pine">Zavolat</span>
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Souhrn */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {stats.map(([label, value]) => (
+              <div key={label} className="rounded-2xl bg-bg/70 px-3.5 py-3">
+                <p className="text-xs text-soft">{label}</p>
+                <p className="mt-0.5 font-semibold tabular-nums">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Pobyty — klik otevře detail rezervace */}
+          <section>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-soft">Pobyty</h3>
+            <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+              {g.stays.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/admin/rezervace?detail=${r.id}`}
+                  className={`flex items-center gap-3 px-4 py-3 transition hover:bg-bg/60 ${r.status === "cancelled" ? "opacity-55" : ""}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {fmtDate(r.startDate)} – {fmtDate(r.endDate)}
+                      <span className="font-normal text-soft">
+                        {" "}
+                        · {nightsOf(r)} {plural(nightsOf(r), "noc", "noci", "nocí")}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-soft">
+                      {guestsLabel(r, site)} · {SOURCE_LABEL[r.source] ?? r.source}
+                    </p>
+                    {r.voucherCode && (
+                      <p className="mt-1">
+                        <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="text-sm font-semibold tabular-nums">{czk(r.totalPrice)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[r.status]}`}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                  </div>
+                  <span aria-hidden className="text-lg leading-none text-soft">
+                    ›
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-coral hover:underline"
+          >
+            <Icon name="trash" size={15} />
+            Smazat hosta
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
