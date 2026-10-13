@@ -41,7 +41,7 @@ export async function PATCH(
   // u rezervace z webu je zadal host a cenu spočítal ceník.
   const details = ["guestName", "phone", "email", "guests", "totalPrice"].some((k) => body[k] !== undefined);
   if (details) {
-    if (guard.reservation.source === "web" || guard.reservation.source === "demo") {
+    if (["web", "widget", "demo"].includes(guard.reservation.source)) {
       return NextResponse.json({ error: "Údaje rezervace z webu upravit nejde." }, { status: 400 });
     }
     if (typeof body.guestName === "string") {

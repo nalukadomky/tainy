@@ -90,9 +90,13 @@ export default async function ReservationPage({
     <div className="min-h-dvh bg-bg">
       <header className="border-b border-line/70 bg-cream">
         <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5 md:max-w-5xl">
-          <Link href={`/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
-            {site.name}
-          </Link>
+          {site.widgetOnly ? (
+            <span className="font-display text-lg font-semibold tracking-tight">{site.name}</span>
+          ) : (
+            <Link href={`/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
+              {site.name}
+            </Link>
+          )}
           <span className="flex items-center gap-2">
             {ukazkova && (
               <span className="rounded-full bg-amber/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#92600a]">
@@ -252,7 +256,7 @@ export default async function ReservationPage({
         )}
 
         {/* Zaplaceno — vpravo náhled úvodní fotky ubytování */}
-        {reservation.status === "paid" && coverPhoto && (
+        {reservation.status === "paid" && coverPhoto && !site.widgetOnly && (
           <Link
             href={`/${site.slug}`}
             className="group relative block aspect-[4/3] overflow-hidden rounded-2xl border border-line bg-line/40 md:aspect-auto md:min-h-64 md:self-stretch md:[grid-area:pay]"

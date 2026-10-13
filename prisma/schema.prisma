@@ -84,6 +84,10 @@ model Site {
   locks          String @default("")
   // Předání klíčů: code = elektronický zámek / kódy, key = fyzický klíč (kódy se nedoplňují)
   keyHandover    String @default("code")
+  /// Widget na cizí web (lib/widget.ts): text a umístění plovoucího tlačítka
+  widgetSettings String @default("{}")
+  /// Majitel má vlastní web a používá jen widget — veřejný web v tainy nemá
+  widgetOnly     Boolean @default(false)
   arrivalAddress String @default("")
   arrivalInfo    String @default("")
   wifiName       String @default("")

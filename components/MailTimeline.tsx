@@ -53,7 +53,7 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
   const sent: Step[] = log.map((m) => ({ key: m.id, kind: m.kind, label: LABEL[m.kind] ?? m.subject, at: m.sentAt, mail: m }));
   const logged = new Set(log.map((m) => m.kind));
   const older: [Kind, string | null | undefined][] = [
-    ["booking", r.source === "web" || r.source === "demo" ? r.createdAt : null],
+    ["booking", ["web", "widget", "demo"].includes(r.source) ? r.createdAt : null],
     ["paid", r.paidMailAt],
     ["arrival", r.arrivalMailAt],
     ["arrivalCode", r.arrivalCodeMailAt],

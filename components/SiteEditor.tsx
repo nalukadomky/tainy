@@ -28,8 +28,9 @@ import { ExternalCalendars } from "@/components/ExternalCalendars";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
 import { Icon } from "@/components/Icon";
 import { DomainSettings } from "@/components/DomainSettings";
+import { WidgetSettings } from "@/components/WidgetSettings";
 
-type Tab = "zakladni" | "cenik" | "pravni" | "domena" | "portaly" | "automatizace";
+type Tab = "zakladni" | "cenik" | "pravni" | "domena" | "portaly" | "automatizace" | "widget";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
@@ -37,21 +38,28 @@ const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   domena: { label: "Doména", short: "Doména", hint: "Vlastní adresa webu" },
   portaly: { label: "Externí rezervace", short: "Portály", hint: "Airbnb, Booking.com a iCal" },
   automatizace: { label: "Automatizace", short: "E-maily", hint: "E-maily hostům a zámky" },
+  widget: { label: "Widget na web", short: "Widget", hint: "Rezervace na tvém vlastním webu" },
 };
 const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 
 // Nastavení webu (název, ceník, firma, portály, e-maily). Vzhled a obsah webu
 // se upravuje přímo ve webu (/admin/web/builder).
-export type EditorArea = "settings";
+// area="widget" = samostatná stránka Widget (účet jen s widgetem ji má v menu místo Můj web).
+export type EditorArea = "settings" | "widget";
 // Hlavní záložky vlevo; méně časté jsou vpravo pod „Další“
 const MAIN_TABS: Tab[] = ["zakladni", "cenik", "pravni", "domena", "automatizace"];
-const MORE_TABS: Tab[] = ["portaly"];
+const MORE_TABS: Tab[] = ["portaly", "widget"];
 const TAB_ORDER: Tab[] = [...MAIN_TABS, ...MORE_TABS];
 
-export function SiteEditor(_props: { area?: EditorArea }) {
+export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
   const router = useRouter();
   const tabs = TAB_ORDER;
   const { slug, site, setSite, loading, error, reload } = useAdminData();
+  const widgetPage = area === "widget";
+  // Účet jen s widgetem nemá web v tainy: bez domény a náhledu webu, widget má v menu
+  const widgetOnly = !!site?.widgetOnly;
+  const mainTabs = MAIN_TABS.filter((t) => !(widgetOnly && t === "domena"));
+  const moreTabs = MORE_TABS.filter((t) => !(widgetOnly && t === "widget"));
   const [form, setForm] = useState<Site | null>(null);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -69,11 +77,12 @@ export function SiteEditor(_props: { area?: EditorArea }) {
   }, [site]);
 
   // Záložka se drží v adrese (?sekce=cenik), ať ji jde poslat odkazem a přežije obnovení.
-  const [tab, setTab] = useState<Tab>(tabs[0]);
+  const [tab, setTab] = useState<Tab>(widgetPage ? "widget" : tabs[0]);
   useEffect(() => {
+    if (widgetPage) return;
     const sekce = new URLSearchParams(window.location.search).get("sekce");
     if (isTab(sekce) && tabs.includes(sekce)) setTab(sekce);
-  }, [tabs]);
+  }, [tabs, widgetPage]);
   // Sekce, kterou majitel právě upravuje — živý náhled na ni odscrolluje.
   const [focus, setFocus] = useState<{ section: PreviewSection; at: number } | null>(null);
   const lastFocus = useRef({ section: "", at: 0 });
@@ -292,7 +301,14 @@ export function SiteEditor(_props: { area?: EditorArea }) {
         />
       )}
       {icoSaved && <ProviderSavedDialog change={icoSaved} onClose={() => setIcoSaved(null)} />}
-      <LivePreview site={form} dirty={dirty} focus={focus} />
+      {!widgetPage && !widgetOnly && <LivePreview site={form} dirty={dirty} focus={focus} />}
+      {widgetPage ? (
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Widget na web</h1>
+          <p className="mt-1 text-sm text-soft">Rezervační tlačítko pro tvůj vlastní web.</p>
+        </div>
+      ) : (
+      <>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Nastavení</h1>
@@ -313,7 +329,7 @@ export function SiteEditor(_props: { area?: EditorArea }) {
           role="tablist"
           aria-label="Části nastavení"
         >
-          {MAIN_TABS.map((t) => (
+          {mainTabs.map((t) => (
             <button
               key={t}
               type="button"
@@ -333,8 +349,10 @@ export function SiteEditor(_props: { area?: EditorArea }) {
           ))}
         </div>
         {/* Méně časté části — vpravo, oddělené */}
-        <MoreTabs current={tab} onPick={switchTab} />
+        <MoreTabs tabs={moreTabs} current={tab} onPick={switchTab} />
       </div>
+      </>
+      )}
 
       {tab === "zakladni" ? (
         <div id="pole-kontakt" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
@@ -400,6 +418,8 @@ export function SiteEditor(_props: { area?: EditorArea }) {
         <ExternalCalendars />
       ) : tab === "automatizace" ? (
         <AutomationSettings form={form} set={set} />
+      ) : tab === "widget" ? (
+        <WidgetSettings form={form} set={set} />
       ) : (
         <>
           {/* Ceník */}
@@ -863,7 +883,7 @@ function LeaveDialog({
 }
 
 /** Záložka „Další ▾“ vpravo: méně časté části nastavení (teď Externí rezervace). */
-function MoreTabs({ current, onPick }: { current: Tab; onPick: (t: Tab) => void }) {
+function MoreTabs({ tabs, current, onPick }: { tabs: Tab[]; current: Tab; onPick: (t: Tab) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -877,7 +897,7 @@ function MoreTabs({ current, onPick }: { current: Tab; onPick: (t: Tab) => void 
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
-  const active = MORE_TABS.includes(current);
+  const active = tabs.includes(current);
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -894,7 +914,7 @@ function MoreTabs({ current, onPick }: { current: Tab; onPick: (t: Tab) => void 
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-lg">
-          {MORE_TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               type="button"

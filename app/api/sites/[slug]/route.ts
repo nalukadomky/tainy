@@ -1,3 +1,4 @@
+import { parseWidgetSettings, serializeWidgetSettings } from "@/lib/widget";
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
@@ -200,6 +201,8 @@ export async function PATCH(
   if (typeof body.emailSettings === "string") data.emailSettings = serializeEmailSettings(parseEmailSettings(body.emailSettings));
   if (typeof body.locks === "string") data.locks = JSON.stringify(parseLocks(body.locks));
   if (body.keyHandover === "code" || body.keyHandover === "key") data.keyHandover = body.keyHandover;
+  if (typeof body.widgetOnly === "boolean") data.widgetOnly = body.widgetOnly;
+  if (typeof body.widgetSettings === "string") data.widgetSettings = serializeWidgetSettings(parseWidgetSettings(body.widgetSettings));
   if (body.heroStyle !== undefined) {
     data.heroStyle = body.heroStyle === "photo" ? "photo" : "text";
   }

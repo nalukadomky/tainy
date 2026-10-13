@@ -746,7 +746,7 @@ function matchesFilter(r: Reservation, f: Filter): boolean {
 }
 
 /** Údaje jde doplnit u rezervací z portálů a ručních — u webových je zadal host. */
-const editable = (r: Reservation) => r.source !== "web" && r.source !== "demo" && !r.anonymized;
+const editable = (r: Reservation) => !["web", "widget", "demo"].includes(r.source) && !r.anonymized;
 
 type GuestDetails = { guestName: string; phone: string; email: string; guests: number; totalPrice: number };
 

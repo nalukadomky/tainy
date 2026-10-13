@@ -22,6 +22,7 @@ export async function GET() {
       themeColor: true,
       customDomain: true,
       domainStatus: true,
+      widgetOnly: true,
     },
   });
   const now = new Date();
@@ -53,6 +54,7 @@ export async function GET() {
       revenueYear: revenue.find((x) => x.siteId === s.id)?._sum.totalPrice ?? 0,
       // Veřejná adresa: aktivní vlastní doména, jinak /adresa
       url: siteUrl(s),
+      widgetOnly: s.widgetOnly,
     }))
   );
 }

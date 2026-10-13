@@ -79,6 +79,10 @@ export type Site = {
   locks: string;
   /** code = elektronický zámek / kódy, key = fyzický klíč (kódy k rezervacím se nedoplňují). */
   keyHandover: string;
+  /** Widget na cizí web (lib/widget.ts). */
+  widgetSettings: string;
+  /** Jen widget na vlastním webu majitele — bez webu v tainy. */
+  widgetOnly: boolean;
   arrivalAddress: string;
   arrivalInfo: string;
   wifiName: string;
@@ -476,6 +480,7 @@ export function guestsLabel(r: Reservation, site: Site | null): string {
 
 export const SOURCE_LABEL: Record<string, string> = {
   web: "Web",
+  widget: "Widget",
   airbnb: "Airbnb",
   booking: "Booking",
   manual: "Ručně",

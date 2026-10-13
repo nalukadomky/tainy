@@ -11,7 +11,7 @@ import { DRAFT_KEY, FORM_KEY } from "@/lib/onboarding";
 export default function FinalizePage() {
   const router = useRouter();
   const ran = useRef(false);
-  const [msg, setMsg] = useState("Dokončuji tvůj web…");
+  const [msg, setMsg] = useState("Dokončuji tvůj účet…");
 
   useEffect(() => {
     if (ran.current) return; // guard proti dvojímu běhu (StrictMode)
@@ -48,7 +48,7 @@ export default function FinalizePage() {
         localStorage.setItem("tainy.site", data.slug);
         localStorage.removeItem(DRAFT_KEY);
         localStorage.removeItem(FORM_KEY);
-        router.replace("/admin?vitej=1");
+        router.replace(data.widgetOnly ? "/admin/widget?vitej=1" : "/admin?vitej=1");
       } catch {
         setMsg("Web se nepodařilo vytvořit. Zkontroluj připojení a zkus to znovu.");
       }

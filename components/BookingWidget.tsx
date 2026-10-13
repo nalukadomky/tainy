@@ -68,6 +68,7 @@ export function BookingWidget({
   preview = false,
   initialBooked = [],
   onOpenDoc,
+  embed = false,
 }: {
   site: BookingSite;
   /** Otevře obchodní podmínky / zásady v okně nad webem (jinak odkaz na stránku). */
@@ -75,6 +76,8 @@ export function BookingWidget({
   preview?: boolean;
   /** Obsazenost ze serveru — kalendář je vyplněný hned v prvním renderu. */
   initialBooked?: BookedRange[];
+  /** Widget na cizím webu (/embed) — rezervace se zapíše se zdrojem „Widget“ a dá vědět vkládající stránce. */
+  embed?: boolean;
 }) {
   const [step, setStep] = useState<Step>("termin");
   // Při přechodu mezi kroky srolovat na začátek formuláře (na mobilu by jinak
@@ -285,6 +288,7 @@ export function BookingWidget({
           termsAccepted: consent,
           payment,
           voucherCode: voucher?.code ?? "",
+          ...(embed && { source: "widget" }),
         }),
       });
       const data = await res.json();
@@ -304,6 +308,9 @@ export function BookingWidget({
         return;
       }
       if (!res.ok) throw new Error(data.error ?? "Rezervaci se nepodařilo dokončit.");
+      // Widget: web majitele se to dozví (např. pro měření konverzí v Google Analytics).
+      // Bez kódu rezervace — vkládající stránku neznáme a kód otevírá údaje hosta.
+      if (embed) window.parent.postMessage({ type: "tainy:booked", total }, "*");
       window.location.href = `/r/${data.publicId}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Rezervaci se nepodařilo dokončit.");

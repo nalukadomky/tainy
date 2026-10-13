@@ -17,12 +17,13 @@ const PERIODS: Period[] = ["year", "12", "all"];
 // Barvy zdrojů: web v barvě administrace, portály v jejich typických odstínech
 const COLOR: Record<string, string> = {
   web: "var(--pine)",
+  widget: "color-mix(in srgb, var(--pine) 55%, white)",
   airbnb: "#e0565b",
   booking: "#2b5aa8",
   manual: "#b3a88f",
   other: "#8a8f98",
 };
-const ORDER = ["web", "airbnb", "booking", "other", "manual"];
+const ORDER = ["web", "widget", "airbnb", "booking", "other", "manual"];
 
 /** Ukázkové rezervace z demo režimu webu se počítají jako web. */
 const sourceOf = (r: Reservation) => (r.source === "demo" ? "web" : SOURCE_LABEL[r.source] ? r.source : "other");
@@ -151,7 +152,7 @@ export function SourceMix({ reservations }: { reservations: Reservation[] }) {
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: COLOR[s.key] }} aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="font-semibold">{SOURCE_LABEL[s.key]}</span>
-                    {s.key === "web" && <span className="ml-2 text-xs text-soft">bez provize</span>}
+                    {(s.key === "web" || s.key === "widget") && <span className="ml-2 text-xs text-soft">bez provize</span>}
                     <span className="block text-xs text-soft sm:inline sm:before:content-['_·_']">
                       {s.count} {plural(s.count, "rezervace", "rezervace", "rezervací")} · {s.nights}{" "}
                       {plural(s.nights, "noc", "noci", "nocí")}

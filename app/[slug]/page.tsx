@@ -29,7 +29,8 @@ export default async function SitePage({
     where: siteWhere(slug),
     include: { priceRules: { orderBy: { startDate: "asc" } } },
   });
-  if (!site) notFound();
+  // Účet jen s widgetem nemá veřejný web — rezervace jsou na webu majitele
+  if (!site || site.widgetOnly) notFound();
   await redirectToCustomDomain(site);
 
   // Obsazenost se načítá spolu se stránkou, takže kalendář je vyplněný

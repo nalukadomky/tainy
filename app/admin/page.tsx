@@ -175,7 +175,7 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       {toast.node}
-      {welcome && (
+      {welcome && !site.widgetOnly && (
         <div className="rise rounded-2xl border border-pine/20 bg-pine/5 p-5">
           <h2 className="font-display text-xl font-semibold"><Icon name="sparkle" size={20} className="mr-1.5 text-pine" />Tvůj web je na světě!</h2>
           <p className="mt-1 text-sm text-soft">
@@ -196,10 +196,16 @@ function Dashboard() {
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Přehled</h1>
           <p className="mt-1 text-sm text-soft">
-            {site.name} ·{" "}
-            <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={siteUrl(site)} target="_blank">
-              {site.customDomain && site.domainStatus === "active" ? site.customDomain : `/${site.slug}`} ↗
-            </Link>
+            {site.name}
+            {!site.widgetOnly && (
+              <>
+                {" "}
+                ·{" "}
+                <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={siteUrl(site)} target="_blank">
+                  {site.customDomain && site.domainStatus === "active" ? site.customDomain : `/${site.slug}`} ↗
+                </Link>
+              </>
+            )}
           </p>
         </div>
       </div>

@@ -25,6 +25,8 @@ const MAIN: Item[] = [
   { href: "/admin/hoste", label: "Hosté", icon: "users" },
   { href: "/admin/web/builder", label: "Můj web", icon: "web" },
 ];
+// Účet jen s widgetem (bez webu v tainy) má místo „Můj web“ stránku Widget
+const WIDGET_ITEM: Item = { href: "/admin/widget", label: "Widget", icon: "web" };
 const MORE: Item[] = [
   { href: "/admin/kalendar/uklid", label: "Úklid", icon: "broom" },
   { href: "/admin/ukoly", label: "Úkoly", icon: "clipboard" },
@@ -36,7 +38,7 @@ const MORE: Item[] = [
 export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [sites, setSites] = useState<{ slug: string; name: string }[]>([]);
+  const [sites, setSites] = useState<{ slug: string; name: string; widgetOnly?: boolean }[]>([]);
   const [current, setCurrent] = useState<string>("");
   const [menu, setMenu] = useState<"more" | "burger" | "mobile" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -74,7 +76,9 @@ export function AdminNav() {
     window.location.reload();
   }
   // Aktivní je nejdelší odpovídající položka (Úklid je pod Kalendářem, svítit má jen Úklid).
-  const ALL = [...MAIN, ...MORE].map((i) => i.href);
+  const widgetOnly = !!sites.find((s) => s.slug === current)?.widgetOnly;
+  const main = MAIN.map((i) => (widgetOnly && i.href === "/admin/web/builder" ? WIDGET_ITEM : i));
+  const ALL = [...main, ...MORE].map((i) => i.href);
   const matches = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`));
   const isActive = (href: string) => matches(href) && !ALL.some((h) => h.length > href.length && h.startsWith(href) && matches(h));
   const moreActive = MORE.some((i) => isActive(i.href));
@@ -83,7 +87,7 @@ export function AdminNav() {
   // takže klik mezi nimi nečeká na server. Data si stránky berou z paměti
   // (useAdminData) a obnovují je na pozadí.
   useEffect(() => {
-    const hrefs = [...MAIN, ...MORE].map((i) => i.href);
+    const hrefs = [...MAIN, WIDGET_ITEM, ...MORE].map((i) => i.href);
     const warm = () => {
       for (const href of hrefs) router.prefetch(href, { kind: PrefetchKind.FULL });
     };
@@ -139,7 +143,7 @@ export function AdminNav() {
   // Plné menu do horní lišty (a jeho skrytá kopie pro měření)
   const fullNav = (measuring: boolean) => (
     <>
-      {MAIN.map((item) => (
+      {main.map((item) => (
         <NavLink key={item.href} item={item} active={!measuring && isActive(item.href)} tabIndex={measuring ? -1 : undefined} />
       ))}
       <div className="relative" ref={measuring ? undefined : menu === "more" ? menuRef : undefined}>
@@ -221,7 +225,7 @@ export function AdminNav() {
                 </button>
                 {menu === "burger" && (
                   <MenuPanel wide>
-                    {[...MAIN, ...MORE].map((item) => (
+                    {[...main, ...MORE].map((item) => (
                       <MenuLink key={item.href} item={item} active={isActive(item.href)} />
                     ))}
                     <div className="my-1 border-t border-line" />
@@ -264,7 +268,7 @@ export function AdminNav() {
           </div>
         )}
         <div className="flex items-stretch justify-between rounded-2xl border border-line/80 bg-surface p-1.5 shadow-[0_8px_30px_rgba(30,42,32,0.12)]">
-          {MAIN.map((item) => (
+          {main.map((item) => (
             <TabLink key={item.href} item={item} active={isActive(item.href)} />
           ))}
           <button

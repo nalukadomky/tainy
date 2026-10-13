@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
       themeColor: cleanTheme(body.themeColor),
       contactEmail: String(body.contactEmail ?? ""),
       contactPhone: String(body.contactPhone ?? ""),
+      // „Mám vlastní web“ v onboardingu — jen rezervační widget
+      widgetOnly: body.widgetOnly === true,
     },
   });
   return NextResponse.json(site, { status: 201 });

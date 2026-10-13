@@ -168,7 +168,8 @@ export async function POST(req: NextRequest) {
           vatRate: vatRateOf(site),
           vatAmount: vatOfQuote(quote, voucher.discount, vatRateOf(site)),
           note: String(body.note ?? "").trim().slice(0, 500),
-          source: demo ? "demo" : "web",
+          // Rezervace z widgetu na webu majitele (public/widget.js) se počítá zvlášť
+          source: demo ? "demo" : body.source === "widget" ? "widget" : "web",
           status: demo ? "paid" : "pending",
           expiresAt: demo ? null : new Date(Date.now() + HOLD_HOURS[payment] * 3_600_000),
           // Časy pobytu platné v době rezervace — pozdější změna v ceníku je nezmění.

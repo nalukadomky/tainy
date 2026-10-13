@@ -26,6 +26,8 @@ type Property = {
   revenueYear: number;
   /** Veřejná adresa (vlastní doména, nebo /adresa). */
   url: string;
+  /** Jen widget na vlastním webu majitele (bez webu v tainy). */
+  widgetOnly?: boolean;
 };
 
 const currentSlug = () => {
@@ -148,7 +150,7 @@ export default function PropertiesPage() {
               active={!choosing && p.slug === current}
               busy={duplicating === p.slug}
               onOpen={() => open(p.slug, "/admin")}
-              onEditWeb={() => open(p.slug, "/admin/web/builder")}
+              onEditWeb={() => open(p.slug, p.widgetOnly ? "/admin/widget" : "/admin/web/builder")}
               onSettings={() => open(p.slug, "/admin/nastaveni")}
               onRename={() => setRenaming(p)}
               onDuplicate={() => duplicate(p)}
@@ -259,7 +261,7 @@ function PropertyCard({
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold">{p.name}</p>
             <p className="truncate text-sm text-soft">
-              {p.propertyType} · tainy.cz/{p.slug}
+              {p.propertyType} · {p.widgetOnly ? "jen widget na vlastním webu" : `tainy.cz/${p.slug}`}
             </p>
           </div>
           <div ref={ref} className="relative shrink-0">
@@ -324,11 +326,13 @@ function PropertyCard({
             {active ? "Přehled" : "Otevřít"}
           </button>
           <button type="button" onClick={onEditWeb} className="btn-ghost !px-4 !py-2 text-sm">
-            Upravit web
+            {p.widgetOnly ? "Widget" : "Upravit web"}
           </button>
-          <a href={p.url || `/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
-            Zobrazit ↗
-          </a>
+          {!p.widgetOnly && (
+            <a href={p.url || `/${p.slug}`} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
+              Zobrazit ↗
+            </a>
+          )}
         </div>
       </div>
     </div>

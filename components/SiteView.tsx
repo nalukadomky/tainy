@@ -5,7 +5,7 @@ import { SECTION_TITLES, parseSectionOrder, sectionTitle, type MovableSection, t
 import Link from "next/link";
 import Image from "next/image";
 import { czk, type PriceRuleInput, type PricingMode } from "@/lib/pricing";
-import { BookingWidget } from "@/components/BookingWidget";
+import { BookingWidget, type BookingSite } from "@/components/BookingWidget";
 import type { BookedRange } from "@/components/DayPicker";
 import { Gallery } from "@/components/Gallery";
 import { parsePhotos } from "@/lib/photos";
@@ -104,6 +104,32 @@ export type SiteViewData = {
   /** Obsah podmínek a zásad pro okno nad webem. */
   docs?: Partial<Record<LegalKind, LegalDocData>>;
 };
+
+/** Data rezervačního formuláře z dat webu — sdílí web i widget na cizím webu (/embed). */
+export function bookingSiteOf(site: SiteViewData): BookingSite {
+  return {
+    slug: site.slug ?? "",
+    name: site.name,
+    pricePerNight: site.pricePerNight,
+    pricingMode: site.pricingMode,
+    weekend: site.weekend,
+    priceRules: site.priceRules,
+    maxGuests: site.maxGuests,
+    minNights: site.minNights ?? 1,
+    leadTimeDays: site.leadTimeDays ?? 0,
+    checkInTime: site.checkInTime ?? "15:00",
+    checkOutTime: site.checkOutTime ?? "10:00",
+    cleaningFee: site.cleaningFee ?? 0,
+    touristTax: site.touristTax ?? 0,
+    paymentMode: site.paymentMode ?? "qr",
+    cancellationPolicy: site.cancellationPolicy ?? "",
+    hasTerms: !!site.hasTerms,
+    vatRate: site.vatRate ?? 0,
+    hasPrivacy: !!site.hasPrivacy,
+    guestMode: site.guestMode ?? "total",
+    categories: site.categories ?? defaultCategories(site.pricingMode),
+  };
+}
 
 // Odsazení od okrajů okna pro hlavičku a úvod s fotkou přes celou šířku
 const EDGE = "px-5 sm:px-8 lg:px-12 xl:px-16";
@@ -361,28 +387,7 @@ export function SiteView({
                   preview={preview}
                   initialBooked={booked}
                   onOpenDoc={site.docs ? openDoc : undefined}
-                  site={{
-                    slug: site.slug ?? "",
-                    name: site.name,
-                    pricePerNight: site.pricePerNight,
-                    pricingMode: site.pricingMode,
-                    weekend: site.weekend,
-                    priceRules: site.priceRules,
-                    maxGuests: site.maxGuests,
-                    minNights: site.minNights ?? 1,
-                    leadTimeDays: site.leadTimeDays ?? 0,
-                    checkInTime: site.checkInTime ?? "15:00",
-                    checkOutTime: site.checkOutTime ?? "10:00",
-                    cleaningFee: site.cleaningFee ?? 0,
-                    touristTax: site.touristTax ?? 0,
-                    paymentMode: site.paymentMode ?? "qr",
-                    cancellationPolicy: site.cancellationPolicy ?? "",
-                    hasTerms: !!site.hasTerms,
-                    vatRate: site.vatRate ?? 0,
-                    hasPrivacy: !!site.hasPrivacy,
-                    guestMode: site.guestMode ?? "total",
-                    categories: site.categories ?? defaultCategories(site.pricingMode),
-                  }}
+                  site={bookingSiteOf(site)}
                 />
               </div>
             </div>
