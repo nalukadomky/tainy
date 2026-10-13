@@ -25,10 +25,18 @@ export function fromISO(iso: string): Date {
   return new Date(`${iso.slice(0, 10)}T00:00:00.000Z`);
 }
 
-/** Dnešek v lokálním čase jako ISO yyyy-mm-dd. */
+/** Skutečné datum ve tvaru YYYY-MM-DD — „2026-02-31“ neprojde (Date by ho přetočil na 3. 3.). */
+export function isIsoDate(v: unknown): v is string {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && toISO(fromISO(v)) === v;
+}
+
+/**
+ * Dnešek v českém čase jako ISO yyyy-mm-dd — stejně na serveru (Vercel běží v UTC)
+ * i u hosta v jiném časovém pásmu, ať se kontroly termínů neliší kolem půlnoci.
+ */
+const PRAGUE_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" });
 export function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return PRAGUE_DAY.format(new Date());
 }
 
 /** Posune ISO datum o `days` dní. */

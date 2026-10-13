@@ -327,10 +327,14 @@ export function useAdminData() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       }).catch(() => null);
+      const data = await res?.json().catch(() => null);
       if (!res?.ok) {
         if (before) setReservations((list) => list.map((r) => (r.id === id ? { ...r, status: before!.status } : r)));
-        throw new Error("Stav se nepodařilo změnit.");
+        // Např. termín mezitím obsadila jiná rezervace (obnovení zrušené)
+        throw new Error(data?.error ?? "Stav se nepodařilo změnit.");
       }
+      // Lhůta na zaplacení se mohla změnit (zaplacená ji nemá, obnovená drží termín)
+      if (data && "expiresAt" in data) setReservations((list) => list.map((r) => (r.id === id ? { ...r, expiresAt: data.expiresAt } : r)));
       return before ? statusMailNote(before, status, site) : null;
     },
     [site]

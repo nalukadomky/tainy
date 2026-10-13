@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { holdsDates } from "@/lib/availability";
 import { checklistFromTemplate, cleaningWindow, manualWindow, parseChecklist } from "@/lib/cleaning";
-import { addDays, todayISO, fromISO, isTime } from "@/lib/stay";
+import { addDays, todayISO, fromISO, isTime, isIsoDate } from "@/lib/stay";
 
 const CLEANER_SELECT = { select: { id: true, name: true, payMode: true, rate: true } } as const;
 
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   const siteId = guard.site.id;
 
   const date = String(body.date ?? "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: "Vyber datum úklidu." }, { status: 400 });
+  if (!isIsoDate(date)) return NextResponse.json({ error: "Vyber datum úklidu." }, { status: 400 });
   const time = isTime(body.time) ? body.time : "";
   const title = String(body.title ?? "").trim().slice(0, 120) || "Úklid";
 

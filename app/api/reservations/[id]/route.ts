@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerByReservationId, deny } from "@/lib/auth";
-import { isTime } from "@/lib/stay";
+import { isRangeFree, isTime, toISO } from "@/lib/stay";
+import { blockedRanges, lockSite } from "@/lib/availability";
 import { sendDueMails, STATUS_MAIL_DELAY } from "@/lib/guest-mails";
 
 // Odklad e-mailu po změně stavu (30 s) + odeslání se vejde do limitu funkce
@@ -23,6 +24,7 @@ export async function PATCH(
   const body = await req.json();
   const data: {
     status?: string;
+    expiresAt?: Date | null;
     paidAt?: Date | null;
     cancelledAt?: Date | null;
     checkInTime?: string;
@@ -77,6 +79,11 @@ export async function PATCH(
     if (body.status !== guard.reservation.status) {
       data.paidAt = body.status === "paid" ? new Date() : null;
       data.cancelledAt = body.status === "cancelled" ? new Date() : null;
+      // Lhůta na zaplacení: zaplacená ji nepotřebuje; nezaplacená vrácená majitelem
+      // (z „zaplaceno“ nebo obnovená zrušená) drží termín, dokud ji majitel nezmění
+      const hold = guard.reservation.expiresAt;
+      if (body.status === "paid") data.expiresAt = null;
+      if (body.status === "pending" && (!hold || hold <= new Date())) data.expiresAt = null;
     }
   }
   for (const key of ["checkInTime", "checkOutTime"] as const) {
@@ -90,6 +97,14 @@ export async function PATCH(
 
   try {
     const reservation = await prisma.$transaction(async (tx) => {
+      // Rezervace, která termín nedržela (zrušená, propadlá), ho znovu obsadí jen když je volný
+      const r = guard.reservation;
+      const wasHolding = r.status === "paid" || (r.status !== "cancelled" && (!r.expiresAt || r.expiresAt > new Date()));
+      if (data.status && data.status !== "cancelled" && !wasHolding) {
+        await lockSite(tx, r.siteId);
+        const blocked = await blockedRanges(r.siteId, toISO(r.startDate), tx, { excludeReservationId: id });
+        if (!isRangeFree(blocked, toISO(r.startDate), toISO(r.endDate))) throw new Taken();
+      }
       const updated = await tx.reservation.update({ where: { id }, data });
       // Zrušený pobyt = žádný úklid po něm (zmizí i uklízečce). Úklid se nedá
       // ukončit před odjezdem, takže zrušení vždy přijde dřív než hotová práce.
@@ -107,7 +122,12 @@ export async function PATCH(
       });
     }
     return NextResponse.json(reservation);
-  } catch {
+  } catch (e) {
+    if (e instanceof Taken) {
+      return NextResponse.json({ error: "Termín mezitím obsadila jiná rezervace nebo blokace." }, { status: 409 });
+    }
     return NextResponse.json({ error: "Rezervace nenalezena." }, { status: 404 });
   }
 }
+
+class Taken extends Error {}

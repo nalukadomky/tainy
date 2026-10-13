@@ -3,14 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { pricedCategories } from "@/lib/pricing";
 import { parseCategories, parseCounts } from "@/lib/guests";
 import { quoteForSite } from "@/lib/quote";
-import { todayISO } from "@/lib/stay";
+import { todayISO, isIsoDate } from "@/lib/stay";
 import { applyVoucher, voucherValueLabel } from "@/lib/voucher";
 import { findVoucher } from "@/lib/voucher-server";
 
 // Veřejné ověření voucheru v rezervačním widgetu. Autoritativní kontrola
 // proběhne znovu při založení rezervace — tohle je jen náhled pro hosta.
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -22,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const start = String(body.startDate ?? "").slice(0, 10);
   const end = String(body.endDate ?? "").slice(0, 10);
-  if (!ISO.test(start) || !ISO.test(end) || end <= start) {
+  if (!isIsoDate(start) || !isIsoDate(end) || end <= start) {
     return NextResponse.json({ error: "Nejdřív vyber termín pobytu." }, { status: 400 });
   }
 

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOwnerByReservationId, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
 import { quoteForSite } from "@/lib/quote";
-import { fromISO, isRangeFree, nightsOf, toISO, todayISO } from "@/lib/stay";
+import { fromISO, isRangeFree, nightsOf, toISO, todayISO, isIsoDate } from "@/lib/stay";
 import { sendGuestDateChange } from "@/lib/email";
 import { guestCounts, stayMailOf } from "@/lib/stay-mail";
 import { discountBase, discountFor } from "@/lib/voucher";
@@ -13,7 +13,6 @@ import { discountBase, discountFor } from "@/lib/voucher";
 //   GET ?start=&end=    → náhled: volno, nová a původní cena
 //   POST                → uložení { start, end, price: "new" | "keep", notify }
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 async function load(id: string) {
   const reservation = await prisma.reservation.findUnique({
@@ -43,7 +42,7 @@ function priceWithVoucher(
 }
 
 function badRange(start: string, end: string): string | null {
-  if (!ISO.test(start) || !ISO.test(end) || end <= start) return "Vyber příjezd i odjezd.";
+  if (!isIsoDate(start) || !isIsoDate(end) || end <= start) return "Vyber příjezd i odjezd.";
   if (nightsOf(start, end) > 60) return "Pobyt může mít nejvýš 60 nocí.";
   return null;
 }
@@ -139,7 +138,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       stayMailOf(updated, site),
       old,
       paid ? Math.max(0, updated.totalPrice - reservation.totalPrice) : 0,
-      id
+      id,
+      site.contactEmail
     );
   }
 

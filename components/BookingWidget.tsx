@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   czk,
+  nightPrice,
   perGuestNightPrice,
   plural,
   pricedCategories,
@@ -69,6 +70,7 @@ export function BookingWidget({
   initialBooked = [],
   onOpenDoc,
   embed = false,
+  aside = false,
 }: {
   site: BookingSite;
   /** Otevře obchodní podmínky / zásady v okně nad webem (jinak odkaz na stránku). */
@@ -78,6 +80,8 @@ export function BookingWidget({
   initialBooked?: BookedRange[];
   /** Widget na cizím webu (/embed) — rezervace se zapíše se zdrojem „Widget“ a dá vědět vkládající stránce. */
   embed?: boolean;
+  /** Na širokém displeji karta s cenou vedle kalendáře (web ubytování). */
+  aside?: boolean;
 }) {
   const [step, setStep] = useState<Step>("termin");
   // Při přechodu mezi kroky srolovat na začátek formuláře (na mobilu by jinak
@@ -205,6 +209,9 @@ export function BookingWidget({
     return quote.nights > 0 ? quote : null;
   }, [startDate, endDate, counts, pricingCfg]);
 
+  // Cena noci v kalendáři (pro aktuální skladbu hostů) — host vidí sezóny a víkendy hned
+  const priceOf = useCallback((iso: string) => nightPrice(pricingCfg, iso, counts).price, [pricingCfg, counts]);
+
   // Cena za osobu se počítá k prvnímu vybranému dni, ať host vidí, co platí
   // pro svůj termín, ne obecnou sazbu.
   const priceHint = useCallback(
@@ -311,13 +318,12 @@ export function BookingWidget({
       // Widget: web majitele se to dozví (např. pro měření konverzí v Google Analytics).
       // Bez kódu rezervace — vkládající stránku neznáme a kód otevírá údaje hosta.
       if (embed) window.parent.postMessage({ type: "tainy:booked", total }, "*");
-      window.location.href = `/r/${data.publicId}`;
+      window.location.href = `/r/${data.publicId}${embed ? "?embed=1" : ""}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Rezervaci se nepodařilo dokončit.");
       setSending(false);
-      // Termín mohl mezitím obsadit někdo jiný — načti kalendář znovu.
+      // Chyba (např. telefon, souhlas) zůstane u potvrzení — obsazený termín řeší 409 výše
       refreshBooked();
-      setStep("termin");
     }
   }
 
@@ -378,8 +384,45 @@ export function BookingWidget({
 
   const earliest = earliestArrival(site);
 
+  // Karta vedle kalendáře (jen široký displej): cena za noc a rozpis vybraného pobytu
+  const asideCard = aside && (
+    <aside className="sticky top-24 space-y-4 rounded-2xl border border-line bg-surface p-5 max-lg:hidden">
+      <p className="font-display text-2xl font-semibold">
+        <span className="text-sm font-normal text-soft">od </span>
+        {czk(site.pricePerNight)}
+        <span className="text-sm font-normal text-soft"> / {site.pricingMode === "person" ? "os. / noc" : "noc"}</span>
+      </p>
+      {/* V kroku Termín host ještě nevybral počet osob — jen termín a orientační cena */}
+      {step === "termin" ? (
+        startDate && endDate && price ? (
+          <div className="rounded-xl bg-bg px-4 py-3 text-sm">
+            <div className="flex justify-between gap-3 font-medium">
+              <span>
+                {fmtDay(startDate)} – {fmtDay(endDate)}
+              </span>
+              <span className="shrink-0">
+                {price.nights} {plural(price.nights, "noc", "noci", "nocí")}
+              </span>
+            </div>
+            <p className="mt-0.5 text-soft">
+              Příjezd od {site.checkInTime}, odjezd do {site.checkOutTime}
+            </p>
+            <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2">
+              <span className="text-soft">celkem od</span>
+              <span className="font-display text-lg font-semibold">{czk(price.total)}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-bg px-4 py-3 text-sm text-soft">Vyber v kalendáři příjezd a odjezd.</p>
+        )
+      ) : (
+        summary
+      )}
+    </aside>
+  );
+
   return (
-    <>
+    <div className={aside ? "lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6" : ""}>
       {toastNode}
       <div ref={boxRef} className="scroll-mt-20 overflow-hidden rounded-2xl border border-line bg-surface">
         {/* Krokovací lišta — hotové kroky jdou rozkliknout zpět */}
@@ -416,6 +459,7 @@ export function BookingWidget({
                 end={endDate}
                 minNights={site.minNights}
                 earliest={earliest}
+                priceOf={preview ? undefined : priceOf}
                 onChange={({ start, end }) => {
                   setStartDate(start);
                   setEndDate(end);
@@ -433,7 +477,7 @@ export function BookingWidget({
               </p>
 
               {startDate && endDate && price && (
-                <div className="flex items-end justify-between gap-3 rounded-xl bg-bg px-4 py-3 text-sm">
+                <div className={`flex items-end justify-between gap-3 rounded-xl bg-bg px-4 py-3 text-sm ${aside ? "lg:hidden" : ""}`}>
                   <span>
                     <strong className="block font-semibold">
                       {fmtDay(startDate)} – {fmtDay(endDate)}
@@ -486,7 +530,7 @@ export function BookingWidget({
                 priceHint={priceHint}
               />
 
-              {summary}
+              <div className={aside ? "lg:hidden" : ""}>{summary}</div>
               {(error || stayError) && (
                 <p className="rounded-xl bg-coral/10 px-4 py-3 text-sm font-medium text-coral">{error || stayError}</p>
               )}
@@ -571,7 +615,7 @@ export function BookingWidget({
                   onChange={(e) => setNote(e.target.value)}
                 />
               </label>
-              {summary}
+              <div className={aside ? "lg:hidden" : ""}>{summary}</div>
               <div className="flex gap-3">
                 <button type="button" className="btn-ghost" onClick={() => setStep("hoste")}>
                   ← Zpět
@@ -590,7 +634,7 @@ export function BookingWidget({
 
           {step === "potvrzeni" && (
             <div className="space-y-4">
-              {summary}
+              <div className={aside ? "lg:hidden" : ""}>{summary}</div>
 
               {voucher ? (
                 <p className="flex items-center justify-between gap-3 text-sm">
@@ -759,7 +803,8 @@ export function BookingWidget({
           )}
         </div>
       </div>
-    </>
+      {asideCard}
+    </div>
   );
 }
 

@@ -47,7 +47,7 @@ async function claimAndSend(
   const claimed = await prisma.reservation.updateMany({ where: { id: r.id, ...where }, data: { [field]: new Date() } });
   if (!claimed.count) return false;
   const { subject, html } = renderEmail(kind, r.site, stayMailOf(r, r.site), { link: `${appUrl()}/r/${r.publicId}`, ...extras });
-  const ok = await send({ to: r.email, subject, html });
+  const ok = await send({ to: r.email, subject, html, replyTo: r.site.contactEmail });
   if (!ok) await prisma.reservation.update({ where: { id: r.id }, data: { [field]: r[field] } });
   else await logGuestMail(r.id, field === "arrivalCodeMailAt" ? "arrivalCode" : kind, subject, html);
   return ok;

@@ -9,7 +9,7 @@ import { capacityCount, parseCategories, parseCounts } from "@/lib/guests";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
 import { syncStale } from "@/lib/ical-sync";
-import { fromISO, isRangeFree, newPublicId, todayISO, toISO, validateStay } from "@/lib/stay";
+import { fromISO, isRangeFree, newPublicId, todayISO, toISO, validateStay, isIsoDate } from "@/lib/stay";
 import { demoPaymentsEnabled } from "@/lib/demo";
 import { vatOfQuote, vatRateOf } from "@/lib/vat";
 import { buildPayment } from "@/lib/payment";
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const startIso = String(body.startDate ?? "").slice(0, 10);
   const endIso = String(body.endDate ?? "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startIso) || !/^\d{4}-\d{2}-\d{2}$/.test(endIso)) {
+  if (!isIsoDate(startIso) || !isIsoDate(endIso)) {
     return NextResponse.json({ error: "Neplatný termín pobytu." }, { status: 400 });
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { safeNext } from "@/lib/safe-next";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -32,7 +33,7 @@ export function AuthForm({
   const router = useRouter();
   const isRegister = mode === "register";
   const fromUrl = useSearchParams().get("next");
-  const next = nextProp || fromUrl || "/admin/vyber";
+  const next = safeNext(nextProp || fromUrl);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

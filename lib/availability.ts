@@ -15,7 +15,8 @@ type Db = PrismaClient | Prisma.TransactionClient;
 export function holdsDates(): Prisma.ReservationWhereInput {
   return {
     status: { not: "cancelled" },
-    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    // Zaplacená drží termín vždy — lhůta na zaplacení (expiresAt) se jí už netýká
+    OR: [{ status: "paid" }, { expiresAt: null }, { expiresAt: { gt: new Date() } }],
   };
 }
 

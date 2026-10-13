@@ -10,8 +10,8 @@ const FEATURES = [
   },
   {
     icon: "card" as const,
-    title: "Platby přes Stripe",
-    text: "Z výběru termínu vede host rovnou na platbu. Žádné dohadování přes e-maily a zálohy na účet.",
+    title: "Platba QR kódem",
+    text: "Po rezervaci dostane host QR kód k platbě na tvůj účet. Žádné dohadování přes e-maily a přepisování čísel účtu.",
   },
   {
     icon: "chart" as const,
@@ -162,7 +162,7 @@ export default function Home() {
           <ul className="mt-6 grid gap-2.5 text-[15px] text-soft sm:mt-0 sm:grid-cols-2 sm:gap-x-8">
             <li>✓ Vlastní prezentační web</li>
             <li>✓ Rezervace s půldny</li>
-            <li>✓ Platby přes Stripe</li>
+            <li>✓ Platby QR kódem</li>
             <li>✓ Kalendář a blokace termínů</li>
             <li>✓ Hosté a vouchery</li>
             <li>✓ Přehled výdělků a nákladů</li>

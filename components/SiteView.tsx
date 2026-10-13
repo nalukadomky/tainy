@@ -377,7 +377,8 @@ export function SiteView({
         <EditSection editing={editing} section="rezervace">
           <section id="rezervace" className="scroll-mt-16 border-t border-line bg-bg">
             {/* Rezervace v užším vystředěném sloupci — kalendář se vejde, nic se zbytečně neroztahuje */}
-            <div className="mx-auto px-5 py-10 sm:py-14" style={{ maxWidth: 760 }}>
+            {/* Na širokém displeji vedle kalendáře karta s cenou (BookingWidget aside) */}
+            <div className="mx-auto max-w-[760px] px-5 py-10 sm:py-14 lg:max-w-[1100px]">
               <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-center">{title("rezervace")}</h2>
               <p className="mt-2 text-soft sm:text-center">
                 Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.
@@ -388,6 +389,7 @@ export function SiteView({
                   initialBooked={booked}
                   onOpenDoc={site.docs ? openDoc : undefined}
                   site={bookingSiteOf(site)}
+                  aside
                 />
               </div>
             </div>
@@ -441,13 +443,13 @@ export function SiteView({
 
       <EditSection editing={editing} section="uvod">
         {site.heroStyle === "photo" && site.heroPhoto ? (
-          <section id="uvod" className="relative isolate flex min-h-[calc(100svh-4rem)] items-end overflow-hidden bg-ink">
-            {/* Fotka vyplní celou výšku okna pod hlavičkou; galerie začíná až po posunu */}
+          <section id="uvod" className="relative isolate flex min-h-[78svh] items-end overflow-hidden bg-ink sm:min-h-[calc(100svh-4rem)]">
+            {/* Fotka vyplní výšku okna pod hlavičkou (na mobilu kratší, ať je vidět, že stránka pokračuje) */}
             <Image src={site.heroPhoto} alt="" fill priority sizes="100vw" className="-z-10 object-cover" />
             {/* Přechod zdola, aby byl bílý text čitelný na jakékoli fotce */}
             <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/80 via-ink/25 to-ink/5" />
             {/* Text v dolní třetině, ne nalepený na spodní hranu (víc místa nad lištou na mobilu) */}
-            <div className={`w-full pt-24 text-white ${EDGE}`} style={{ paddingBottom: "clamp(8.5rem, 18vh, 12rem)" }}>
+            <div className={`w-full pb-28 pt-24 text-white sm:pb-[clamp(8.5rem,18vh,12rem)] ${EDGE}`}>
               <p className="rise text-xs font-semibold uppercase tracking-widest text-white/80">
                 {site.propertyType} · až {site.maxGuests} hostů
                 {site.sleeping?.bedrooms ? ` · ${bedroomsLabel(site.sleeping.bedrooms)}` : ""}

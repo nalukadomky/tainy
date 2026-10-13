@@ -16,6 +16,7 @@ import { Icon } from "@/components/Icon";
 import { parseEmailSettings } from "@/lib/email-templates";
 import { parsePhotos } from "@/lib/photos";
 import Image from "next/image";
+import { EmbedClose } from "@/components/EmbedClose";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,14 @@ function fmt(iso: string): string {
 
 export default async function ReservationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ publicId: string }>;
+  searchParams: Promise<{ embed?: string }>;
 }) {
   const { publicId } = await params;
+  // ?embed=1 = otevřeno v okně widgetu na webu majitele: křížek místo odkazu na web, bez pozvánky na tainy
+  const embed = (await searchParams).embed === "1";
   const reservation = await prisma.reservation.findUnique({
     where: { publicId },
     include: { site: true },
@@ -90,7 +95,7 @@ export default async function ReservationPage({
     <div className="min-h-dvh bg-bg">
       <header className="border-b border-line/70 bg-cream">
         <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5 md:max-w-5xl">
-          {site.widgetOnly ? (
+          {site.widgetOnly || embed ? (
             <span className="font-display text-lg font-semibold tracking-tight">{site.name}</span>
           ) : (
             <Link href={`/${site.slug}`} className="font-display text-lg font-semibold tracking-tight">
@@ -106,6 +111,7 @@ export default async function ReservationPage({
             <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${state.style}`}>
               {state.label}
             </span>
+            {embed && <EmbedClose />}
           </span>
         </div>
       </header>
@@ -124,7 +130,7 @@ export default async function ReservationPage({
             {reservation.status === "cancelled" || expired ? (
               <>
                 Termín je zase volný.{" "}
-                <Link href={`/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
+                <Link href={embed ? `/embed/${site.slug}` : `/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
                   Zkusit jiný termín
                 </Link>
               </>
@@ -248,7 +254,13 @@ export default async function ReservationPage({
             </div>
             {reservation.expiresAt && (
               <p className="mt-4 rounded-xl bg-amber/15 px-4 py-2.5 text-xs font-medium text-[#92600a]">
-                Termín držíme do {reservation.expiresAt.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}.
+                Termín držíme do {reservation.expiresAt.toLocaleString("cs-CZ", {
+                  day: "numeric",
+                  month: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "Europe/Prague",
+                })}.
                 Po zaplacení ti majitel rezervaci potvrdí.
               </p>
             )}
@@ -315,7 +327,7 @@ export default async function ReservationPage({
             {reservation.termsAcceptedAt && (
               <p>
                 Souhlas s{" "}
-                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.terms}`}>
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.terms}`} target={embed ? "_blank" : undefined}>
                   obchodními podmínkami
                 </Link>{" "}
                 udělen{" "}
@@ -332,7 +344,7 @@ export default async function ReservationPage({
             )}
             {hasDoc(site, "privacy") && (
               <p>
-                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.privacy}`}>
+                <Link className="underline underline-offset-2 hover:text-ink" href={`/${site.slug}/${LEGAL_PATH.privacy}`} target={embed ? "_blank" : undefined}>
                   Zásady ochrany osobních údajů
                 </Link>
               </p>
@@ -342,7 +354,8 @@ export default async function ReservationPage({
 
         </div>
 
-        {/* Pozvánka na tainy — rezervační web pro další majitele */}
+        {/* Pozvánka na tainy — rezervační web pro další majitele (ve widgetu na cizím webu ne) */}
+        {!embed && (
         <Link
           href="/"
           className="group mt-2 flex flex-col items-start gap-3 rounded-2xl border border-line bg-cream p-5 transition hover:border-pine/40 sm:flex-row sm:items-center sm:justify-between md:mt-0 md:flex-col md:items-start md:[grid-area:promo]"
@@ -359,6 +372,7 @@ export default async function ReservationPage({
             Vyzkoušet tainy →
           </span>
         </Link>
+        )}
         </div>
       </main>
     </div>

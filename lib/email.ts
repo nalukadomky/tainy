@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { czk } from "@/lib/pricing";
 import { greetingName } from "@/lib/vocative";
 import {
+  esc,
   fmt,
   layout,
   renderEmail,
@@ -27,16 +28,19 @@ export function appUrl(): string {
   return "http://localhost:3000";
 }
 
-type Mail = { to: string; subject: string; html: string };
+/** replyTo = kontakt majitele: host odpovídá na e-mail jemu, ne na adresu tainy. */
+type Mail = { to: string; subject: string; html: string; replyTo?: string };
+
+const isEmail = (v: string | undefined): v is string => !!v && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
 
 /** Odešle e-mail; vrací, jestli ho Resend přijal (bez klíče = ukázkový režim, bere se jako odeslaný). */
-export async function send({ to, subject, html }: Mail): Promise<boolean> {
+export async function send({ to, subject, html, replyTo }: Mail): Promise<boolean> {
   if (!resend) {
     console.log(`[e-mail — ukázkový režim] pro ${to}: ${subject}`);
     return true;
   }
   try {
-    const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+    const { error } = await resend.emails.send({ from: FROM, to, subject, html, ...(isEmail(replyTo) && { replyTo: replyTo.trim() }) });
     if (error) console.error("Odeslání e-mailu selhalo:", error);
     return !error;
   } catch (e) {
@@ -57,7 +61,9 @@ export async function sendGuestConfirmation(
   reservationId?: string,
 ): Promise<void> {
   const { subject, html } = renderEmail("booking", site, r, { ...extras, link: `${appUrl()}/r/${r.publicId}` });
-  if ((await send({ to: r.email, subject, html })) && reservationId) await logGuestMail(reservationId, "booking", subject, html);
+  if ((await send({ to: r.email, subject, html, replyTo: site.contactEmail })) && reservationId) {
+    await logGuestMail(reservationId, "booking", subject, html);
+  }
 }
 
 /** Uloží odeslaný e-mail hostovi (časová osa v detailu rezervace). Selhání nevadí. */
@@ -71,11 +77,13 @@ export async function sendOwnerNotification(r: StayMail, ownerEmail: string): Pr
   await send({
     to: ownerEmail,
     subject: `Nová rezervace — ${r.siteName}, ${fmt(r.startDate)}`,
+    // Odpověď majitele půjde rovnou hostovi
+    replyTo: r.email,
     html: titled(
       "Máš novou rezervaci",
-      `<p style="margin:0 0 16px;font-size:15px;line-height:1.6"><strong>${r.guestName}</strong> si rezervoval pobyt v ${r.siteName}.</p>
+      `<p style="margin:0 0 16px;font-size:15px;line-height:1.6"><strong>${esc(r.guestName)}</strong> si rezervoval pobyt v ${esc(r.siteName)}.</p>
        ${stayBlock(r)}
-       <p style="margin:0 0 16px;font-size:14px;color:#5a6557">${r.email}${r.phone ? ` · ${r.phone}` : ""}<br>Stav: ${r.demo ? "zaplaceno ukázkovou platbou" : r.paid ? "zaplaceno" : "čeká na platbu"}</p>
+       <p style="margin:0 0 16px;font-size:14px;color:#5a6557">${esc(r.email)}${r.phone ? ` · ${esc(r.phone)}` : ""}<br>Stav: ${r.demo ? "zaplaceno ukázkovou platbou" : r.paid ? "zaplaceno" : "čeká na platbu"}</p>
        <a href="${appUrl()}/admin/rezervace" style="display:inline-block;background:#2c5e3f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;font-size:15px">Otevřít administraci</a>`
     ),
   });
@@ -86,7 +94,8 @@ export async function sendGuestDateChange(
   r: StayMail,
   old: { startDate: string; endDate: string },
   doplatek: number,
-  reservationId?: string
+  reservationId?: string,
+  replyTo?: string
 ): Promise<void> {
   const link = `${appUrl()}/r/${r.publicId}`;
   const payment =
@@ -96,10 +105,11 @@ export async function sendGuestDateChange(
 
   const mail = {
     to: r.email,
+    replyTo,
     subject: `Změna termínu — ${r.siteName}, ${fmt(r.startDate)}`,
     html: titled(
-      `${greetingName(r.firstName || r.guestName)}, termín pobytu je změněný`,
-      `<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Tvůj pobyt v <strong>${r.siteName}</strong> má nový termín.</p>
+      `${esc(greetingName(r.firstName || r.guestName))}, termín pobytu je změněný`,
+      `<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Tvůj pobyt v <strong>${esc(r.siteName)}</strong> má nový termín.</p>
        <p style="margin:0 0 4px;font-size:14px;color:#5a6557">Původně: <s>${fmt(old.startDate)} – ${fmt(old.endDate)}</s></p>
        ${stayBlock(r)}
        ${payment}

@@ -128,6 +128,7 @@ export async function syncFeed(feed: Feed, timeoutMs = FETCH_TIMEOUT): Promise<{
   for (const e of events) if (!e.cancelled && e.end >= from) live.set(e.uid, e);
 
   let changed = false;
+  let warning = "";
   await prisma.$transaction(
     async (tx) => {
       await lockSite(tx, feed.siteId);
@@ -141,6 +142,11 @@ export async function syncFeed(feed: Feed, timeoutMs = FETCH_TIMEOUT): Promise<{
       ]);
       const iso = (d: Date) => d.toISOString().slice(0, 10);
       const day = (s: string) => new Date(`${s}T00:00:00Z`);
+      // Portál poslal kalendář bez jediného budoucího termínu, i když jsme jich měli víc —
+      // spíš výpadek na jeho straně než zrušení všeho. Nic nerušit a zkusit to příště.
+      const known = stays.filter((s) => s.status !== "cancelled" && iso(s.endDate) >= today).length + blocks.filter((b) => iso(b.endDate) >= today).length;
+      const keepAll = live.size === 0 && known > 0;
+      if (keepAll) warning = "Portál poslal prázdný kalendář — rezervace jsme nechali beze změny a zkusíme to znovu.";
 
       for (const s of stays) {
         const e = live.get(s.externalUid ?? "");
@@ -151,7 +157,7 @@ export async function syncFeed(feed: Feed, timeoutMs = FETCH_TIMEOUT): Promise<{
             await tx.reservation.update({ where: { id: s.id }, data: { startDate: day(e.start), endDate: day(e.end) } });
             changed = true;
           }
-        } else if (iso(s.endDate) >= today && s.status !== "cancelled") {
+        } else if (!keepAll && iso(s.endDate) >= today && s.status !== "cancelled") {
           // Z portálu zmizel budoucí termín = zrušená rezervace
           await tx.reservation.update({ where: { id: s.id }, data: { status: "cancelled" } });
           await tx.cleaning.deleteMany({ where: { reservationId: s.id, paid: false } });
@@ -166,7 +172,7 @@ export async function syncFeed(feed: Feed, timeoutMs = FETCH_TIMEOUT): Promise<{
             await tx.blackout.update({ where: { id: b.id }, data: { startDate: day(e.start), endDate: day(e.end) } });
             changed = true;
           }
-        } else if (iso(b.endDate) >= today) {
+        } else if (!keepAll && iso(b.endDate) >= today) {
           await tx.blackout.delete({ where: { id: b.id } });
           changed = true;
         }
@@ -207,12 +213,14 @@ export async function syncFeed(feed: Feed, timeoutMs = FETCH_TIMEOUT): Promise<{
       }
       await tx.calendarFeed.update({
         where: { id: feed.id },
-        data: { lastSyncAt: new Date(), lastError: "", eventCount: [...events].filter((e) => !e.cancelled && e.end >= from).length },
+        data: keepAll
+          ? { lastSyncAt: new Date(), lastError: warning }
+          : { lastSyncAt: new Date(), lastError: "", eventCount: [...events].filter((e) => !e.cancelled && e.end >= from).length },
       });
     },
     { maxWait: 10_000, timeout: 20_000 }
   );
-  return { changed };
+  return warning ? { changed, error: warning } : { changed };
 }
 
 /**

@@ -10,7 +10,7 @@ import {
   parseChecklist,
   parseCleanerFields,
 } from "@/lib/cleaning";
-import { addDays, fromISO, isTime, todayISO } from "@/lib/stay";
+import { addDays, fromISO, isTime, todayISO, isIsoDate } from "@/lib/stay";
 import { TODO_INCLUDE, toTodoItem, trashSince } from "@/lib/todos";
 
 // Kalendář úklidů pro uklízečku (přístup přes tajný odkaz, bez přihlášení).
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const body = await req.json();
 
   const date = String(body.date ?? "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: "Vyber datum úklidu." }, { status: 400 });
+  if (!isIsoDate(date)) return NextResponse.json({ error: "Vyber datum úklidu." }, { status: 400 });
   const title = String(body.title ?? "").trim().slice(0, 120);
   if (!title) return NextResponse.json({ error: "Napiš, o jaký úklid jde." }, { status: 400 });
 

@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { blockedRanges, lockSite } from "@/lib/availability";
-import { fromISO, isRangeFree } from "@/lib/stay";
+import { fromISO, isRangeFree, isIsoDate } from "@/lib/stay";
 
 // Blokace termínů majitelem (servis, vlastní pobyt). `end` je den po
 // posledním blokovaném dni — stejná konvence jako odjezd u rezervace.
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("site");
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const start = String(body.start ?? "");
   const end = String(body.end ?? "");
-  if (!ISO.test(start) || !ISO.test(end) || end <= start) {
+  if (!isIsoDate(start) || !isIsoDate(end) || end <= start) {
     return NextResponse.json({ error: "Neplatný termín blokace." }, { status: 400 });
   }
   const siteId = guard.site.id;

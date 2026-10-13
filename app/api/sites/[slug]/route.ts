@@ -90,6 +90,12 @@ export async function GET(
     wifiName: _wifiName,
     wifiPassword: _wifiPassword,
     geo: _geo,
+    // Tajný odkaz na kalendář obsazenosti a interní nastavení úklidu a personálu
+    icalToken: _icalToken,
+    cleaningChecklist: _cleaningChecklist,
+    cleanerFields: _cleanerFields,
+    staffSeesOwnerTodos: _staffSeesOwnerTodos,
+    domainVerifiedAt: _domainVerifiedAt,
     ...publicSite
   } = site;
   return NextResponse.json(publicSite);

@@ -8,6 +8,7 @@ import { bookingSiteOf, type SiteViewData } from "@/components/SiteView";
 import { Wordmark } from "@/components/Logo";
 import { providerLine, type LegalKind } from "@/lib/legal";
 import { themeVars } from "@/lib/theme";
+import { sectionTitle } from "@/lib/sections";
 
 // Rezervace v okně nad cizím webem (iframe z public/widget.js): jen formulář
 // v barvách webu, zavírací křížek a provozovatel. Vkládající stránce posílá
@@ -45,15 +46,12 @@ export function EmbedView({ site, booked }: { site: SiteViewData; booked: Booked
   const doc = openKind ? site.docs?.[openKind] : undefined;
 
   return (
-    <div className="min-h-dvh bg-cream" style={themeVars(site.themeColor, site.surfaceTone) as React.CSSProperties}>
+    <div className="min-h-dvh bg-bg" style={themeVars(site.themeColor, site.surfaceTone) as React.CSSProperties}>
       {openKind && doc && (
         <LegalModal kind={openKind} doc={doc} slug={site.slug} provider={provider} onClose={() => setOpenKind(null)} />
       )}
       <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line/70 bg-cream/90 px-5 py-3.5 backdrop-blur">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-soft">Rezervace</p>
-          <h1 className="truncate font-display text-xl font-semibold leading-tight">{site.name}</h1>
-        </div>
+        <p className="truncate font-display text-xl font-semibold leading-tight">{site.name}</p>
         <button
           type="button"
           onClick={close}
@@ -63,8 +61,11 @@ export function EmbedView({ site, booked }: { site: SiteViewData; booked: Booked
           ×
         </button>
       </header>
-      <main className="mx-auto max-w-xl px-5 pb-10 pt-5">
-        <BookingWidget site={bookingSiteOf(site)} initialBooked={booked} onOpenDoc={site.docs ? openDoc : undefined} embed />
+      {/* Stejně jako sekce Rezervace na webu v tainy: nadpis, kalendář a na šířku karta s cenou */}
+      <main className="mx-auto max-w-[760px] px-5 pb-10 pt-8 sm:pt-10 lg:max-w-[1100px]">
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-center">{sectionTitle(site.sectionTitles, "rezervace")}</h1>
+        <p className="mb-6 mt-2 text-soft sm:text-center">Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.</p>
+        <BookingWidget site={bookingSiteOf(site)} initialBooked={booked} onOpenDoc={site.docs ? openDoc : undefined} embed aside />
         <footer className="mt-8 space-y-1 text-center text-xs text-soft">
           {site.provider?.name && (
             <p>

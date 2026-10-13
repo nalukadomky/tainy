@@ -212,7 +212,7 @@ type AlertManual = AlertCleaning & { date: Date | null; title: string };
 export function cleaningAlerts(stays: AlertStay[], manual: AlertManual[], today: string): Record<string, CleaningAlert> {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const now = new Date();
-  const holds = stays.filter((r) => r.status !== "cancelled" && (!r.expiresAt || r.expiresAt > now));
+  const holds = stays.filter((r) => r.status === "paid" || (r.status !== "cancelled" && (!r.expiresAt || r.expiresAt > now)));
   const [y, m, d] = today.split("-").map(Number);
   const day = (n: number) => new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
   const tomorrow = day(1);

@@ -36,7 +36,7 @@
     ".ov{position:fixed;inset:0;z-index:2147483001;display:flex;align-items:center;justify-content:center;padding:24px;" +
     "background:rgba(18,24,20,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;transition:opacity .22s ease}" +
     ".ov[hidden]{display:none}.ov.open{opacity:1}" +
-    ".panel{position:relative;width:min(580px,100%);height:min(880px,100%);border-radius:24px;overflow:hidden;background:#fdfbf6;" +
+    ".panel{position:relative;width:min(1180px,100%);height:min(900px,100%);border-radius:24px;overflow:hidden;background:#fdfbf6;" +
     "box-shadow:0 30px 80px -20px rgba(0,0,0,.5);transform:translateY(16px) scale(.98);transition:transform .26s cubic-bezier(.2,.8,.2,1)}" +
     ".ov.open .panel{transform:none}" +
     ".panel iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}" +

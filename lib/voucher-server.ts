@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient, Voucher } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { fromISO, toISO } from "@/lib/stay";
+import { fromISO, toISO, isIsoDate } from "@/lib/stay";
 import { normalizeCode, type VoucherRule } from "@/lib/voucher";
 
 // Načtení voucheru z databáze pro ověření (server). Počet použití =
@@ -33,7 +33,6 @@ export async function findVoucher(siteId: string, rawCode: string, db: Db = pris
   return { voucher, rule: toRule(voucher), uses: await voucherUses(siteId, code, db) };
 }
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Vstup z formuláře správy voucherů → data pro Prisma, nebo chybová hláška. */
 export function parseVoucherInput(body: Record<string, unknown>, partial = false) {
@@ -58,7 +57,7 @@ export function parseVoucherInput(body: Record<string, unknown>, partial = false
     if (body[key] === undefined) continue;
     const v = body[key];
     if (v === null || v === "") data[key] = null;
-    else if (typeof v === "string" && ISO.test(v)) data[key] = fromISO(v);
+    else if (typeof v === "string" && isIsoDate(v)) data[key] = fromISO(v);
     else return { error: "Neplatné datum platnosti." } as const;
   }
   if (data.validFrom instanceof Date && data.validTo instanceof Date && data.validTo < data.validFrom) {
