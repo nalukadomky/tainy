@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 
-// Mobil: tažením karty doleva se rezervace označí jako zaplacená. Pod kartou
-// se odkrývá zelený pruh „Zaplaceno“; po překročení hranice stačí pustit.
+// Mobil: tažením karty doleva se rezervace označí jako zaplacená (zelený pruh
+// „Zaplaceno“), u zaplacené se tímtéž gestem vrátí na nezaplaceno (oranžový
+// pruh „Nezaplaceno“). Po překročení hranice stačí pustit.
 // Svislé posouvání stránky zůstává prohlížeči (touch-action: pan-y), gesto
 // se chytá jen u dotyku a jen na úzké obrazovce.
 
@@ -13,12 +14,15 @@ const LOCK = 8; // px — po kolika pixelech se rozhodne, jestli jde o vodorovn�
 export function SwipeToPay({
   enabled,
   onPay,
+  undo = false,
   id,
   className,
   children,
 }: {
   enabled: boolean;
   onPay: () => void;
+  /** Zaplacená rezervace — gesto ji vrátí na nezaplaceno. */
+  undo?: boolean;
   id?: string;
   className?: string;
   children: React.ReactNode;
@@ -76,6 +80,7 @@ export function SwipeToPay({
 
   const width = start.current?.width ?? 1;
   const passed = -dx >= width * THRESHOLD;
+  const accent = undo ? "color-mix(in srgb, var(--amber) 75%, black)" : "var(--pine)";
 
   return (
     // Ořez jen během tažení — jinak by uřízl nabídku „⋯“, která přesahuje kartu
@@ -85,11 +90,13 @@ export function SwipeToPay({
           aria-hidden
           className="absolute inset-0 flex items-center justify-end rounded-2xl pr-6 text-sm font-semibold text-white"
           style={{
-            background: passed || !dragging ? "var(--pine)" : "color-mix(in srgb, var(--pine) 55%, var(--soft))",
+            background: passed || !dragging ? accent : `color-mix(in srgb, ${accent} 55%, var(--soft))`,
             transition: "background 150ms",
           }}
         >
-          <span style={{ transform: `scale(${passed ? 1.08 : 1})`, transition: "transform 150ms" }}>✓ Zaplaceno</span>
+          <span style={{ transform: `scale(${passed ? 1.08 : 1})`, transition: "transform 150ms" }}>
+            {undo ? "↺ Nezaplaceno" : "✓ Zaplaceno"}
+          </span>
         </div>
       )}
       <div

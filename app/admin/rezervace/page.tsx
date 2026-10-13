@@ -332,10 +332,12 @@ export default function ReservationsPage() {
                     key={r.id}
                     id={`rez-${r.id}`}
                     className={`scroll-mt-24 ${ri === 0 ? "rounded-t-2xl" : ""} ${ri === g.items.length - 1 ? "rounded-b-2xl" : ""}`}
-                    enabled={r.status === "pending"}
+                    enabled={r.status === "pending" || r.status === "paid"}
+                    undo={r.status === "paid"}
                     onPay={() => {
-                      setStatus(r.id, "paid");
-                      toast.show(`${r.guestName}: zaplaceno`, "success");
+                      const back = r.status === "paid";
+                      setStatus(r.id, back ? "pending" : "paid");
+                      toast.show(`${r.guestName}: ${back ? "vráceno na nezaplaceno" : "zaplaceno"}`, "success");
                     }}
                   >
                     <div
