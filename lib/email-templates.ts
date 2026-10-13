@@ -247,6 +247,9 @@ function varValues(d: StayMail): Record<string, string> {
   return Object.fromEntries(pairs.map(([k, v]) => [normVar(k), v]));
 }
 
+/** Je {název} známá proměnná (editor ji zvýrazní jako štítek)? */
+export const isEmailVar = (name: string) => EMAIL_VARS.some((v) => normVar(v) === normVar(name));
+
 /** Doplní {proměnné}; neznámé nechá, jak jsou. */
 export function fillVars(text: string, d: StayMail): string {
   const values = varValues(d);
@@ -506,6 +509,21 @@ export function renderEmail(
   d: StayMail,
   x: EmailExtras,
 ): { subject: string; html: string } {
+  const p = renderEmailParts(kind, site, d, x);
+  return { subject: p.subject, html: layout(`${p.intro}${p.body}`) };
+}
+
+/**
+ * E-mail po částech: průvodní text majitele (intro) a vše, co se doplní samo
+ * (body — souhrn, platba, tlačítko, patička). Editor v nastavení ukazuje intro
+ * k úpravě a body jako pevnou část, odesílá se obojí spojené v layout().
+ */
+export function renderEmailParts(
+  kind: EmailKind,
+  site: EmailSite,
+  d: StayMail,
+  x: EmailExtras,
+): { subject: string; intro: string; body: string } {
   const settings = parseEmailSettings(site.emailSettings);
   const cfg = settings[kind];
   const t: Tone = (ty, vy) => (settings.formal ? vy : ty);
@@ -536,6 +554,7 @@ export function renderEmail(
 
   return {
     subject: fillVars(cfg.subject, d),
-    html: layout(`${intro}${body}${legalBlock(d.legal, kind === "booking")}${unsubscribe}`),
+    intro,
+    body: `${body}${legalBlock(d.legal, kind === "booking")}${unsubscribe}`,
   };
 }

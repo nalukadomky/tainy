@@ -9,10 +9,9 @@ import {
   EMAIL_VARS,
   SCHEDULED_TIME,
   defaultsOf,
-  emailMeta,
   parseEmailSettings,
   parseLocks,
-  renderEmail,
+  renderEmailParts,
   serializeEmailSettings,
   switchTone,
   type EmailConfig,
@@ -25,6 +24,7 @@ import { buildPayment } from "@/lib/payment";
 import { nightsBetween, plural } from "@/lib/pricing";
 import { addDays, todayISO } from "@/lib/stay";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { EmailCanvas, EmailTextEditor, SubjectField } from "@/components/EmailEditor";
 import { AddressInput } from "@/components/AddressInput";
 import { Icon } from "@/components/Icon";
 import { KeyIcon } from "@/components/AccessCode";
@@ -38,7 +38,6 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
   const settings = useMemo(() => parseEmailSettings(form.emailSettings), [form.emailSettings]);
   const update = (kind: EmailKind, patch: Partial<EmailConfig>) =>
     set("emailSettings", serializeEmailSettings({ ...settings, [kind]: { ...settings[kind], ...patch } }));
-  const [preview, setPreview] = useState<EmailKind | null>(null);
   // Po přepnutí tónu: kolik e-mailů má vlastní text, který je potřeba přepsat ručně
   const [customLeft, setCustomLeft] = useState(0);
   function setTone(formal: boolean) {
@@ -57,8 +56,8 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
         meta={m}
         formal={settings.formal}
         cfg={settings[m.kind]}
+        form={form}
         onChange={(patch) => update(m.kind, patch)}
-        onPreview={() => setPreview(m.kind)}
       />
     ));
 
@@ -107,7 +106,7 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
       </div>
 
       <p className="rounded-2xl border border-line bg-surface px-5 py-4 text-sm text-soft">
-        Tady nastavíš, co hostům chodí e-mailem. Teď upravíš texty a uvidíš náhled. Hned po rezervaci už se posílá
+        Tady nastavíš, co hostům chodí e-mailem. E-mail upravíš přímo v jeho podobě. Hned po rezervaci už se posílá
         e-mail <strong className="text-ink">Přijetí rezervace</strong> podle tohoto nastavení. Ostatní e-maily začnou
         chodit, až zapneme jejich automatické odesílání.
       </p>
@@ -150,8 +149,6 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
         {form.keyHandover !== "key" && <LocksCard value={form.locks} onChange={(v) => set("locks", v)} />}
         <ArrivalCard form={form} set={set} />
       </Section>
-
-      {preview && <PreviewDialog kind={preview} form={form} onClose={() => setPreview(null)} />}
     </div>
   );
 }
@@ -216,24 +213,81 @@ function EmailCard({
   meta,
   formal,
   cfg,
+  form,
   onChange,
-  onPreview,
 }: {
   meta: EmailMeta;
   formal: boolean;
   cfg: EmailConfig;
+  form: Site;
   onChange: (patch: Partial<EmailConfig>) => void;
-  onPreview: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-line bg-surface">
+      <div className="flex items-start gap-3 p-5">
+        <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" className="min-w-0 flex-1 text-left">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className={`font-semibold ${cfg.enabled ? "" : "text-soft"}`}>{meta.title}</span>
+            <span className="rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-soft">
+              {whenLabel(meta, cfg)}
+            </span>
+          </span>
+          <span className="mt-1 block text-sm text-soft">{meta.includes}</span>
+          <span className="mt-2 block text-sm font-medium text-pine">Upravit e-mail →</span>
+        </button>
+        <Switch
+          on={cfg.enabled}
+          disabled={meta.required}
+          label={meta.required ? `${meta.title} — posílá se vždy` : meta.title}
+          onChange={(enabled) => onChange({ enabled })}
+        />
+      </div>
+      {open && (
+        <EmailDialog meta={meta} formal={formal} cfg={cfg} form={form} onChange={onChange} onClose={() => setOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/** Okno s e-mailem v jeho skutečné podobě — upravuje se předmět a průvodní text. */
+function EmailDialog({
+  meta,
+  formal,
+  cfg,
+  form,
+  onChange,
+  onClose,
+}: {
+  meta: EmailMeta;
+  formal: boolean;
+  cfg: EmailConfig;
+  form: Site;
+  onChange: (patch: Partial<EmailConfig>) => void;
+  onClose: () => void;
+}) {
+  const { reservations } = useAdminData();
   const insertText = useRef<((text: string) => void) | null>(null);
-  const subjectRef = useRef<HTMLInputElement>(null);
+  const subjectRef = useRef<HTMLTextAreaElement>(null);
   // Proměnná se vloží tam, kde byl kurzor naposledy — do předmětu, nebo do textu
   const [target, setTarget] = useState<"subject" | "text">("text");
+  const [filled, setFilled] = useState(false);
   const defaults = defaultsOf(meta, formal);
   const isDefault = cfg.subject === defaults.subject && cfg.text === defaults.text;
   // Po „Vrátit výchozí“ se editor znovu vytvoří s výchozím textem
   const [editorKey, setEditorKey] = useState(0);
+  const parts = useMemo(() => sampleParts(meta.kind, form, reservations), [meta.kind, form, reservations]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
 
   function insertVar(name: string) {
     const token = `{${name}}`;
@@ -249,84 +303,98 @@ function EmailCard({
     } else insertText.current?.(token);
   }
 
-  return (
-    <div className={`rounded-2xl border bg-surface transition ${open ? "border-pine/30" : "border-line"}`}>
-      <div className="flex items-start gap-3 p-5">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="min-w-0 flex-1 text-left"
-        >
-          <span className="flex flex-wrap items-center gap-2">
-            <span className={`font-semibold ${cfg.enabled ? "" : "text-soft"}`}>{meta.title}</span>
-            <span className="rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-soft">
+  // Do <body>: předek s CSS transformací by jinak rozbil `fixed` překryv.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`E-mail: ${meta.title}`}
+        className="rise flex h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="font-display text-xl font-semibold leading-tight">{meta.title}</h2>
+            <p className="mt-0.5 text-sm text-soft">
               {whenLabel(meta, cfg)}
-            </span>
-          </span>
-          <span className="mt-1 block text-sm text-soft">{meta.includes}</span>
-          <span className="mt-2 block text-sm font-medium text-pine">{open ? "Skrýt ▴" : "Upravit text ▾"}</span>
-        </button>
-        <Switch
-          on={cfg.enabled}
-          disabled={meta.required}
-          label={meta.required ? `${meta.title} — posílá se vždy` : meta.title}
-          onChange={(enabled) => onChange({ enabled })}
-        />
-      </div>
-      {meta.required && open && (
-        <p className="-mt-2 px-5 pb-3 text-xs text-soft">
-          Tenhle e-mail se posílá vždy — host v něm dostává údaje k platbě.
-        </p>
-      )}
-
-      {open && (
-        <div className="space-y-4 border-t border-line p-5">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Předmět</span>
-            <input
-              ref={subjectRef}
-              className="field"
-              value={cfg.subject}
-              maxLength={150}
-              onFocus={() => setTarget("subject")}
-              onChange={(e) => onChange({ subject: e.target.value })}
-            />
-          </label>
-
-          <div onFocusCapture={(e) => e.target !== subjectRef.current && setTarget("text")}>
-            <span className="mb-1.5 block text-sm font-medium">Text e-mailu</span>
-            <RichTextEditor
-              key={editorKey}
-              value={cfg.text}
-              onChange={(text) => onChange({ text })}
-              placeholder="Úvodní text e-mailu"
-              insertRef={insertText}
-            />
-            <p className="mt-1.5 text-xs text-soft">
-              Pod tvůj text se automaticky doplní: {meta.includes.toLowerCase()}.
+              {meta.required && " · posílá se vždy, host v něm dostává údaje k platbě"}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-soft hover:bg-bg hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
 
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 sm:py-5">
           <div>
-            <span className="mb-1.5 block text-sm font-medium">Vložit údaj z rezervace</span>
-            <div className="flex flex-wrap gap-1.5">
-              {EMAIL_VARS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()} // nepřijít o kurzor v textu
-                  onClick={() => insertVar(v)}
-                  className="rounded-full border border-line bg-bg px-3 py-1 text-xs font-medium text-ink transition hover:border-pine/40"
-                >
-                  {`{${v}}`}
-                </button>
-              ))}
+            <div className="flex items-start gap-3 rounded-t-2xl border border-line bg-white px-4 py-3 text-sm">
+              <span className="w-16 shrink-0 py-0.5 text-soft">Předmět</span>
+              {filled ? (
+                <span className="min-w-0 flex-1 px-1 py-0.5 font-semibold leading-snug">{parts.subject}</span>
+              ) : (
+                <SubjectField
+                  value={cfg.subject}
+                  onChange={(subject) => onChange({ subject })}
+                  inputRef={subjectRef}
+                  onFocus={() => setTarget("subject")}
+                />
+              )}
             </div>
+            <EmailCanvas
+              body={parts.body}
+              intro={
+                filled ? (
+                  // Naše vlastní HTML (text majitele je ošetřený v renderEmailParts)
+                  <div className="mail-edit is-static">
+                    <div className="email-editor" dangerouslySetInnerHTML={{ __html: parts.intro }} />
+                  </div>
+                ) : (
+                  <EmailTextEditor
+                    key={editorKey}
+                    value={cfg.text}
+                    onChange={(text) => onChange({ text })}
+                    insertRef={insertText}
+                    onFocus={() => setTarget("text")}
+                  />
+                )
+              }
+            />
           </div>
 
+          {filled ? (
+            <p className="px-1 text-sm text-soft">
+              Takhle e-mail uvidí host — s údaji z tvé nejbližší rezervace (nebo ukázkovými). Slevový kód je jen ukázka.
+            </p>
+          ) : (
+            <div className="px-1">
+              <span className="mb-1.5 block text-sm font-medium">Vložit údaj z rezervace</span>
+              <div className="flex flex-wrap gap-1.5">
+                {EMAIL_VARS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()} // nepřijít o kurzor v textu
+                    onClick={() => insertVar(v)}
+                    className="rounded-full border border-line bg-bg px-3 py-1 text-xs font-medium text-ink transition hover:border-pine/40"
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {meta.timing && (
-            <label className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex flex-wrap items-center gap-2 px-1 text-sm">
               <span className="font-medium">Odeslat</span>
               <NumberField value={cfg.days} min={0} max={30} onChange={(days) => onChange({ days })} />
               <span className="text-soft">
@@ -337,27 +405,32 @@ function EmailCard({
           )}
 
           {meta.kind === "thanks" && <ThanksOptions cfg={cfg} onChange={onChange} />}
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button type="button" onClick={onPreview} className="btn-primary !px-5 !py-2 text-sm">
-              Náhled e-mailu
-            </button>
-            {!isDefault && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(defaults);
-                  setEditorKey((k) => k + 1);
-                }}
-                className="btn-ghost !px-4 !py-2 text-sm"
-              >
-                Vrátit výchozí text
-              </button>
-            )}
-          </div>
         </div>
-      )}
-    </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line px-5 py-3.5">
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <Switch on={filled} label="Ukázat s údaji rezervace" onChange={setFilled} />
+            <span>Ukázat s údaji rezervace</span>
+          </label>
+          {!isDefault && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(defaults);
+                setEditorKey((k) => k + 1);
+              }}
+              className="text-sm text-soft underline underline-offset-2 hover:text-ink"
+            >
+              Vrátit výchozí text
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="btn-primary ml-auto !px-6 !py-2 text-sm">
+            Hotovo
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -663,76 +736,26 @@ function previewData(form: Site, reservations: Reservation[]): { stay: StayMail;
   };
 }
 
-function PreviewDialog({ kind, form, onClose }: { kind: EmailKind; form: Site; onClose: () => void }) {
-  const { reservations } = useAdminData();
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const { subject, html } = useMemo(() => {
-    const { stay, accessCode } = previewData(form, reservations);
-    const settings = parseEmailSettings(form.emailSettings);
-    const pay = form.bankAccount ? buildPayment(form.bankAccount, stay.total, form.name, stay.publicId) : null;
-    return renderEmail(
-      kind,
-      form,
-      { ...stay, paid: kind === "paid" },
-      {
-        link: "#",
-        payment: pay ? { account: form.bankAccount, vs: pay.vs, amount: stay.total } : null,
-        holdUntil: new Date(Date.now() + 24 * 3600_000).toISOString(),
-        accessCode,
-        voucher: {
-          code: "DIKY-4F7K",
-          percent: settings.thanks.discount.percent,
-          validTo: addMonths(todayISO(), settings.thanks.discount.months),
-        },
-        unsubscribeUrl: "#",
+/** E-mail vykreslený s údaji nejbližší rezervace (nebo ukázkovými) — pro editor. */
+function sampleParts(kind: EmailKind, form: Site, reservations: Reservation[]) {
+  const { stay, accessCode } = previewData(form, reservations);
+  const settings = parseEmailSettings(form.emailSettings);
+  const pay = form.bankAccount ? buildPayment(form.bankAccount, stay.total, form.name, stay.publicId) : null;
+  return renderEmailParts(
+    kind,
+    form,
+    { ...stay, paid: kind === "paid" },
+    {
+      link: "#",
+      payment: pay ? { account: form.bankAccount, vs: pay.vs, amount: stay.total } : null,
+      holdUntil: new Date(Date.now() + 24 * 3600_000).toISOString(),
+      accessCode,
+      voucher: {
+        code: "DIKY-4F7K",
+        percent: settings.thanks.discount.percent,
+        validTo: addMonths(todayISO(), settings.thanks.discount.months),
       },
-    );
-  }, [kind, form, reservations]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm sm:items-center sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Náhled: ${emailMeta(kind).title}`}
-        className="rise flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
-        style={{ height: "92dvh" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-soft">Náhled · {emailMeta(kind).title}</p>
-            <p className="mt-0.5 truncate font-semibold">{subject}</p>
-          </div>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            aria-label="Zavřít"
-            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-soft outline-none transition hover:bg-bg hover:text-ink focus-visible:ring-2 focus-visible:ring-pine/40"
-          >
-            ×
-          </button>
-        </div>
-        {/* Bez skriptů a odkazů ven — jen vykreslený e-mail */}
-        <iframe title="Náhled e-mailu" srcDoc={html} sandbox="" className="min-h-0 w-full flex-1 bg-bg" />
-        <p className="border-t border-line px-5 py-3 text-xs text-soft">
-          Náhled s údaji z tvé nejbližší rezervace (nebo ukázkovými). Slevový kód je jen ukázka — skutečný se vytvoří
-          při odeslání.
-        </p>
-      </div>
-    </div>,
-    document.body,
+      unsubscribeUrl: "#",
+    },
   );
 }
-
