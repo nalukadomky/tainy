@@ -22,6 +22,8 @@ import {
 } from "@/lib/cleaning";
 import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
+import { SwipeToPay } from "@/components/SwipeToPay";
+import { createPortal } from "react-dom";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
 // správa uklízeček a jejich odkazů a nastavení, co uklízečky uvidí.
@@ -550,10 +552,12 @@ function CleaningCard({
         ? { label: `Hotovo · ${fmtMinutes(c.minutes)}`, cls: "bg-pine/10 text-pine" }
         : { label: "Čeká na úklid", cls: "bg-amber/15 text-[#92600a]" };
 
-  return (
-    <div className="rounded-2xl border border-line bg-surface">
-      <div className="flex flex-wrap items-start justify-between gap-3 p-4">
-        <div className="min-w-0">
+  const mobile = useMobile();
+  const togglePaid = () =>
+    c && run({ paid: !c.paid }, !c.paid ? "Zaplaceno — zapsáno do Nákladů." : "Platba zrušena, náklad odebrán.");
+  // Části karty — sdílí je karta i okno s detailem na mobilu
+  const info = (
+    <>
           <p className="font-display text-lg font-semibold">
             {day(item.window.date)}
             {item.window.from && <span className="font-sans text-sm font-normal text-soft"> od {item.window.from}</span>}
@@ -584,9 +588,10 @@ function CleaningCard({
               ? `Další příjezd: ${day(item.window.nextArrival.date)} od ${item.window.nextArrival.time}`
               : "Další příjezd zatím není"}
           </p>
-        </div>
-        {/* Štítky stavu: na mobilu vedle sebe pod textem, na počítači pod sebou vpravo */}
-        <div className="flex flex-wrap items-center gap-2 max-sm:w-full sm:flex-col sm:items-end">
+    </>
+  );
+  const badges = (
+    <>
           {status && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>}
           {c?.note && (
             <button
@@ -627,17 +632,6 @@ function CleaningCard({
               ✓ Označit jako hotový
             </button>
           )}
-          {completing && (
-            <CompleteDialog
-              cleaning={c}
-              title={item.kind === "stay" ? `Úklid po pobytu ${item.guestName}` : item.title ?? "Úklid"}
-              onCancel={() => setCompleting(false)}
-              onConfirm={(complete) => {
-                setCompleting(false);
-                run({ complete }, "Úklid je označený jako hotový.");
-              }}
-            />
-          )}
           {c?.status === "done" && !c.paid && (
             <button
               type="button"
@@ -648,10 +642,10 @@ function CleaningCard({
               Povolit úpravu
             </button>
           )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-3">
+    </>
+  );
+  const assign = (
+    <>
         <Dropdown
           label="Kdo uklízí"
           size="sm"
@@ -679,50 +673,30 @@ function CleaningCard({
             )}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-3">
-          {c?.cleanerId && (
+    </>
+  );
+  const payToggle = c?.cleanerId ? (
+
             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium" title="Zaplacený úklid se zapíše do Nákladů">
               Zaplaceno
               <input
                 type="checkbox"
                 className="peer sr-only"
                 checked={c.paid}
-                onChange={() =>
-                  run({ paid: !c.paid }, !c.paid ? "Zaplaceno — zapsáno do Nákladů." : "Platba zrušena, náklad odebrán.")
-                }
+                onChange={togglePaid}
               />
               <span className="relative h-6 w-10 rounded-full bg-line transition peer-checked:bg-pine after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-4" />
             </label>
-          )}
-          {item.kind === "manual" && !c?.paid && !item.key.startsWith("tmp-") && (
+          
+  ) : null;
+  const deleteButton = item.kind === "manual" && !c?.paid && !item.key.startsWith("tmp-") && (
             <button type="button" onClick={() => setConfirmDelete(true)} className="text-sm font-medium text-soft hover:text-coral">
               Smazat
             </button>
-          )}
-          <button type="button" onClick={onToggle} className="text-sm font-medium text-pine hover:underline" aria-expanded={expanded}>
-            {expanded ? "Skrýt" : "Úkoly a detail"}
-          </button>
-          {confirmDelete && (
-            <ConfirmDialog
-              title="Smazat úklid?"
-              confirmLabel="Smazat úklid"
-              onConfirm={() => {
-                setConfirmDelete(false);
-                onDelete();
-              }}
-              onCancel={() => setConfirmDelete(false)}
-            >
-              <p>
-                „{item.title}" {day(item.window.date)} zmizí z kalendáře
-                {c?.cleaner ? ` — ${c.cleaner.name} ho už neuvidí` : ""}.
-              </p>
-            </ConfirmDialog>
-          )}
-        </div>
-      </div>
+  );
 
-      {expanded && (
-        <div className="space-y-3 border-t border-line px-4 py-4">
+  const detail = (
+    <>
           {c && c.checklist.length > 0 ? (
             <ul className="space-y-1.5">
               {c.checklist.map((t) => (
@@ -779,9 +753,91 @@ function CleaningCard({
               <span className="font-semibold"><Icon name="chat" className="mr-1" />{c.cleaner?.name ?? "Personál"} píše:</span> {c.note}
             </p>
           )}
+    </>
+  );
+
+  return (
+    // Mobil: swipe doleva = zaplaceno (u zaplaceného zpět), klik na kartu otevře úkoly a detail
+    <SwipeToPay
+      enabled={!!c?.cleanerId && !item.key.startsWith("tmp-")}
+      undo={!!c?.paid}
+      onPay={togglePaid}
+      className="rounded-2xl"
+    >
+    <div
+      className="rounded-2xl border border-line bg-surface max-sm:cursor-pointer"
+      onClick={(e) => {
+        if (!mobile || expanded || !e.currentTarget.contains(e.target as Node)) return;
+        if ((e.target as HTMLElement).closest("button, a, input, label, select, [role=menu], [role=dialog]")) return;
+        onToggle();
+      }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+        <div className="min-w-0">{info}</div>
+        {/* Štítky stavu: na mobilu vedle sebe pod textem, na počítači pod sebou vpravo */}
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full sm:flex-col sm:items-end">{badges}</div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-3">
+        {assign}
+        <div className="ml-auto flex items-center gap-3">
+          <span className="max-sm:hidden">{payToggle}</span>
+          {deleteButton}
+          <button type="button" onClick={onToggle} className="text-sm font-medium text-pine hover:underline max-sm:hidden" aria-expanded={expanded}>
+            {expanded ? "Skrýt" : "Úkoly a detail"}
+          </button>
         </div>
+      </div>
+
+      {/* Okna (dokončení, smazání) jen jednou — patří kartě i oknu s detailem */}
+          {completing && (
+            <CompleteDialog
+              cleaning={c}
+              title={item.kind === "stay" ? `Úklid po pobytu ${item.guestName}` : item.title ?? "Úklid"}
+              onCancel={() => setCompleting(false)}
+              onConfirm={(complete) => {
+                setCompleting(false);
+                run({ complete }, "Úklid je označený jako hotový.");
+              }}
+            />
+          )}
+          {confirmDelete && (
+            <ConfirmDialog
+              title="Smazat úklid?"
+              confirmLabel="Smazat úklid"
+              onConfirm={() => {
+                setConfirmDelete(false);
+                onDelete();
+              }}
+              onCancel={() => setConfirmDelete(false)}
+            >
+              <p>
+                „{item.title}" {day(item.window.date)} zmizí z kalendáře
+                {c?.cleaner ? ` — ${c.cleaner.name} ho už neuvidí` : ""}.
+              </p>
+            </ConfirmDialog>
+          )}
+      {/* Úkoly a detail: na počítači rozbalené pod kartou, na mobilu v okně zespodu */}
+      {expanded && !mobile && <div className="space-y-3 border-t border-line px-4 py-4">{detail}</div>}
+      {expanded && mobile && (
+        <CleaningSheet
+          title={item.kind === "stay" ? "Úklid po pobytu" : "Úklid"}
+          onClose={onToggle}
+        >
+          <div className="space-y-1">{info}</div>
+          <div className="flex flex-wrap items-center gap-2">{badges}</div>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bg px-4 py-3">
+            {assign}
+            <div className="ml-auto flex items-center gap-3">
+              {payToggle}
+              {deleteButton}
+            </div>
+          </div>
+          {detail}
+        </CleaningSheet>
       )}
     </div>
+    </SwipeToPay>
   );
 }
 
@@ -1177,5 +1233,69 @@ function Settings({
         <p className="rounded-xl bg-bg px-3 py-2 text-xs text-soft"><Icon name="lock" size={13} className="mr-1" />Cenu pobytu ani e-mail hosta personál nikdy neuvidí.</p>
       </div>
     </div>
+  );
+}
+
+/** Úzký displej (mobil) — podle něj se detail úklidu otevírá v okně místo rozbalení. */
+function useMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return mobile;
+}
+
+/** Úkoly a detail úklidu v okně zespodu (mobil). */
+function CleaningSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+
+  // Do <body>: předek s CSS transformací (swipe) by jinak rozbil `fixed` překryv.
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="rise flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-surface shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <h2 className="min-w-0 font-display text-lg font-semibold leading-snug">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Zavřít"
+            className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-soft hover:bg-bg hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+        <div className="space-y-4 overflow-y-auto overscroll-contain px-5 pb-8 pt-4">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
