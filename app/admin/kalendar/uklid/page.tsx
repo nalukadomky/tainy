@@ -541,8 +541,9 @@ function CleaningCard({
     patch(item.key, body).catch((e) => toast(e instanceof Error ? e.message : "Úklid se nepodařilo uložit."));
   }
 
+  // Nepřiřazený úklid nemá štítek — je to vidět dole ve výběru „Kdo uklízí“
   const status = !c?.cleanerId
-    ? { label: "Nepřiřazeno", cls: "bg-coral/10 text-coral" }
+    ? null
     : c.paid
       ? { label: "Zaplaceno", cls: "bg-pine/10 text-pine" }
       : c.status === "done"
@@ -584,8 +585,9 @@ function CleaningCard({
               : "Další příjezd zatím není"}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>
+        {/* Štítky stavu: na mobilu vedle sebe pod textem, na počítači pod sebou vpravo */}
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full sm:flex-col sm:items-end">
+          {status && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>}
           {c?.note && (
             <button
               type="button"
@@ -610,9 +612,9 @@ function CleaningCard({
             </span>
           )}
           {c?.status === "done" && c.finishedAt && finishedEarly(c.finishedAt, item.window.date, item.window.from) && (
-            <span className="text-right text-xs">
+            <span className="text-xs max-sm:flex max-sm:items-center max-sm:gap-2 sm:text-right">
               <span className="rounded-full bg-amber/20 px-2 py-0.5 font-semibold text-[#92600a]">Uklizeno dřív</span>
-              <span className="mt-0.5 block text-soft">dokončeno {fmtFinished(c.finishedAt)}</span>
+              <span className="text-soft sm:mt-0.5 sm:block">dokončeno {fmtFinished(c.finishedAt)}</span>
             </span>
           )}
           {c?.status !== "done" && !item.key.startsWith("tmp-") && (

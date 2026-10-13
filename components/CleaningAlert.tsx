@@ -52,14 +52,39 @@ export function CleaningAlerts({ reservations }: { reservations: Reservation[] }
 }
 
 /** Štítek u přijíždějící rezervace (seznamy, detail). */
-export function CleaningBadge({ alert, withLink = false }: { alert?: CleaningAlert | null; withLink?: boolean }) {
+export function CleaningBadge({
+  alert,
+  withLink = false,
+  compact = false,
+  small = false,
+}: {
+  alert?: CleaningAlert | null;
+  withLink?: boolean;
+  /** Jen ikona (úzký řádek na mobilu) — popis v title a pro čtečky. */
+  compact?: boolean;
+  /** Menší štítek do řádku vedle jména (seznam rezervací). */
+  small?: boolean;
+}) {
   if (!alert) return null;
-  const label = alert.kind === "unassigned" ? "Úklid nepřiřazený" : "Úklid nehotový";
-  const cls =
-    "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-semibold text-[#7a4f06]";
+  // Malý štítek vedle jména jen „Úklid“ — co přesně chybí, říká title (najetí myší)
+  const label = small ? "Úklid" : alert.kind === "unassigned" ? "Úklid nepřiřazený" : "Úklid nehotový";
+  const cls = `inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-amber/15 font-semibold text-[#7a4f06] ${
+    small ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-0.5 text-xs"
+  }`;
   const title = `${when(alert)} přijíždějí hosté a ${
     alert.prevGuest ? `úklid po pobytu ${alert.prevGuest}` : `naplánovaný úklid „${alert.title}“`
   } ${alert.kind === "unassigned" ? "nikdo nemá přiřazený" : "ještě není hotový"}.`;
+  if (compact) {
+    return (
+      <span
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber/20 text-[#7a4f06]"
+        title={title}
+      >
+        <Icon name="broom" size={14} />
+        <span className="sr-only">{label}</span>
+      </span>
+    );
+  }
   return withLink ? (
     <Link href="/admin/kalendar/uklid" className={`${cls} hover:bg-amber/25`} title={title}>
       <Icon name="broom" className="mr-1" />{label} →

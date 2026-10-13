@@ -367,22 +367,37 @@ export default function ReservationsPage() {
                           <p className="text-[11px] font-medium uppercase tracking-wide text-soft">
                             {start.toLocaleDateString("cs-CZ", { month: "short" }).replace(".", "")}
                           </p>
+                          {/* Mobil: nepřiřazený / nehotový úklid jen jako ikonka pod datem */}
+                          {r.cleaningAlert && (
+                            <span className="mt-1 inline-flex sm:hidden">
+                              <CleaningBadge alert={r.cleaningAlert} compact />
+                            </span>
+                          )}
                         </div>
                         {/* Host a termín */}
                         <div className="min-w-0 flex-1">
-                          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-semibold leading-snug">
+                          {/* Na mobilu má jméno celý řádek — zdroj je v řádku pod ním, úklid ikonou pod datem */}
+                          {/* Štítky v jednom řádku se jménem — při nedostatku místa se zkrátí jméno, ne řádek navíc */}
+                          <p className="flex items-center gap-x-2 font-semibold leading-snug">
                             <span className="truncate">{r.guestName}</span>
                             {r.source !== "web" && (
-                              <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-soft">
+                              <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-soft max-sm:hidden">
                                 {SOURCE_LABEL[r.source] ?? r.source}
                               </span>
                             )}
-                            <VoucherBadge code={r.voucherCode} discount={r.discount} />
-                            <CleaningBadge alert={r.cleaningAlert} />
+                            <span className="contents max-sm:hidden">
+                              <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                              <CleaningBadge alert={r.cleaningAlert} small />
+                            </span>
                           </p>
-                          <p className="truncate text-sm text-soft">
-                            {shortRange(r.startDate, r.endDate)} · {nightsOf(r)} {plural(nightsOf(r), "noc", "noci", "nocí")}
-                            {r.guests > 0 && ` · ${r.guests} ${plural(r.guests, "host", "hosté", "hostů")}`}
+                          <p className="text-sm text-soft sm:truncate">
+                            <span className="sm:hidden">{dayMonthRange(r.startDate, r.endDate)}</span>
+                            <span className="max-sm:hidden">{shortRange(r.startDate, r.endDate)}</span> · {nightsOf(r)}{" "}
+                            {plural(nightsOf(r), "noc", "noci", "nocí")}
+                            {r.guests > 0 && (
+                              <span className="max-sm:hidden">{` · ${r.guests} ${plural(r.guests, "host", "hosté", "hostů")}`}</span>
+                            )}
+                            {r.source !== "web" && <span className="sm:hidden"> · {SOURCE_LABEL[r.source] ?? r.source}</span>}
                           </p>
                         </div>
                         {/* Akce podle situace (počítač) — uprostřed */}
@@ -392,7 +407,7 @@ export default function ReservationsPage() {
                               type="button"
                               disabled={busy === r.id}
                               onClick={action.run}
-                              className="btn-ghost whitespace-nowrap !px-3.5 !py-1.5 text-xs"
+                              className="btn-ghost whitespace-nowrap !px-3 !py-1 !text-xs"
                             >
                               {action.label}
                             </button>
@@ -856,4 +871,11 @@ function shortRange(startIso: string, endIso: string): string {
   if (sy === ey && sm === em) return `${sd}.–${ed}. ${em}. ${ey}`;
   if (sy === ey) return `${sd}. ${sm}. – ${ed}. ${em}. ${ey}`;
   return `${sd}. ${sm}. ${sy} – ${ed}. ${em}. ${ey}`;
+}
+
+/** „14.–16. 10.“ / „30. 10.–2. 11.“ — bez roku (je v nadpisu měsíce), pro úzký řádek na mobilu. */
+function dayMonthRange(startIso: string, endIso: string): string {
+  const [, sm, sd] = startIso.slice(0, 10).split("-").map(Number);
+  const [, em, ed] = endIso.slice(0, 10).split("-").map(Number);
+  return sm === em ? `${sd}.–${ed}. ${em}.` : `${sd}. ${sm}.–${ed}. ${em}.`;
 }
