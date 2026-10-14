@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
 import { applyAdjust, czk } from "@/lib/pricing";
 import { AdjustField } from "@/components/AdjustField";
+import { NumberField } from "@/components/NumberField";
 import { parseCategories, serializeCategories, type GuestCategory } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
 import { LivePreview, type PreviewSection } from "@/components/LivePreview";
@@ -22,7 +23,7 @@ import {
   withProviderInDocs,
   type ProviderChange,
 } from "@/components/LegalSettings";
-import { isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
+import { DEFAULT_CANCELLATION, isValidIco, isValidVatId, type LegalKind } from "@/lib/legal";
 import { AutomationSettings } from "@/components/AutomationSettings";
 import { ExternalCalendars } from "@/components/ExternalCalendars";
 import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/email-templates";
@@ -459,11 +460,10 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
                 <span className="mb-1.5 block text-sm font-medium">
                   Základní cena / noc {form.pricingMode === "person" && <span className="text-soft">(za osobu)</span>}
                 </span>
-                <input
+                <NumberField
                   className="field"
-                  type="number"
                   value={form.pricePerNight}
-                  onChange={(e) => set("pricePerNight", Number(e.target.value))}
+                  onChange={(v) => set("pricePerNight", v)}
                 />
               </label>
               <AdjustField
@@ -596,11 +596,10 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
 
             <label className="block sm:max-w-48">
               <span className="mb-1.5 block text-sm font-medium">Maximální počet hostů</span>
-              <input
+              <NumberField
                 className="field"
-                type="number"
                 value={form.maxGuests}
-                onChange={(e) => set("maxGuests", Number(e.target.value))}
+                onChange={(v) => set("maxGuests", v)}
               />
             </label>
 
@@ -707,28 +706,24 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Nejkratší pobyt (nocí)</span>
-                <input
+                <NumberField
                   className="field"
-                  type="number"
-                  min={1}
                   value={form.minNights}
-                  onChange={(e) => set("minNights", Number(e.target.value))}
+                  onChange={(v) => set("minNights", v)}
                 />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Rezervovat nejdříve (dní předem)</span>
-                <input
+                <NumberField
                   className="field"
-                  type="number"
-                  min={0}
                   value={form.leadTimeDays}
-                  onChange={(e) => set("leadTimeDays", Number(e.target.value))}
+                  onChange={(v) => set("leadTimeDays", v)}
                 />
               </label>
               <label id="pole-casy" className="block scroll-mt-24 rounded-xl">
                 <span className="mb-1.5 block text-sm font-medium">Check-in (příjezd od)</span>
                 <input
-                  className={`field ${isTime(form.checkInTime) ? "" : "!border-coral"}`}
+                  className={`field field-time ${isTime(form.checkInTime) ? "" : "!border-coral"}`}
                   type="time"
                   required
                   value={form.checkInTime}
@@ -738,7 +733,7 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Check-out (odjezd do)</span>
                 <input
-                  className={`field ${isTime(form.checkOutTime) ? "" : "!border-coral"}`}
+                  className={`field field-time ${isTime(form.checkOutTime) ? "" : "!border-coral"}`}
                   type="time"
                   required
                   value={form.checkOutTime}
@@ -750,36 +745,34 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
               </p>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Úklidový poplatek (Kč za pobyt)</span>
-                <input
+                <NumberField
                   className="field"
-                  type="number"
-                  min={0}
                   value={form.cleaningFee}
-                  onChange={(e) => set("cleaningFee", Number(e.target.value))}
+                  onChange={(v) => set("cleaningFee", v)}
                 />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Poplatek z pobytu (Kč / osoba / noc)</span>
-                <input
+                <NumberField
                   className="field"
-                  type="number"
-                  min={0}
                   value={form.touristTax}
-                  onChange={(e) => set("touristTax", Number(e.target.value))}
+                  onChange={(v) => set("touristTax", v)}
                 />
                 <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
               </label>
             </div>
 
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Storno podmínky</span>
-              <textarea
-                className="field min-h-20"
-                placeholder="Zrušení do 14 dní před příjezdem zdarma, poté se záloha nevrací."
-                value={form.cancellationPolicy}
-                onChange={(e) => set("cancellationPolicy", e.target.value)}
-              />
-            </label>
+            <CancellationField
+              value={form.cancellationPolicy}
+              onChange={(v) => set("cancellationPolicy", v)}
+              onTerms={() => {
+                switchTab("pravni");
+                const url = new URL(window.location.href);
+                url.searchParams.set("pole", "dokumenty");
+                window.history.replaceState(null, "", url);
+                window.setTimeout(() => document.getElementById("pole-dokumenty")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+              }}
+            />
           </div>
         </>
       )}
@@ -791,6 +784,52 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
  * Plovoucí „Uložit změny“ dole na obrazovce — ukáže se, jakmile je co ukládat
  * (na mobilu vlevo nad navigací, vpravo je tlačítko náhledu webu).
  */
+/**
+ * Storno podmínky. Bez vlastního textu ukazuje výchozí znění jako skutečný text
+ * (to platí v obchodních podmínkách) — po úpravě se uloží verze majitele.
+ */
+function CancellationField({ value, onChange, onTerms }: { value: string; onChange: (v: string) => void; onTerms: () => void }) {
+  // Během psaní držíme text tak, jak je — i prázdný, ať jde začít úplně od nuly
+  const [draft, setDraft] = useState<string | null>(null);
+  const usingDefault = draft === null && !value.trim();
+  const shown = draft ?? (usingDefault ? DEFAULT_CANCELLATION : value);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor="storno" className="text-sm font-medium">
+          Storno podmínky
+        </label>
+        {usingDefault ? (
+          <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-semibold text-pine">Výchozí znění</span>
+        ) : (
+          <button type="button" className="text-xs font-medium text-pine hover:underline" onClick={() => (setDraft(null), onChange(""))}>
+            Obnovit výchozí
+          </button>
+        )}
+      </div>
+      <textarea
+        id="storno"
+        className="field min-h-44 sm:min-h-32"
+        rows={5}
+        value={shown}
+        onChange={(e) => {
+          const v = e.target.value;
+          setDraft(v);
+          onChange(v.trim() === DEFAULT_CANCELLATION ? "" : v);
+        }}
+        onBlur={() => setDraft(null)}
+      />
+      <p className="text-xs text-soft">
+        {usingDefault ? "Platí, dokud ho neupravíš. " : ""}Hosté storno podmínky uvidí v obchodních podmínkách.{" "}
+        <button type="button" className="font-medium text-pine hover:underline" onClick={onTerms}>
+          Podrobněji je rozvedeš v obchodních podmínkách →
+        </button>
+      </p>
+    </div>
+  );
+}
+
 function SaveBar({ dirty, saved, onSave }: { dirty: boolean; saved: boolean; onSave: () => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);

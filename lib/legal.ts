@@ -3,6 +3,11 @@
 import { activeCategories, parseCategories } from "@/lib/guests";
 import { vatRateOf } from "@/lib/vat";
 
+/** Storno podmínky, které platí, dokud si majitel nenapíše vlastní (Nastavení → Ceník a pobyt). */
+export const DEFAULT_CANCELLATION = `- více než 30 dní před příjezdem — zdarma, vracíme celou zaplacenou částku
+- 30 až 14 dní před příjezdem — storno poplatek 50 % ceny pobytu
+- méně než 14 dní před příjezdem nebo nedostavení se — storno poplatek 100 % ceny pobytu`;
+
 export type LegalKind = "terms" | "privacy";
 
 export const LEGAL_TITLE: Record<LegalKind, string> = {
@@ -231,11 +236,7 @@ export function termsTemplate(site: LegalSource): string {
     site.touristTax ? `- **Místní poplatek z pobytu** — ${czk(site.touristTax)} za osobu a noc (podle obecní vyhlášky)` : "",
   ].filter(Boolean);
 
-  const cancellation = site.cancellationPolicy?.trim()
-    ? site.cancellationPolicy.trim()
-    : `- více než 30 dní před příjezdem — zdarma, vracíme celou zaplacenou částku
-- 30 až 14 dní před příjezdem — storno poplatek 50 % ceny pobytu
-- méně než 14 dní před příjezdem nebo nedostavení se — storno poplatek 100 % ceny pobytu`;
+  const cancellation = site.cancellationPolicy?.trim() ? site.cancellationPolicy.trim() : DEFAULT_CANCELLATION;
 
   return `# Obchodní podmínky
 

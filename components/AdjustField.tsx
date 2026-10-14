@@ -1,6 +1,7 @@
 "use client";
 
 import type { Adjust } from "@/lib/pricing";
+import { NumberField } from "@/components/NumberField";
 
 // Zadání úpravy ceny: číslo plus přepínač jednotky.
 //   %  — úprava vůči základní ceně, procenta se sčítají
@@ -27,12 +28,12 @@ export function AdjustField({
         {label}
       </span>
       <div className="flex items-stretch gap-2">
-        <input
+        <NumberField
           className={`field min-w-0 flex-1 ${compact ? "!py-2 text-sm" : ""}`}
-          type="number"
           aria-label={label}
+          negative={value.unit === "pct"}
           value={value.value}
-          onChange={(e) => onChange({ ...value, value: Number(e.target.value) })}
+          onChange={(v) => onChange({ ...value, value: v })}
         />
         <div className="flex shrink-0 overflow-hidden rounded-xl border border-line">
           {(
