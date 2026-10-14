@@ -48,7 +48,9 @@ const isTab = (v: string | null): v is Tab => !!v && v in TABS;
 // area="widget" = samostatná stránka Widget (účet jen s widgetem ji má v menu místo Můj web).
 export type EditorArea = "settings" | "widget";
 // Hlavní záložky vlevo; méně časté jsou vpravo pod „Další“
-const MAIN_TABS: Tab[] = ["zakladni", "cenik", "pravni", "domena", "automatizace"];
+const MAIN_TABS: Tab[] = ["zakladni", "cenik", "pravni", "automatizace", "domena"];
+// Na telefonu se všechny hlavní záložky do řádku nevejdou — Doména je tam v „Další“
+const MOBILE_MORE: Tab[] = ["domena"];
 const MORE_TABS: Tab[] = ["portaly", "widget"];
 const TAB_ORDER: Tab[] = [...MAIN_TABS, ...MORE_TABS];
 
@@ -338,8 +340,8 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
               aria-selected={tab === t}
               onClick={() => switchTab(t)}
               className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-left transition max-sm:flex-none max-sm:px-3 max-sm:text-center sm:px-4 ${
-                tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"
-              }`}
+                MOBILE_MORE.includes(t) ? "max-sm:hidden" : ""
+              } ${tab === t ? "bg-surface shadow-sm" : "hover:bg-surface/50"}`}
             >
               <span className={`block text-sm font-semibold ${tab === t ? "text-ink" : "text-soft"}`}>
                 <span className="whitespace-nowrap sm:hidden">{TABS[t].short}</span>
@@ -350,7 +352,7 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           ))}
         </div>
         {/* Méně časté části — vpravo, oddělené */}
-        <MoreTabs tabs={moreTabs} current={tab} onPick={switchTab} />
+        <MoreTabs tabs={moreTabs} mobileTabs={mainTabs.filter((t) => MOBILE_MORE.includes(t))} current={tab} onPick={switchTab} />
       </div>
       </>
       )}
@@ -922,7 +924,18 @@ function LeaveDialog({
 }
 
 /** Záložka „Další ▾“ vpravo: méně časté části nastavení (teď Externí rezervace). */
-function MoreTabs({ tabs, current, onPick }: { tabs: Tab[]; current: Tab; onPick: (t: Tab) => void }) {
+function MoreTabs({
+  tabs,
+  mobileTabs = [],
+  current,
+  onPick,
+}: {
+  tabs: Tab[];
+  /** Hlavní záložky, které se na telefonu nevejdou do řádku — v menu jen tam */
+  mobileTabs?: Tab[];
+  current: Tab;
+  onPick: (t: Tab) => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -937,6 +950,7 @@ function MoreTabs({ tabs, current, onPick }: { tabs: Tab[]; current: Tab; onPick
     };
   }, [open]);
   const active = tabs.includes(current);
+  const activeMobile = active || mobileTabs.includes(current);
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -944,16 +958,17 @@ function MoreTabs({ tabs, current, onPick }: { tabs: Tab[]; current: Tab; onPick
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-full items-center gap-1.5 rounded-2xl border px-3 text-sm font-semibold transition sm:px-4 ${
-          active ? "border-line bg-surface text-ink shadow-sm" : "border-line bg-bg text-soft hover:text-ink"
-        }`}
+        className={`flex h-full items-center gap-1.5 rounded-2xl border border-line px-3 text-sm font-semibold transition sm:px-4 ${
+          activeMobile ? "max-sm:bg-surface max-sm:text-ink max-sm:shadow-sm" : "max-sm:bg-bg max-sm:text-soft"
+        } ${active ? "sm:bg-surface sm:text-ink sm:shadow-sm" : "sm:bg-bg sm:text-soft sm:hover:text-ink"}`}
       >
-        <span className="max-w-[9rem] truncate">{active ? TABS[current].label : "Další"}</span>
+        <span className="max-w-[9rem] truncate sm:hidden">{activeMobile ? TABS[current].short : "Další"}</span>
+        <span className="max-w-[9rem] truncate max-sm:hidden">{active ? TABS[current].label : "Další"}</span>
         <span aria-hidden className={`text-xs transition ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-lg">
-          {tabs.map((t) => (
+          {[...mobileTabs, ...tabs].map((t) => (
             <button
               key={t}
               type="button"
@@ -962,7 +977,9 @@ function MoreTabs({ tabs, current, onPick }: { tabs: Tab[]; current: Tab; onPick
                 setOpen(false);
                 onPick(t);
               }}
-              className={`block w-full rounded-xl px-3 py-2 text-left transition hover:bg-bg ${current === t ? "bg-bg" : ""}`}
+              className={`block w-full rounded-xl px-3 py-2 text-left transition hover:bg-bg ${current === t ? "bg-bg" : ""} ${
+                mobileTabs.includes(t) ? "sm:hidden" : ""
+              }`}
             >
               <span className="block text-sm font-semibold">{TABS[t].label}</span>
               <span className="block text-xs text-soft">{TABS[t].hint}</span>

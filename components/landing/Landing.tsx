@@ -124,7 +124,7 @@ const EXTRAS: { icon: IconName; title: string; text: string }[] = [
   { icon: "ticket", title: "Vouchery a slevy", text: "Dárkové poukazy a slevové kódy, které si host uplatní sám." },
   { icon: "home", title: "Máš už web?", text: "Přeneseme ho, nebo k němu přidáš tlačítko Rezervovat." },
   { icon: "file", title: "Podmínky a GDPR", text: "Obchodní podmínky a ochrana údajů připravené automaticky." },
-  { icon: "zap", title: "Vlastní doména", text: "Web na tvé adrese i se zabezpečením. Nastavíš za pár minut." },
+  { icon: "zap", title: "Vlastní doména", text: "Připojíš doménu, kterou už máš (koupíš ji u kteréhokoli registrátora). Zabezpečení nastavíme sami." },
   { icon: "clipboard", title: "Více nemovitostí", text: "Chata, apartmán i tiny house v jednom účtu." },
   { icon: "user", title: "Hosté a export", text: "Přehled hostů, kolik utratili, a export do Excelu." },
 ];
@@ -207,7 +207,7 @@ export function Landing({ light = false }: { light?: boolean }) {
           </>
         }
         text="Fotky, popis, vybavení, recenze a mapa v moderním designu. Na mobilu vypadá stejně dobře jako na počítači a každou změnu hned vidíš v živém náhledu."
-        points={["10 barevných témat nebo vlastní barva", "Sekce, které si poskládáš a přejmenuješ", "Vlastní doména se zabezpečením"]}
+        points={["10 barevných témat nebo vlastní barva", "Sekce, které si poskládáš a přejmenuješ", "Připojení vlastní domény i se zabezpečením"]}
         visual={
           <ThemeSwitch>
             <SiteVisual />
@@ -369,7 +369,7 @@ export function Landing({ light = false }: { light?: boolean }) {
             <p className="mt-3 text-sm text-[#14261b]/60">Přístupy posíláme postupně</p>
           </div>
           <ul className="grid content-center gap-3 bg-white/50 p-8 text-[15px] sm:grid-cols-2 sm:p-12">
-            {["Vlastní web a doména", "Rezervace s půldny", "QR platby (karty brzy)", "Sladění s Airbnb a Booking", "Automatické e-maily", "Kódy k zámku", "Úklid a úkoly", "Přehled tržeb a nákladů", "Vouchery a slevy", "Podmínky a GDPR"].map((f) => (
+            {["Vlastní web a připojení domény", "Rezervace s půldny", "QR platby (karty brzy)", "Sladění s Airbnb a Booking", "Automatické e-maily", "Kódy k zámku", "Úklid a úkoly", "Přehled tržeb a nákladů", "Vouchery a slevy", "Podmínky a GDPR"].map((f) => (
               <li key={f} className="flex gap-2.5">
                 <span className="text-[#2c5e3f]">✓</span>
                 {f}
