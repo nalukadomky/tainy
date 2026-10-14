@@ -7,6 +7,7 @@ import { createSite } from "@/lib/create-site";
 import { storeSitePhoto } from "@/lib/site-photos";
 import { safeFetch } from "@/lib/safe-fetch";
 import { geocodeAddress } from "@/lib/geocode";
+import { lookupAres } from "@/lib/ares";
 import { serializePhotos, type Photo } from "@/lib/photos";
 import { newReview, serializeReviews } from "@/lib/reviews";
 import { EMPTY_SLEEPING, serializeSleeping } from "@/lib/sleeping";
@@ -105,7 +106,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const about = text(c.about, 8000);
   const bedrooms = int(c.bedrooms, 0, 20);
-  const business = c.useBusiness && result.business ? result.business : null;
+  // Firma: z webu, nebo z IČ, které majitel zadal sám — to znovu ověříme v ARES
+  const ico = normalizeIco(text(c.ico, 12));
+  let business = c.useBusiness && result.business && ico === normalizeIco(result.ico.value) ? result.business : null;
+  if (c.useBusiness && !business && ico) {
+    const ares = await lookupAres(ico).catch(() => null);
+    if (ares?.ok) business = { name: ares.subject.name, address: ares.subject.address, vatId: ares.subject.vatId, register: ares.subject.register };
+  }
   const reviews =
     c.useReviews && result.reviews.value.length
       ? result.reviews.value.slice(0, 12).map((r) => ({ ...newReview(), name: r.name, text: r.text, rating: r.rating, meta: r.meta }))
@@ -128,7 +135,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(time(c.checkOutTime) && { checkOutTime: time(c.checkOutTime) }),
       ...(business && {
         businessName: business.name,
-        businessId: normalizeIco(text(c.ico, 12)),
+        businessId: ico,
         vatId: business.vatId,
         businessAddress: business.address,
         businessRegister: business.register,

@@ -696,7 +696,7 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           </div>
 
           {/* Pravidla pobytu a poplatky */}
-          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+          <div id="pole-pravidla" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
             <div>
               <h2 className="font-display text-lg font-semibold">Pravidla pobytu a poplatky</h2>
               <p className="text-sm text-soft">

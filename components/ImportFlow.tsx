@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
 import { FLASH_KEY } from "@/components/Toast";
 import { AMENITY_SUGGESTIONS, PROPERTY_TYPES } from "@/lib/listing";
-import { MAX_IMPORT_PHOTOS, type Field, type ImportChoice, type ImportResult, type Mark } from "@/lib/import/types";
+import { MAX_IMPORT_PHOTOS, type Field, type ImportBusiness, type ImportChoice, type ImportResult, type Mark } from "@/lib/import/types";
 
 // Import existujícího webu: adresa → sken → kontrola a doplnění → nový web.
 
-type Stage = "url" | "scanning" | "review" | "creating";
+type Stage = "url" | "scanning" | "review" | "creating" | "done";
 
 const SCAN_STEPS = ["Načítáme úvodní stránku", "Procházíme další stránky webu", "Hledáme fotky", "Čteme kontakty, ceny a vybavení", "Ověřujeme IČ v ARES"];
 const CREATE_STEPS = ["Zakládáme web", "Stahujeme a zmenšujeme fotky", "Doplňujeme popis, firmu a polohu"];
@@ -56,6 +57,7 @@ export function ImportFlow() {
   const [jobId, setJobId] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [choice, setChoice] = useState<ImportChoice | null>(null);
+  const [created, setCreated] = useState<{ photos: number; skipped: number } | null>(null);
 
   // Kroky průběhu jen ukazují, co se děje — skutečný stav hlásí server až na konci
   useEffect(() => {
@@ -105,13 +107,19 @@ export function ImportFlow() {
     }
     try {
       localStorage.setItem("tainy.site", data.slug);
-      const photos = `${data.photos} ${data.photos === 1 ? "fotka" : data.photos >= 2 && data.photos <= 4 ? "fotky" : "fotek"}`;
-      sessionStorage.setItem(
-        FLASH_KEY,
-        `Web je přenesený (${photos}${data.skipped ? `, ${data.skipped} se nepodařilo stáhnout` : ""}). Projdi ho a uprav, co je potřeba.`,
-      );
     } catch {
       /* bez úložiště se vybere první web */
+    }
+    setCreated({ photos: data.photos, skipped: data.skipped });
+    setStage("done");
+    window.scrollTo({ top: 0 });
+  }
+
+  function openBuilder() {
+    try {
+      sessionStorage.setItem(FLASH_KEY, "Web je přenesený. Projdi ho a uprav, co je potřeba.");
+    } catch {
+      /* bez úložiště jen bez uvítání */
     }
     router.push("/admin/web/builder");
   }
@@ -191,7 +199,79 @@ export function ImportFlow() {
       </div>
     );
 
+  if (stage === "done" && created) return <Done choice={choice} created={created} onBuilder={openBuilder} />;
+
   return <Review result={result} choice={choice} setChoice={setChoice} error={error} onCreate={create} onBack={() => setStage("url")} />;
+}
+
+/* ---------- Hotovo: co ještě doplnit ---------- */
+
+const plural = (n: number, one: string, few: string, many: string) => `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
+
+function Done({ choice, created, onBuilder }: { choice: ImportChoice; created: { photos: number; skipped: number }; onBuilder: () => void }) {
+  // Co import nepřenesl nebo neumí — každý řádek vede přímo na pole v Nastavení
+  const todo = [
+    !(choice.useBusiness && choice.ico) && {
+      label: "Provozovatel a IČ",
+      hint: "Jméno nebo firma do patičky webu a na doklady",
+      to: "/admin/nastaveni?sekce=pravni&pole=provozovatel",
+    },
+    { label: "Účet pro platby", hint: "Kam ti hosté pošlou zálohu a doplatek", to: "/admin/nastaveni?sekce=pravni&pole=platby" },
+    { label: "Obchodní podmínky a ochrana údajů", hint: "Host je odsouhlasí před rezervací", to: "/admin/nastaveni?sekce=pravni&pole=dokumenty" },
+    { label: "Ložnice a lůžka", hint: "Kolik je postelí a jakých", to: "/admin/nastaveni?sekce=cenik&pole=luzka" },
+    !(choice.checkInTime && choice.checkOutTime) && {
+      label: "Příjezd a odjezd",
+      hint: "Od kdy můžou hosté přijet a do kdy odjet",
+      to: "/admin/nastaveni?sekce=cenik&pole=casy",
+    },
+    { label: "Pravidla pobytu a storno", hint: "Minimální pobyt, poplatky a storno podmínky", to: "/admin/nastaveni?sekce=cenik&pole=pravidla" },
+    !(choice.contactEmail && choice.contactPhone) && {
+      label: "Kontakt",
+      hint: "E-mail a telefon pro hosty",
+      to: "/admin/nastaveni?sekce=zakladni&pole=kontakt",
+    },
+  ].filter(Boolean) as { label: string; hint: string; to: string }[];
+
+  return (
+    <div className="mx-auto w-full max-w-xl flex-1 pt-8 sm:pt-14">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pine text-xl text-white" aria-hidden>
+        ✓
+      </span>
+      <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">Web je přenesený</h1>
+      <p className="mt-2 text-soft">
+        {created.photos ? `Přenesli jsme ${plural(created.photos, "fotku", "fotky", "fotek")}` : "Fotky se nepodařilo přenést, nahraješ je v editoru"}
+        {created.skipped ? ` (${plural(created.skipped, "fotku", "fotky", "fotek")} se nepodařilo stáhnout)` : ""}. Než přijmeš první
+        rezervaci, doplň ještě pár údajů, které na původním webu nebyly.
+      </p>
+
+      <section className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface">
+        <h2 className="border-b border-line px-5 py-3 text-xs font-semibold uppercase tracking-widest text-soft">Ještě doplň</h2>
+        <ul className="divide-y divide-line">
+          {todo.map((t) => (
+            <li key={t.to + t.label}>
+              <Link href={t.to} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-bg">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-coral" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium">{t.label}</span>
+                  <span className="block text-sm text-soft">{t.hint}</span>
+                </span>
+                <span className="shrink-0 text-soft" aria-hidden>→</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <button type="button" className="btn-primary" onClick={onBuilder}>
+          Prohlédnout web
+        </button>
+        <Link href="/admin/nastaveni" className="btn-ghost">
+          Celé nastavení
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 function StepDot({ done, active }: { done: boolean; active: boolean }) {
@@ -260,7 +340,7 @@ function Review({
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card title="Základ">
-          <Row label="Název" field={result.name} origin={origin} required>
+          <Row label="Název" field={result.name} filled={!!choice.name.trim()} origin={origin} required>
             <input className="field" value={choice.name} maxLength={80} onChange={(e) => set("name", e.target.value)} />
           </Row>
           <Row label="Typ ubytování" field={result.propertyType} origin={origin}>
@@ -278,45 +358,45 @@ function Review({
               ))}
             </div>
           </Row>
-          <Row label="Slogan" field={result.tagline} origin={origin}>
+          <Row label="Slogan" field={result.tagline} filled={!!choice.tagline.trim()} origin={origin}>
             <input className="field" value={choice.tagline} maxLength={160} onChange={(e) => set("tagline", e.target.value)} />
           </Row>
-          <Row label="Popis" field={result.description} origin={origin}>
+          <Row label="Popis" field={result.description} filled={!!choice.description.trim()} origin={origin}>
             <textarea className="field min-h-40" value={choice.description} maxLength={3000} onChange={(e) => set("description", e.target.value)} />
           </Row>
         </Card>
 
         <div className="space-y-6">
           <Card title="Kapacita a cena">
-            <div className="grid grid-cols-2 gap-3">
-              <Row label="Max. hostů" field={result.maxGuests} origin={origin} required>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+              <Row label="Max. hostů" field={result.maxGuests} origin={origin} required filled={choice.maxGuests > 0}>
                 <NumberInput value={choice.maxGuests} max={40} onChange={(v) => set("maxGuests", v)} />
               </Row>
-              <Row label="Ložnice" field={result.bedrooms} origin={origin}>
+              <Row label="Ložnice" field={result.bedrooms} origin={origin} filled={choice.bedrooms > 0}>
                 <NumberInput value={choice.bedrooms} max={20} onChange={(v) => set("bedrooms", v)} />
               </Row>
-            </div>
-            <Row label="Cena za noc (Kč)" field={result.pricePerNight} origin={origin} required>
-              <NumberInput value={choice.pricePerNight} max={1_000_000} onChange={(v) => set("pricePerNight", v)} />
-            </Row>
-            <div className="grid grid-cols-2 gap-3">
-              <Row label="Příjezd od" field={result.checkInTime} origin={origin}>
-                <input type="time" className="field" value={choice.checkInTime} onChange={(e) => set("checkInTime", e.target.value)} />
+              <div className="col-span-2">
+                <Row label="Cena za noc" field={result.pricePerNight} origin={origin} required filled={choice.pricePerNight > 0}>
+                  <NumberInput value={choice.pricePerNight} max={1_000_000} unit="Kč / noc" onChange={(v) => set("pricePerNight", v)} />
+                </Row>
+              </div>
+              <Row label="Příjezd od" field={result.checkInTime} origin={origin} filled={!!choice.checkInTime}>
+                <input type="time" className="field field-time" value={choice.checkInTime} onChange={(e) => set("checkInTime", e.target.value)} />
               </Row>
-              <Row label="Odjezd do" field={result.checkOutTime} origin={origin}>
-                <input type="time" className="field" value={choice.checkOutTime} onChange={(e) => set("checkOutTime", e.target.value)} />
+              <Row label="Odjezd do" field={result.checkOutTime} origin={origin} filled={!!choice.checkOutTime}>
+                <input type="time" className="field field-time" value={choice.checkOutTime} onChange={(e) => set("checkOutTime", e.target.value)} />
               </Row>
             </div>
           </Card>
 
           <Card title="Kontakt a adresa">
-            <Row label="E-mail" field={result.contactEmail} origin={origin}>
+            <Row label="E-mail" field={result.contactEmail} filled={!!choice.contactEmail.trim()} origin={origin}>
               <input className="field" type="email" value={choice.contactEmail} onChange={(e) => set("contactEmail", e.target.value)} />
             </Row>
-            <Row label="Telefon" field={result.contactPhone} origin={origin}>
+            <Row label="Telefon" field={result.contactPhone} filled={!!choice.contactPhone.trim()} origin={origin}>
               <input className="field" type="tel" value={choice.contactPhone} onChange={(e) => set("contactPhone", e.target.value)} />
             </Row>
-            <Row label="Adresa ubytování" field={result.address} origin={origin} hint="Hosté ji dostanou v e-mailu před příjezdem, na webu bude jen obec.">
+            <Row label="Adresa ubytování" field={result.address} filled={!!choice.address.trim()} origin={origin} hint="Hosté ji dostanou v e-mailu před příjezdem, na webu bude jen obec.">
               <input className="field" value={choice.address} maxLength={200} onChange={(e) => set("address", e.target.value)} />
             </Row>
           </Card>
@@ -344,33 +424,16 @@ function Review({
           </div>
         </Card>
 
-        <Card title="Firma" field={result.ico}>
-          {result.business ? (
-            <label className="flex items-start gap-3 rounded-xl border border-line p-4 text-sm">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--pine)]" checked={choice.useBusiness} onChange={(e) => set("useBusiness", e.target.checked)} />
-              <span>
-                <strong>{result.business.name}</strong>
-                <span className="block text-soft">
-                  IČ {result.ico.value}
-                  {result.business.vatId && ` · DIČ ${result.business.vatId}`}
-                </span>
-                <span className="block text-soft">{result.business.address}</span>
-                <span className="mt-1 block text-xs text-soft">Údaje z ARES. Použijí se v patičce webu a v obchodních podmínkách.</span>
-              </span>
-            </label>
-          ) : (
-            <p className="text-sm text-soft">IČ jsme na webu nenašli. Údaje o firmě doplníš později v Nastavení → Firma a platby.</p>
-          )}
-        </Card>
+        <Business result={result} choice={choice} patch={patch} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card title="O nás" field={result.about} origin={origin}>
+        <Card title="O nás" field={result.about} origin={origin} filled={!!choice.about.trim()}>
           <textarea
             className="field min-h-32"
             value={choice.about}
             maxLength={8000}
-            placeholder="Na webu jsme nenašli stránku O nás. Můžeš ji napsat později v editoru."
+            placeholder="Na webu jsme nenašli stránku O nás. Napiš pár vět o sobě a o tom, jak ubytování vzniklo — nebo to doplň později v editoru."
             onChange={(e) => set("about", e.target.value)}
           />
         </Card>
@@ -420,15 +483,109 @@ function Review({
   );
 }
 
-function Card({ title, field, origin, children }: { title: string; field?: Field<unknown>; origin?: string; children: React.ReactNode }) {
+function Card({
+  title,
+  field,
+  origin,
+  filled,
+  children,
+}: {
+  title: string;
+  field?: Field<unknown>;
+  origin?: string;
+  /** Chybějící údaj už majitel doplnil ručně */
+  filled?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-xl font-semibold">{title}</h2>
-        {field && <MarkChip field={field} origin={origin} />}
+        {field &&
+          (filled && field.mark === "missing" ? (
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${MARK.found.cls}`}>Doplněno</span>
+          ) : (
+            <MarkChip field={field} origin={origin} />
+          ))}
       </div>
       {children}
     </section>
+  );
+}
+
+/** Firma: z ARES podle IČ z webu, nebo podle IČ, které majitel zadá sám. */
+function Business({ result, choice, patch }: { result: ImportResult; choice: ImportChoice; patch: (p: Partial<ImportChoice>) => void }) {
+  const [business, setBusiness] = useState<ImportBusiness | null>(result.business);
+  const [ico, setIco] = useState(result.business ? "" : choice.ico);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function lookup(e: React.FormEvent) {
+    e.preventDefault();
+    const v = ico.replace(/\s/g, "");
+    if (!/^\d{6,8}$/.test(v)) return setError("IČ má 8 číslic.");
+    setError("");
+    setLoading(true);
+    const res = await fetch(`/api/ares/${v}`).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    setLoading(false);
+    if (!res?.ok || !data?.name) return setError(data?.error ?? "ARES teď neodpovídá. Údaje o firmě doplníš později v Nastavení.");
+    setBusiness({ name: data.name, address: data.address, vatId: data.vatId, register: data.register });
+    patch({ ico: data.ico, useBusiness: true });
+  }
+
+  return (
+    <Card title="Firma" field={result.ico} filled={!!business}>
+      {business ? (
+        <div className="space-y-2">
+          <label className="flex items-start gap-3 rounded-xl border border-line p-4 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--pine)]" checked={choice.useBusiness} onChange={(e) => patch({ useBusiness: e.target.checked })} />
+            <span>
+              <strong>{business.name}</strong>
+              <span className="block text-soft">
+                IČ {choice.ico}
+                {business.vatId && ` · DIČ ${business.vatId}`}
+              </span>
+              <span className="block text-soft">{business.address}</span>
+              <span className="mt-1 block text-xs text-soft">Údaje z ARES. Použijí se v patičce webu a v obchodních podmínkách.</span>
+            </span>
+          </label>
+          {!result.business && (
+            <button
+              type="button"
+              className="text-sm text-soft underline-offset-2 hover:text-ink hover:underline"
+              onClick={() => {
+                setBusiness(null);
+                patch({ ico: "", useBusiness: false });
+              }}
+            >
+              Zadat jiné IČ
+            </button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={lookup} className="space-y-2">
+          <p className="text-sm text-soft">IČ jsme na webu nenašli. Zadej ho a údaje o firmě načteme z ARES.</p>
+          <div className="flex gap-2">
+            <input
+              className="field min-w-0 flex-1"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="12345678"
+              maxLength={10}
+              value={ico}
+              onChange={(e) => setIco(e.target.value)}
+              aria-label="IČ"
+            />
+            <button type="submit" className="btn-ghost shrink-0" disabled={loading || !ico.trim()}>
+              {loading ? "Načítám…" : "Načíst z ARES"}
+            </button>
+          </div>
+          {error && <p className="text-sm text-coral">{error}</p>}
+          <p className="text-xs text-soft">Nemáš IČ? Klidně přeskoč, doplníš ho později v Nastavení → Firma a platby.</p>
+        </form>
+      )}
+    </Card>
   );
 }
 
@@ -452,6 +609,7 @@ function Row({
   origin,
   required,
   hint,
+  filled,
   children,
 }: {
   label: string;
@@ -459,35 +617,59 @@ function Row({
   origin: string;
   required?: boolean;
   hint?: string;
+  /** Hodnota je vyplněná — chybějící údaj se pak hlásí jako doplněný */
+  filled?: boolean;
   children: React.ReactNode;
 }) {
+  const showSource = field.source && field.mark !== "missing";
   return (
     <div className="min-w-0">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <span className="text-sm font-medium">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-medium">
           {label}
           {required && <span className="text-coral"> *</span>}
         </span>
-        <MarkChip field={field} origin={origin} />
+        <StatusChip mark={field.mark} filled={filled} />
       </div>
       {children}
-      {hint && <p className="mt-1 text-xs text-soft">{hint}</p>}
+      {(hint || showSource) && (
+        <p className="mt-1 truncate text-xs text-soft">
+          {hint ??
+            (showSource && (
+              <>
+                Z{" "}
+                <a href={origin + field.source} target="_blank" rel="noopener noreferrer nofollow" className="underline-offset-2 hover:text-ink hover:underline">
+                  {field.source === "/" ? "úvodní stránky" : field.source}
+                </a>
+              </>
+            ))}
+        </p>
+      )}
     </div>
   );
 }
 
-function NumberInput({ value, max, onChange }: { value: number; max: number; onChange: (v: number) => void }) {
+/** Malý štítek stavu u pole: Nalezeno / Zkontroluj / Doplň, po vyplnění Doplněno. */
+function StatusChip({ mark, filled }: { mark: Mark; filled?: boolean }) {
+  const m = filled && mark === "missing" ? { label: "Doplněno", cls: MARK.found.cls } : MARK[mark];
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${m.cls}`}>{m.label}</span>;
+}
+
+function NumberInput({ value, max, unit, onChange }: { value: number; max: number; unit?: string; onChange: (v: number) => void }) {
   return (
-    <input
-      className="field tabular-nums"
-      inputMode="numeric"
-      value={value ? String(value) : ""}
-      placeholder="0"
-      onChange={(e) => {
-        const n = Number(e.target.value.replace(/\D/g, ""));
-        onChange(Math.min(max, n || 0));
-      }}
-    />
+    <div className="relative">
+      <input
+        className={`field tabular-nums ${unit ? "pr-20" : ""}`}
+        inputMode="numeric"
+        value={value ? value.toLocaleString("cs-CZ") : ""}
+        placeholder="0"
+        onChange={(e) => {
+          const n = Number(e.target.value.replace(/\D/g, ""));
+          onChange(Math.min(max, n || 0));
+        }}
+      />
+      {unit && <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-soft">{unit}</span>}
+    </div>
   );
 }
 
@@ -527,7 +709,7 @@ function Photos({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-xl font-semibold">Fotky</h2>
         <p className="text-sm text-soft">
-          Vybráno {choice.photos.length} z {result.photos.length} · nejvýš {MAX_IMPORT_PHOTOS} · hvězdička = úvodní fotka
+          Vybráno {choice.photos.length} z {result.photos.length} · nejvýš {MAX_IMPORT_PHOTOS} · úvodní fotku zvolíš hvězdičkou
         </p>
       </div>
       {result.photos.length ? (
@@ -562,7 +744,7 @@ function Photos({
                     onClick={() => patch({ hero: p.src })}
                     aria-label="Nastavit jako úvodní fotku"
                     aria-pressed={hero}
-                    className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full transition ${hero ? "bg-amber text-white" : "bg-white/85 text-soft opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
+                    className={`absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition active:scale-90 ${hero ? "bg-amber text-white" : "bg-white/90 text-soft hover:text-amber"}`}
                   >
                     <Icon name="star" size={14} />
                   </button>

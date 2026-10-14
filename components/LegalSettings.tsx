@@ -51,7 +51,9 @@ export function LegalSettings({
       <div id="pole-provozovatel" className="scroll-mt-24 rounded-2xl">
         <ProviderCard form={form} set={set} requestSave={requestSave} />
       </div>
-      <PaymentCard form={form} set={set} />
+      <div id="pole-platby" className="scroll-mt-24 rounded-2xl">
+        <PaymentCard form={form} set={set} />
+      </div>
       <div id="pole-dokumenty" className="scroll-mt-24 rounded-2xl">
         <LegalDocCard
           kind="terms"
