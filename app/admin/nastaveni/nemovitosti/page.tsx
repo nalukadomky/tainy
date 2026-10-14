@@ -10,6 +10,7 @@ import { themeHex } from "@/lib/theme";
 import { slugify, slugProblem } from "@/lib/site-slug";
 import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
+import { Icon } from "@/components/Icon";
 import { SITES_CHANGED } from "@/components/AdminNav";
 
 // Nastavení → Nemovitosti: všechny nemovitosti účtu v kartách — otevřít,
@@ -42,6 +43,14 @@ export default function PropertiesPage() {
   const router = useRouter();
   const toast = useToast();
   const [list, setList] = useState<Property[] | null>(null);
+  // Import existujícího webu (zatím jen pro testery)
+  const [canImport, setCanImport] = useState(false);
+  useEffect(() => {
+    fetch("/api/import/allowed")
+      .then((r) => r.json())
+      .then((d) => setCanImport(!!d.allowed))
+      .catch(() => {});
+  }, []);
   const [current, setCurrent] = useState("");
   const [renaming, setRenaming] = useState<Property | null>(null);
   const [deleting, setDeleting] = useState<Property | null>(null);
@@ -166,6 +175,16 @@ export default function PropertiesPage() {
             <span className="font-semibold">Přidat nemovitost</span>
             <span className="text-xs">Krátký průvodce, pak úprava přímo ve webu</span>
           </button>
+          {canImport && (
+            <Link
+              href="/import"
+              className="flex min-h-56 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line px-6 text-center text-soft transition hover:border-pine/40 hover:text-ink"
+            >
+              <Icon name="sparkle" size={26} className="text-pine" />
+              <span className="font-semibold">Přenést z existujícího webu</span>
+              <span className="text-xs">Fotky, texty a kontakty vytáhneme z tvého současného webu</span>
+            </Link>
+          )}
         </div>
       )}
 

@@ -366,3 +366,21 @@ model GuestMail {
 
   @@index([reservationId])
 }
+
+/// Import existujícího webu do tainy (sken → kontrola → nový web). Později se
+/// k němu přidá platba.
+model ImportJob {
+  id        String   @id @default(cuid())
+  ownerId   String   @db.Uuid
+  url       String
+  host      String
+  /// scanned | done | failed
+  status    String   @default("scanned")
+  /// Výsledek skenu (JSON ImportResult)
+  result    String   @default("")
+  siteId    String?
+  error     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}

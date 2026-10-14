@@ -6,13 +6,12 @@
 // (jen když jsou data starší než pár minut), ručně tlačítkem a přes
 // /api/ical/sync pro externí plánovač (např. cron-job.org).
 
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { holdsDates, lockSite } from "@/lib/availability";
 import { newPublicId, todayISO, addDays } from "@/lib/stay";
 import { looksLikeReservation, parseIcs, type IcalEvent } from "@/lib/ical";
+import { SafeFetchError, decodeText, safeFetch, urlProblem } from "@/lib/safe-fetch";
 
 export const FEED_SOURCES = ["airbnb", "booking", "other"] as const;
 export type FeedSource = (typeof FEED_SOURCES)[number];
@@ -21,82 +20,44 @@ export const FEED_LABEL: Record<FeedSource, string> = { airbnb: "Airbnb", bookin
 const MAX_BYTES = 2_000_000;
 const FETCH_TIMEOUT = 10_000;
 
-/* ---------- Bezpečné stažení cizí adresy ---------- */
-
-/** Privátní, místní a speciální adresy — server se na ně nesmí nechat poslat. */
-function isPrivateIp(ip: string): boolean {
-  if (ip.includes(":")) {
-    const v6 = ip.toLowerCase();
-    if (v6 === "::1" || v6 === "::") return true;
-    if (v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80")) return true;
-    const mapped = v6.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    return mapped ? isPrivateIp(mapped[1]) : false;
-  }
-  const [a, b] = ip.split(".").map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    a >= 224
-  );
-}
-
-/** Ve vývoji jde testovat s kalendářem z localhostu. */
-const allowLocal = () => process.env.NODE_ENV === "development";
+/* ---------- Bezpečné stažení kalendáře ---------- */
 
 /** Odkaz na kalendář, který smíme stahovat (vrací chybovou hlášku, nebo null). */
 export function feedUrlProblem(raw: string): string | null {
-  let url: URL;
-  try {
-    url = new URL(raw.trim().replace(/^webcal:\/\//i, "https://"));
-  } catch {
-    return "Tohle není platný odkaz. Zkopíruj celý odkaz na kalendář (začíná https://).";
-  }
-  const local = allowLocal() && ["localhost", "127.0.0.1"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(local && url.protocol === "http:")) return "Odkaz musí začínat https://.";
-  if (!local && (url.hostname === "localhost" || (isIP(url.hostname) && isPrivateIp(url.hostname))))
-    return "Tenhle odkaz nejde použít.";
+  const problem = urlProblem(normalizeFeedUrl(raw), false);
+  if (problem === "invalid") return "Tohle není platný odkaz. Zkopíruj celý odkaz na kalendář (začíná https://).";
+  if (problem === "protocol") return "Odkaz musí začínat https://.";
+  if (problem) return "Tenhle odkaz nejde použít.";
   return null;
 }
 
 export const normalizeFeedUrl = (raw: string) => raw.trim().replace(/^webcal:\/\//i, "https://");
 
 async function fetchIcs(raw: string, timeoutMs: number): Promise<string> {
-  let url = normalizeFeedUrl(raw);
-  const deadline = AbortSignal.timeout(timeoutMs);
-  for (let hop = 0; hop < 4; hop++) {
-    const problem = feedUrlProblem(url);
-    if (problem) throw new Error(problem);
-    const { hostname } = new URL(url);
-    const local = allowLocal() && ["localhost", "127.0.0.1"].includes(hostname);
-    if (!local && !isIP(hostname)) {
-      const addrs = await lookup(hostname, { all: true }).catch(() => []);
-      if (!addrs.length) throw new Error("Adresa kalendáře neexistuje.");
-      if (addrs.some((a) => isPrivateIp(a.address))) throw new Error("Tenhle odkaz nejde použít.");
-    }
-    const res = await fetch(url, {
-      redirect: "manual",
-      signal: deadline,
-      headers: { Accept: "text/calendar, text/plain, */*", "User-Agent": "tainy.cz calendar sync" },
-      cache: "no-store",
+  const problem = feedUrlProblem(raw);
+  if (problem) throw new Error(problem);
+  let res;
+  try {
+    res = await safeFetch(normalizeFeedUrl(raw), {
+      timeoutMs,
+      maxBytes: MAX_BYTES,
+      accept: "text/calendar, text/plain, */*",
+      userAgent: "tainy.cz calendar sync",
     });
-    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
-      url = new URL(res.headers.get("location")!, url).toString();
-      continue;
-    }
-    if (!res.ok) throw new Error(`Portál kalendář nevydal (chyba ${res.status}). Zkontroluj odkaz.`);
-    const len = Number(res.headers.get("content-length") ?? 0);
-    if (len > MAX_BYTES) throw new Error("Kalendář je příliš velký.");
-    const text = await res.text();
-    if (text.length > MAX_BYTES) throw new Error("Kalendář je příliš velký.");
-    if (!text.includes("BEGIN:VCALENDAR")) throw new Error("Na odkazu není kalendář (iCal). Zkopíruj odkaz pro export kalendáře.");
-    return text;
+  } catch (e) {
+    // Spojení se nepodařilo (portál nedostupný) — místo technického „fetch failed“
+    if (e instanceof TypeError) throw new Error("Kalendář se nepodařilo stáhnout — portál neodpovídá. Zkusíme to znovu.");
+    if (!(e instanceof SafeFetchError)) throw e;
+    if (e.code === "dns") throw new Error("Adresa kalendáře neexistuje.");
+    if (e.code === "status") throw new Error(`Portál kalendář nevydal (chyba ${e.status}). Zkontroluj odkaz.`);
+    if (e.code === "too-big") throw new Error("Kalendář je příliš velký.");
+    if (e.code === "redirects") throw new Error("Odkaz přesměrovává příliš mnohokrát.");
+    if (e.code === "protocol") throw new Error("Odkaz musí začínat https://.");
+    throw new Error("Tenhle odkaz nejde použít.");
   }
-  throw new Error("Odkaz přesměrovává příliš mnohokrát.");
+  const text = decodeText(res.bytes, res.contentType);
+  if (!text.includes("BEGIN:VCALENDAR")) throw new Error("Na odkazu není kalendář (iCal). Zkopíruj odkaz pro export kalendáře.");
+  return text;
 }
 
 /* ---------- Synchronizace jednoho kalendáře ---------- */

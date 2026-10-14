@@ -20,6 +20,14 @@ function Wizard() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
   const [loaded, setLoaded] = useState(false);
+  // Import existujícího webu (zatím jen pro testery)
+  const [canImport, setCanImport] = useState(false);
+  useEffect(() => {
+    fetch("/api/import/allowed")
+      .then((r) => r.json())
+      .then((d) => setCanImport(!!d.allowed))
+      .catch(() => {});
+  }, []);
 
   // ?nova=1 = další nemovitost z administrace: začít načisto, „Zavřít“ vede zpět do administrace
   const [fromAdmin, setFromAdmin] = useState(false);
@@ -130,7 +138,7 @@ function Wizard() {
             </div>
             <div>
               <span className="mb-1.5 block text-sm font-medium">Máš už vlastní web?</span>
-              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Máš už vlastní web?">
+              <div className={`grid gap-2 ${canImport ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} role="radiogroup" aria-label="Máš už vlastní web?">
                 {[
                   { value: false, title: "Chci web v tainy", text: "Web s rezervacemi ti připravíme za pár minut." },
                   { value: true, title: "Mám vlastní web", text: "Na svůj web vložíš tlačítko Rezervovat." },
@@ -152,6 +160,21 @@ function Wizard() {
                     <span className="mt-1 block text-xs text-soft">{o.text}</span>
                   </button>
                 ))}
+                {canImport && (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={false}
+                    onClick={() => router.push("/import")}
+                    className="rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-pine/40"
+                  >
+                    <span className="flex items-center gap-2 font-medium">
+                      <Icon name="sparkle" className="text-pine" />
+                      Přenést můj web
+                    </span>
+                    <span className="mt-1 block text-xs text-soft">Z tvého webu vytáhneme fotky, texty a kontakty.</span>
+                  </button>
+                )}
               </div>
             </div>
           </>
