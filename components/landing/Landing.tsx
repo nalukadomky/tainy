@@ -79,7 +79,7 @@ function DarkRow({
   eyebrow: string;
   title: React.ReactNode;
   text: string;
-  points: string[];
+  points: React.ReactNode[];
   visual: React.ReactNode;
   alt?: boolean;
 }) {
@@ -93,12 +93,12 @@ function DarkRow({
           <h2 className="mt-4 text-balance font-display text-3xl font-semibold leading-[1.08] tracking-tight sm:text-[44px]">{title}</h2>
           <p className="mt-5 text-[17px] leading-relaxed text-[var(--lp-muted)]">{text}</p>
           <ul className="mt-7 space-y-3">
-            {points.map((p) => (
-              <li key={p} className="flex gap-3 text-[15px] text-[var(--lp-fg)]">
+            {points.map((p, i) => (
+              <li key={i} className="flex gap-3 text-[15px] text-[var(--lp-fg)]">
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: "var(--lp-accent-soft)", color: GOLD }} aria-hidden>
                   ✓
                 </span>
-                {p}
+                <span>{p}</span>
               </li>
             ))}
           </ul>
@@ -108,6 +108,11 @@ function DarkRow({
     </section>
   );
 }
+
+/** Štítek u funkce, kterou teprve připravujeme. */
+const Soon = () => (
+  <span className="ml-1 rounded-full bg-amber/15 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-[#92600a]">Brzy</span>
+);
 
 const Em = ({ children }: { children: React.ReactNode }) => (
   <em className="font-normal" style={{ color: GOLD }}>
@@ -132,7 +137,7 @@ const FAQ: [string, string][] = [
   ["Co se stane po zkušebním měsíci?", "Před koncem ti napíšeme a sám se rozhodneš, jestli pokračovat. Nic se nestrhne automaticky."],
   ["Už mám vlastní web. Musím ho zrušit?", "Nemusíš. Buď k němu přidáš tlačítko Rezervovat, nebo ho do tainy přeneseme i s fotkami a texty."],
   ["Pronajímám i přes Airbnb a Booking.com.", "Kalendáře se navzájem sladí, takže se ti termíny nikdy nepřekryjí. Portály můžeš dál používat vedle přímých rezervací."],
-  ["Jak hosté platí?", "Jak si nastavíš: QR kódem ze své bankovní aplikace rovnou na tvůj účet (bez poplatků), nebo kartou, Apple Pay a Google Pay přes Stripe. Klidně můžeš nabídnout obojí."],
+  ["Jak hosté platí?", "QR kódem ze své bankovní aplikace, rovnou na tvůj účet a bez poplatků. Brzy přidáme i platbu kartou, Apple Pay a Google Pay přes Stripe — pak si vybereš, co nabídneš, nebo obojí."],
 ];
 
 export function Landing({ light = false }: { light?: boolean }) {
@@ -217,10 +222,12 @@ export function Landing({ light = false }: { light?: boolean }) {
             Rezervace i peníze <Em>přímo k tobě</Em>
           </>
         }
-        text="Host si vybere termín, hned vidí konečnou cenu a zaplatí tak, jak mu to vyhovuje. Ty si vybereš, co nabídneš: QR platbu bez poplatků, platbu kartou přes Stripe, nebo obojí."
+        text="Host si vybere termín, hned vidí konečnou cenu a zaplatí QR kódem ze své banky, rovnou na tvůj účet a bez poplatků. Brzy přidáme i platbu kartou přes Stripe."
         points={[
           "QR platba z bankovní aplikace rovnou na tvůj účet, bez poplatků",
-          "Karta, Apple Pay i Google Pay přes Stripe, rezervace se zaplatí hned",
+          <>
+            Karta, Apple Pay i Google Pay přes Stripe <Soon />
+          </>,
           "Půldny, ceny na víkend a sezónu, děti, pejsci i poplatek z pobytu",
         ]}
         visual={<PaymentVisual />}
@@ -362,7 +369,7 @@ export function Landing({ light = false }: { light?: boolean }) {
             <p className="mt-3 text-sm text-[#14261b]/60">Bez platební karty</p>
           </div>
           <ul className="grid content-center gap-3 bg-white/50 p-8 text-[15px] sm:grid-cols-2 sm:p-12">
-            {["Vlastní web a doména", "Rezervace s půldny", "QR platby i karty přes Stripe", "Sladění s Airbnb a Booking", "Automatické e-maily", "Kódy k zámku", "Úklid a úkoly", "Přehled tržeb a nákladů", "Vouchery a slevy", "Podmínky a GDPR"].map((f) => (
+            {["Vlastní web a doména", "Rezervace s půldny", "QR platby (karty brzy)", "Sladění s Airbnb a Booking", "Automatické e-maily", "Kódy k zámku", "Úklid a úkoly", "Přehled tržeb a nákladů", "Vouchery a slevy", "Podmínky a GDPR"].map((f) => (
               <li key={f} className="flex gap-2.5">
                 <span className="text-[#2c5e3f]">✓</span>
                 {f}

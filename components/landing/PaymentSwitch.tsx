@@ -3,7 +3,8 @@
 import { useState } from "react";
 
 // Ukázka platby rezervace na úvodní stránce s přepínačem: QR platba z banky,
-// nebo platba kartou přes Stripe. QR kód přichází hotový ze serveru (props.qr).
+// nebo platba kartou přes Stripe (zatím jen připravujeme — štítek Brzy).
+// QR kód přichází hotový ze serveru (props.qr).
 
 type Mode = "qr" | "card";
 
@@ -35,6 +36,11 @@ export function PaymentSwitch({ qr }: { qr: React.ReactNode }) {
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === m ? "bg-pine text-white" : "text-soft hover:text-ink"}`}
           >
             {label}
+            {m === "card" && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${mode === m ? "bg-white/20 text-white" : "bg-amber/15 text-[#92600a]"}`}>
+                Brzy
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -70,7 +76,10 @@ export function PaymentSwitch({ qr }: { qr: React.ReactNode }) {
             </div>
           </div>
         ) : (
-          <div className="mt-5 space-y-2.5 rounded-2xl bg-bg p-4">
+          <div className="relative mt-5 space-y-2.5 rounded-2xl bg-bg p-4">
+            <span className="absolute -top-2.5 right-3 rounded-full bg-amber px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+              Připravujeme
+            </span>
             <div className="grid grid-cols-2 gap-2">
               <span className="flex h-10 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-white">Apple Pay</span>
               <span className="flex h-10 items-center justify-center rounded-xl border border-line bg-surface text-sm font-semibold">
