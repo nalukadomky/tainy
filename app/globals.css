@@ -119,6 +119,31 @@ body {
 .rise-3 { animation-delay: 0.22s; }
 .rise-4 { animation-delay: 0.3s; }
 
+/* Úvodní stránka: jemné vznášení vizualizací a objevení řádků při scrollu */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float { animation: float 6s ease-in-out infinite; }
+.float-slow { animation: float 8s ease-in-out 1.2s infinite; }
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@supports (animation-timeline: view()) {
+  .reveal { animation: reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.4); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float, .float-slow, .reveal, .rise { animation: none !important; }
+}
+
 /* Pulz nahrávání hlasu */
 @keyframes pulse-ring {
   0% { box-shadow: 0 0 0 0 rgba(239, 91, 60, 0.35); }

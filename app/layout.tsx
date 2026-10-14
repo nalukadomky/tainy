@@ -13,9 +13,9 @@ const instrument = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "tainy — vlastní web s rezervacemi za pár minut",
+  title: "tainy — vlastní web s rezervacemi bez provizí",
   description:
-    "tainy je nejrychlejší cesta k modernímu prezentačnímu webu s rezervacemi a jednoduché správě pronájmu tvého ubytování.",
+    "Web s rezervacemi pro chaty, chalupy, apartmány, tiny housy a glampingy. Platby QR kódem nebo kartou přímo tobě, kalendář sladěný s Airbnb a Bookingem, automatické e-maily a úklid. Měsíc zdarma.",
 };
 
 export const viewport: Viewport = {
