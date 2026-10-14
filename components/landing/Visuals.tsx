@@ -66,7 +66,7 @@ export function MiniDayPicker() {
     <div>
       <div className="flex items-center justify-between">
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[9px] text-soft">←</span>
-        <span className="text-[8px] font-medium uppercase tracking-wider text-soft">Vybraný termín</span>
+        <span className="whitespace-nowrap text-[8px] font-medium uppercase tracking-wider text-soft">Vybraný termín</span>
         <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[9px] text-soft">→</span>
       </div>
       <p className="mb-1 mt-1.5 text-center font-display text-[11px] font-semibold capitalize">
@@ -104,11 +104,12 @@ export function MiniDayPicker() {
   );
 }
 
+// Na telefonu web přes celou šířku a menší telefon vpředu vlevo dole; od sm web vpravo a telefon přes něj.
 export function HeroVisual() {
   return (
-    <div aria-hidden className="relative mx-auto h-[440px] w-full max-w-[540px] select-none sm:h-[480px]">
+    <div aria-hidden className="relative mx-auto h-[400px] w-full max-w-[540px] select-none sm:h-[480px]">
       {/* Web chaty v prohlížeči */}
-      <div className="absolute right-0 top-6 w-[86%] overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_30px_80px_-30px_rgba(30,42,32,0.35)]">
+      <div className="absolute right-0 top-0 w-full overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_30px_80px_-30px_rgba(30,42,32,0.35)] sm:top-6 sm:w-[86%]">
         <div className="flex items-center gap-1.5 border-b border-line bg-cream px-3 py-2">
           <span className="h-2 w-2 rounded-full bg-[#e4ddcf]" />
           <span className="h-2 w-2 rounded-full bg-[#e4ddcf]" />
@@ -136,7 +137,9 @@ export function HeroVisual() {
       </div>
 
       {/* Telefon s výběrem termínu */}
-      <div className="float absolute bottom-0 left-0 w-[46%] max-w-[230px] rounded-[2.2rem] border-[7px] border-ink bg-surface p-3.5 shadow-[0_30px_70px_-25px_rgba(30,42,32,0.55)]">
+      <div
+        className="float absolute bottom-0 left-1 w-[44%] max-w-[230px] rounded-[2.2rem] border-[7px] border-ink bg-surface p-3.5 shadow-[0_30px_70px_-25px_rgba(30,42,32,0.55)] sm:left-0 sm:w-[46%]"
+      >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <MiniDayPicker />
         <div className="mt-3 rounded-xl bg-bg px-3 py-2">
@@ -147,7 +150,7 @@ export function HeroVisual() {
       </div>
 
       {/* Plovoucí oznámení */}
-      <Chip className="float bottom-4 right-0 sm:-bottom-2 sm:right-2">
+      <Chip className="float bottom-4 right-0 hidden sm:-bottom-2 sm:right-2 sm:flex">
         <Qr size={48} className="rounded text-ink" />
         <span>
           <span className="block text-[11px] text-soft">QR platba přímo na účet</span>
@@ -157,8 +160,8 @@ export function HeroVisual() {
           </span>
         </span>
       </Chip>
-      {/* Oznámení vpravo nahoře pod sebou — vznáší se společně */}
-      <div className="float-slow absolute -right-3 top-[22%] z-10 flex flex-col items-end gap-2 sm:-right-8">
+      {/* Oznámení vpravo nahoře pod sebou (na telefonu přes oblohu na fotce) — vznáší se společně */}
+      <div className="float-slow absolute right-2 top-[13%] z-10 flex flex-col items-end gap-2 sm:-right-8 sm:top-[22%]">
         <Chip className="!relative">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-pine/10 text-pine">
             <Icon name="calendar" size={18} />

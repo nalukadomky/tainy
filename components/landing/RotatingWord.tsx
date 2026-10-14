@@ -22,8 +22,11 @@ export function RotatingWord({ words, interval = 2400 }: { words: string[]; inte
         {words.map((w, n) => (
           <span
             key={w}
-            className="[grid-area:1/1] transition-all duration-500 ease-[cubic-bezier(0.2,0.7,0.2,1)]"
+            className="[grid-area:1/1] transition-all ease-[cubic-bezier(0.2,0.7,0.2,1)]"
             style={{
+              // Staré slovo rychle zmizí, nové naběhne až po něm — nikdy nejsou vidět obě naráz
+              transitionDuration: n === i ? "450ms" : "200ms",
+              transitionDelay: n === i ? "180ms" : "0ms",
               opacity: n === i ? 1 : 0,
               transform: n === i ? "translateY(0)" : n === (i - 1 + words.length) % words.length ? "translateY(-0.35em)" : "translateY(0.35em)",
               filter: n === i ? "blur(0)" : "blur(4px)",

@@ -140,44 +140,69 @@ const FAQ: [string, string][] = [
   ["Jak hosté platí?", "QR kódem ze své bankovní aplikace, rovnou na tvůj účet a bez poplatků. Brzy přidáme i platbu kartou, Apple Pay a Google Pay přes Stripe — pak si vybereš, co nabídneš, nebo obojí."],
 ];
 
+const WORDS = ["Tvoje chata.", "Tvůj tiny.", "Tvůj apartmán.", "Tvůj glamping."];
+
+const Glow = () => (
+  <div
+    aria-hidden
+    className="pointer-events-none absolute right-0 top-0 h-[600px] w-[600px] rounded-full opacity-40 blur-3xl"
+    style={{ background: "radial-gradient(circle, var(--lp-glow), transparent 65%)" }}
+  />
+);
+
+const Perks = ({ className = "" }: { className?: string }) => (
+  <ul className={`flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-[var(--lp-muted)] ${className}`}>
+    {["Spouštíme brzy", "Měsíc zdarma", "Bez provizí"].map((t) => (
+      <li key={t} className="flex items-center gap-1.5">
+        <span className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "var(--lp-accent-soft)", color: GOLD }} aria-hidden>
+          ✓
+        </span>
+        {t}
+      </li>
+    ))}
+  </ul>
+);
+
+/** Úvodní obrazovka: nadpis na střed (od lg vlevo), jedno hlavní tlačítko, demo jako odkaz. */
+function Hero() {
+  return (
+    <section className="relative">
+      <Glow />
+      <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-12 pt-10 lg:grid-cols-2 lg:gap-10 lg:pb-10 lg:pt-4">
+        <div className="text-center lg:text-left">
+          <h1 className="font-display text-[44px] font-semibold leading-[1.04] tracking-tight sm:text-[66px]">
+            <RotatingWord words={WORDS} />
+            <br />
+            Tvoji hosté.
+            <br />
+            <span className="whitespace-nowrap">
+              <Em>Tvoje peníze.</Em>
+            </span>
+          </h1>
+          <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row lg:justify-start sm:justify-center">
+            <a href={TRY} className="inline-flex w-full max-w-xs items-center justify-center rounded-full bg-[var(--lp-btn)] px-7 py-4 font-semibold text-[var(--lp-btn-fg)] shadow-[0_12px_30px_-12px_rgba(44,94,63,0.6)] sm:w-auto">
+              {TRY_LABEL} →
+            </a>
+            <Link href="/demo" className="font-semibold underline decoration-[var(--lp-line-strong)] underline-offset-4 hover:decoration-[var(--lp-fg)]">
+              Prohlédnout demo
+            </Link>
+          </div>
+          <Perks className="mt-6 justify-center lg:justify-start" />
+        </div>
+        <div className="min-w-0 text-ink">
+          <HeroVisual />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Landing({ light = false }: { light?: boolean }) {
   return (
     <div className="min-h-dvh overflow-x-clip bg-[var(--lp-bg)] text-[var(--lp-fg)]" style={PALETTE[light ? "light" : "dark"] as React.CSSProperties}>
       <Header dark={!light} />
 
-      {/* Hero */}
-      <section className="relative">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-0 top-0 h-[600px] w-[600px] rounded-full opacity-40 blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--lp-glow), transparent 65%)" }}
-        />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-14 pt-8 lg:grid-cols-2 lg:gap-10 lg:pb-10 lg:pt-4">
-          <div>
-            <h1 className="text-balance font-display text-[46px] font-semibold leading-[1.02] tracking-tight sm:text-[66px]">
-              <RotatingWord words={["Tvoje chata.", "Tvůj tiny.", "Tvůj apartmán.", "Tvůj glamping."]} />
-              <br />
-              Tvoji hosté.
-              <br />
-              <span className="whitespace-nowrap">
-                <Em>Tvoje peníze.</Em>
-              </span>
-            </h1>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <a href={TRY} className="inline-flex items-center justify-center rounded-full bg-[var(--lp-btn)] px-7 py-4 font-semibold text-[var(--lp-btn-fg)]">
-                {TRY_LABEL} →
-              </a>
-              <Link href="/demo" className="inline-flex items-center justify-center rounded-full border border-[var(--lp-line-strong)] px-7 py-4 font-semibold hover:border-[var(--lp-faint)]">
-                Prohlédnout demo
-              </Link>
-            </div>
-            <p className="mt-4 text-sm text-[var(--lp-faint)]">{MICRO}</p>
-          </div>
-          <div className="min-w-0 text-ink">
-            <HeroVisual />
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Čísla */}
       <section className="border-y border-[var(--lp-line)]">
