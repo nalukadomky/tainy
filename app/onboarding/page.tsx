@@ -140,7 +140,7 @@ function Wizard() {
               <span className="mb-1.5 block text-sm font-medium">Máš už vlastní web?</span>
               <div className={`grid gap-2 ${canImport ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} role="radiogroup" aria-label="Máš už vlastní web?">
                 {[
-                  { value: false, title: "Chci web v tainy", text: "Web s rezervacemi ti připravíme za pár minut." },
+                  { value: false, title: "Chci web v tainy", text: "Web s rezervacemi si připravíš za pár minut." },
                   { value: true, title: "Mám vlastní web", text: "Na svůj web vložíš tlačítko Rezervovat." },
                 ].map((o) => (
                   <button

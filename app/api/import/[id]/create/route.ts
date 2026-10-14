@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { getUser, deny } from "@/lib/auth";
-import { importAllowed } from "@/lib/import/flag";
+import { IMPORT_LIMITS, importEnabled } from "@/lib/import/flag";
 import { createSite } from "@/lib/create-site";
 import { storeSitePhoto } from "@/lib/site-photos";
 import { safeFetch } from "@/lib/safe-fetch";
@@ -44,7 +44,7 @@ async function importPhoto(siteId: string, src: string): Promise<string | null> 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) return deny(401);
-  if (!importAllowed(user.email)) return deny(403);
+  if (!importEnabled()) return deny(403);
 
   const job = await prisma.importJob.findUnique({ where: { id: (await params).id } });
   if (!job || job.ownerId !== user.id) return deny(404);
@@ -53,6 +53,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (site) return NextResponse.json({ slug: site.slug, photos: 0, skipped: 0 });
   }
   if (job.status !== "scanned") return NextResponse.json({ error: "Tenhle import už nejde použít. Naskenuj web znovu." }, { status: 409 });
+
+  const day = new Date(Date.now() - 86_400_000);
+  const [mine, all] = await Promise.all([
+    prisma.importJob.count({ where: { ownerId: user.id, status: "done", createdAt: { gte: day } } }),
+    prisma.importJob.count({ where: { status: "done", createdAt: { gte: day } } }),
+  ]);
+  if (mine >= IMPORT_LIMITS.createsPerUserDay || all >= IMPORT_LIMITS.createsPerDay)
+    return NextResponse.json({ error: "Dnes už z importu vzniklo hodně webů. Zkus to prosím zítra." }, { status: 429 });
 
   const result = JSON.parse(job.result) as ImportResult;
   const c = (await req.json().catch(() => ({}))) as Partial<ImportChoice>;

@@ -3,13 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { ImportFlow } from "@/components/ImportFlow";
 import { getUser } from "@/lib/auth";
-import { importAllowed } from "@/lib/import/flag";
+import { importEnabled } from "@/lib/import/flag";
 
-// Import existujícího webu do tainy (zatím ve zkušebním provozu).
+// Import existujícího webu do tainy.
 export default async function ImportPage() {
-  const user = await getUser();
-  if (!user) redirect("/login?next=/import");
-  if (!importAllowed(user.email)) notFound();
+  if (!importEnabled()) notFound();
+  // Nový majitel přichází z registrace — účet si založí a vrátí se sem
+  if (!(await getUser())) redirect("/register?next=/import");
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-4xl flex-col px-5 pb-10">

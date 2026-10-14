@@ -119,7 +119,7 @@ export function ImportFlow() {
   if (stage === "url" || stage === "scanning")
     return (
       <div className="mx-auto w-full max-w-xl flex-1 pt-6 sm:pt-14">
-        <p className="text-xs font-semibold uppercase tracking-widest text-soft">Zkušební provoz</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-soft">Přenos webu</p>
         <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Přenes svůj web do tainy</h1>
         <p className="mt-3 text-soft">
           Zadej adresu svého současného webu. Projdeme ho a vytáhneme fotky, popis, vybavení, kontakty a údaje o firmě.
