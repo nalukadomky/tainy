@@ -1,6 +1,7 @@
 import { parseWidgetSettings, serializeWidgetSettings } from "@/lib/widget";
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isTaxPeriod } from "@/lib/guestbook";
 import { requireSiteOwnerBySlug, deny, getUser } from "@/lib/auth";
 import { parseCategories, serializeCategories } from "@/lib/guests";
 import { isTime } from "@/lib/stay";
@@ -96,6 +97,10 @@ export async function GET(
     cleanerFields: _cleanerFields,
     staffSeesOwnerTodos: _staffSeesOwnerTodos,
     domainVerifiedAt: _domainVerifiedAt,
+    // Údaje pro hlášení cizinců a dohledání poplatku vidí jen majitel
+    ubyportIdub: _ubyportIdub,
+    ubyportAbbr: _ubyportAbbr,
+    taxSource: _taxSource,
     ...publicSite
   } = site;
   return NextResponse.json(publicSite);
@@ -207,6 +212,12 @@ export async function PATCH(
   if (typeof body.emailSettings === "string") data.emailSettings = serializeEmailSettings(parseEmailSettings(body.emailSettings));
   if (typeof body.locks === "string") data.locks = JSON.stringify(parseLocks(body.locks));
   if (body.keyHandover === "code" || body.keyHandover === "key") data.keyHandover = body.keyHandover;
+  // Check-in, Ubyport a odvod poplatku z pobytu
+  if (typeof body.checkinEnabled === "boolean") data.checkinEnabled = body.checkinEnabled;
+  if (typeof body.checkinReminder === "boolean") data.checkinReminder = body.checkinReminder;
+  if (typeof body.ubyportIdub === "string") data.ubyportIdub = body.ubyportIdub.replace(/[^0-9A-Za-z-]/g, "").slice(0, 20);
+  if (typeof body.ubyportAbbr === "string") data.ubyportAbbr = body.ubyportAbbr.replace(/[|\r\n]/g, "").trim().slice(0, 10);
+  if (isTaxPeriod(body.taxPeriod)) data.taxPeriod = body.taxPeriod;
   if (typeof body.widgetOnly === "boolean") data.widgetOnly = body.widgetOnly;
   if (typeof body.widgetSettings === "string") data.widgetSettings = serializeWidgetSettings(parseWidgetSettings(body.widgetSettings));
   if (body.heroStyle !== undefined) {

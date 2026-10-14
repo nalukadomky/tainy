@@ -14,7 +14,7 @@ export function slugify(name: string): string {
 // Weby jsou přímo na tainy.cz/[adresa], takže adresa nesmí kolidovat s žádnou
 // stránkou aplikace (složky v app/) — při přidání nové stránky ji doplň sem.
 const RESERVED = new Set([
-  "admin", "api", "auth", "login", "register", "onboarding", "nahled", "uklid", "r", "w",
+  "admin", "api", "auth", "login", "register", "onboarding", "nahled", "uklid", "r", "w", "checkin",
   "zapomenute-heslo", "favicon.ico", "robots.txt", "sitemap.xml", "_next",
   "app", "demo", "tainy", "www", "cenik", "kontakt", "podpora", "napoveda", "blog", "o-nas",
   "podminky", "ochrana-udaju", "gdpr", "dashboard", "ucet", "nastaveni", "static", "public", "domena-nenalezena",

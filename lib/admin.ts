@@ -6,6 +6,7 @@ import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
 import { DELETED_GUEST, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { stayTimes } from "@/lib/stay";
+import { slotsFor } from "@/lib/guestbook";
 import { needsStayCode, parseEmailSettings } from "@/lib/email-templates";
 
 export type Unit = "pct" | "czk";
@@ -90,6 +91,15 @@ export type Site = {
   /** Poloha na webu (none | area | exact) a souřadnice dohledané z adresy (lib/location.ts). */
   locationMode: string;
   geo: string;
+  /** Online check-in (kniha ubytovaných) a připomínka v den příjezdu. */
+  checkinEnabled: boolean;
+  checkinReminder: boolean;
+  /** Ubyport: identifikátor ubytovatele a zkratka od cizinecké policie. */
+  ubyportIdub: string;
+  ubyportAbbr: string;
+  /** Jak často se odvádí poplatek z pobytu a výsledek dohledání vyhlášky obce (lib/tourist-tax.ts). */
+  taxPeriod: string;
+  taxSource: string;
   /** Sekce „O nás“ (lib/about.ts). */
   aboutEnabled: boolean;
   aboutLayout: string;
@@ -169,6 +179,11 @@ export type Reservation = {
   cancelMailAt?: string | null;
   arrivalMailAt?: string | null;
   arrivalCodeMailAt?: string | null;
+  /** Check-in: kolik osob je v knize ubytovaných, kdy byl hotový a kdy odešel odkaz / připomínka. */
+  checkinCount?: number;
+  checkinDoneAt?: string | null;
+  checkinMailAt?: string | null;
+  checkinReminderAt?: string | null;
 };
 
 /** Přiděluje se kód k zámku ke každé rezervaci zvlášť — jen pak má smysl kód u rezervace. */
@@ -421,6 +436,13 @@ export function useAdminData() {
         setReservations(before);
         throw new Error("Hosta se nepodařilo smazat, zkus to znovu.");
       }
+      if (mode === "full") {
+        // Pobyty z knihy ubytovaných server ponechal jako „Smazaný host“
+        const data: { kept?: string[] } = await res.json().catch(() => ({}));
+        const kept = before.filter((r) => data.kept?.includes(r.id));
+        if (kept.length)
+          setReservations((list) => [...list, ...kept.map((r) => ({ ...r, ...scrub, guestName: DELETED_GUEST, guestRef: "", anonymized: true }))]);
+      }
       if (mode === "pseudonymize") {
         const data: { ref?: string; name?: string } = await res.json().catch(() => ({}));
         if (data.ref && data.name) {
@@ -466,6 +488,22 @@ export const STATUS_STYLE: Record<Reservation["status"], string> = {
 };
 
 /** Skladba hostů rezervace („2× dospělí · 1× pes"), pokud ji web rozlišuje; jinak počet. */
+/** Kolik osob má rezervace vyplnit v check-inu (bez psů, i s miminky) — stejně jako server (slotsFor). */
+export function checkinPeople(r: Reservation, site: Site | null): number {
+  const categories = pricedCategories({
+    guestMode: site?.guestMode,
+    pricingMode: site?.pricingMode,
+    categories: parseCategories(site?.guestCategories ?? "", site?.pricingMode),
+  });
+  let raw: unknown = { adult: r.guests };
+  try {
+    if (r.guestBreakdown) raw = JSON.parse(r.guestBreakdown);
+  } catch {
+    // starší rezervace bez rozpisu
+  }
+  return slotsFor(parseCounts(raw, categories), categories, r.guests).length;
+}
+
 export function guestsLabel(r: Reservation, site: Site | null): string {
   const categories = pricedCategories({
     guestMode: site?.guestMode,

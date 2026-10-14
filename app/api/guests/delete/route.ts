@@ -9,7 +9,9 @@ import { DELETED_GUEST } from "@/lib/guests";
 //  pseudonymize — nesouhlas s GDPR: z hosta je „Host č. 4821" bez osobních údajů,
 //                 ve statistikách hostů zůstává (pobyty, noci, útrata)
 //  keepRevenue  — rezervace zůstanou jako „Smazaný host" jen kvůli příjmům
-//  full         — rezervace se smažou
+//  full         — rezervace se smažou; pobyty zapsané v knize ubytovaných ale
+//                 zůstanou jako „Smazaný host“ — knihu ukládá zákon 6 let
+//                 (zákonná povinnost má před výmazem přednost)
 // Úklidy nikdy nezmizí: zaplacené mají záznam v Nákladech a při úplném smazání
 // se úklid po pobytu převede na samostatný úklid (stejné datum), ať neztratíš
 // přehled, co dlužíš personálu.
@@ -62,12 +64,21 @@ export async function POST(req: NextRequest) {
   }
 
   // Úplné smazání — úklidy po pobytech se nejdřív odpojí jako samostatné úklidy
+  const kept: string[] = [];
   const count = await prisma.$transaction(
     async (tx) => {
-      const stays = await tx.reservation.findMany({
+      const all = await tx.reservation.findMany({
         where,
-        select: { id: true, endDate: true, checkOutTime: true, cleaning: { select: { id: true } } },
+        select: { id: true, endDate: true, checkOutTime: true, cleaning: { select: { id: true } }, _count: { select: { guestRecords: true } } },
       });
+      // Pobyty v knize ubytovaných: jen bez kontaktu, rezervace zůstane
+      kept.push(...all.filter((s) => s._count.guestRecords > 0).map((s) => s.id));
+      if (kept.length)
+        await tx.reservation.updateMany({
+          where: { id: { in: kept } },
+          data: { ...SCRUB, guestName: DELETED_GUEST, guestRef: "", anonymized: true },
+        });
+      const stays = all.filter((s) => !kept.includes(s.id));
       for (const s of stays) {
         if (!s.cleaning) continue;
         await tx.cleaning.update({
@@ -80,5 +91,5 @@ export async function POST(req: NextRequest) {
     },
     { maxWait: 10_000, timeout: 20_000 }
   );
-  return NextResponse.json({ ok: true, count });
+  return NextResponse.json({ ok: true, count, kept });
 }

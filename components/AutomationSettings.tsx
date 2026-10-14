@@ -157,6 +157,61 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
         />
         <ArrivalCard form={form} set={set} />
       </Section>
+
+      <Section
+        title="Check-in a kniha ubytovaných"
+        hint={`Host vyplní údaje za všechny osoby online — odkaz dostane v e-mailu Check-in před příjezdem${
+          settings.checkin.enabled ? ` (${settings.checkin.days} ${plural(settings.checkin.days, "den", "dny", "dní")} předem)` : ", ten je teď vypnutý"
+        } a najde ho i na stránce rezervace.`}
+      >
+        <CheckinSettings form={form} set={set} />
+      </Section>
+    </div>
+  );
+}
+
+function CheckinSettings({ form, set }: { form: Site; set: SetField }) {
+  return (
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-semibold">Online check-in</p>
+          <p className="text-sm text-soft">
+            Údaje se ukládají šifrovaně a najdeš je v Rezervacích → Kniha ubytovaných. Ručně je doplníš v detailu rezervace.
+          </p>
+        </div>
+        <Switch on={form.checkinEnabled} label="Online check-in" onChange={(on) => set("checkinEnabled", on)} />
+      </div>
+      {form.checkinEnabled && (
+        <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[var(--pine)]"
+            checked={form.checkinReminder}
+            onChange={(e) => set("checkinReminder", e.target.checked)}
+          />
+          Když host nevyplní všechny osoby, připomenout mu to ráno v den příjezdu
+        </label>
+      )}
+      <div id="pole-ubyport" className="scroll-mt-24 space-y-3 border-t border-line pt-4">
+        <div>
+          <p className="font-semibold">Hlášení cizinců (Ubyport)</p>
+          <p className="text-sm text-soft">
+            Cizince musíš do 3 pracovních dnů nahlásit cizinecké policii. V Knize ubytovaných pro ně vytvoříme soubor k nahrání na
+            ubyport.policie.cz. Identifikátor a zkratku ti přidělí policie při registraci do Ubyportu.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Identifikátor ubytovatele (IDUB)</span>
+            <input className="field" value={form.ubyportIdub} maxLength={20} onChange={(e) => set("ubyportIdub", e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Zkratka ubytovatele</span>
+            <input className="field" value={form.ubyportAbbr} maxLength={10} onChange={(e) => set("ubyportAbbr", e.target.value)} />
+          </label>
+        </div>
+      </div>
     </div>
   );
 }

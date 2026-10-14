@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     prisma.reservation.findMany({
       where: { siteId: site.id },
       orderBy: { startDate: "desc" },
-      include: { cleaning: { select: cleaningSelect } },
+      include: { cleaning: { select: cleaningSelect }, _count: { select: { guestRecords: true } } },
     }),
     prisma.cost.findMany({ where: { siteId: site.id }, orderBy: { date: "desc" } }),
     prisma.blackout.findMany({ where: { siteId: site.id }, orderBy: { startDate: "asc" } }),
@@ -40,6 +40,11 @@ export async function GET(req: NextRequest) {
   ]);
   // Úklid hlídáme jen u webů, které sekci Úklid používají (mají personál nebo ruční úklid)
   const alerts = cleaners || manual.length ? cleaningAlerts(rows, manual, today) : {};
-  const reservations = rows.map(({ cleaning: _cleaning, ...r }) => ({ ...r, cleaningAlert: alerts[r.id] ?? null }));
+  // Z check-inu jen počet vyplněných osob — údaje samotné se načítají zvlášť (šifrované)
+  const reservations = rows.map(({ cleaning: _cleaning, _count, checkinNonce: _nonce, ...r }) => ({
+    ...r,
+    checkinCount: _count.guestRecords,
+    cleaningAlert: alerts[r.id] ?? null,
+  }));
   return NextResponse.json({ site: { ...site, geo }, reservations, costs, blackouts });
 }

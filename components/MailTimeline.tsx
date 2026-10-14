@@ -24,7 +24,7 @@ import { Icon } from "@/components/Icon";
 // přesně tak, jak odešel (uložený v GuestMail), naplánovaný jako náhled.
 // Pravidla plánování odpovídají lib/guest-mails.ts.
 
-type Kind = EmailKind | "arrivalCode" | "dateChange";
+type Kind = EmailKind | "arrivalCode" | "checkinReminder" | "dateChange";
 type Sent = { id: string; kind: Kind; subject: string; html: string; sentAt: string };
 /** sendNow = naplánovaný e-mail jde poslat hned na klik (host chce údaje dřív). */
 type Step = { key: string; kind: Kind; label: string; at?: string; plan?: string; mail?: Sent; sendNow?: boolean };
@@ -32,6 +32,8 @@ type Step = { key: string; kind: Kind; label: string; at?: string; plan?: string
 const LABEL: Record<Kind, string> = {
   booking: "Přijetí rezervace",
   paid: "Platba přijata",
+  checkin: "Check-in před příjezdem",
+  checkinReminder: "Připomínka check-inu",
   arrival: "Před příjezdem",
   arrivalCode: "Kód k zámku",
   cancelled: "Zrušení rezervace",
@@ -125,7 +127,7 @@ function stayOf(r: Reservation, site: Site): StayMail {
 
 function preview(step: Step, r: Reservation, site: Site | null): { subject: string; html: string } | null {
   if (!site || step.kind === "dateChange" || step.kind === "thanks") return null;
-  const kind: EmailKind = step.kind === "arrivalCode" ? "arrival" : step.kind;
+  const kind: EmailKind = step.kind === "arrivalCode" ? "arrival" : step.kind === "checkinReminder" ? "checkin" : step.kind;
   const pay = kind === "booking" && site.bankAccount ? buildPayment(site.bankAccount, r.totalPrice, site.name, r.publicId) : null;
   const stay = stayOf(r, site);
   // Potvrzení rezervace odešlo před zaplacením (kromě ukázkové platby)
@@ -135,6 +137,7 @@ function preview(step: Step, r: Reservation, site: Site | null): { subject: stri
     payment: pay ? { account: site.bankAccount, vs: pay.vs, amount: r.totalPrice } : null,
     holdUntil: r.expiresAt,
     accessCode: r.accessCode || undefined,
+    checkin: { link: "#", people: r.guests, missing: r.guests, reminder: step.kind === "checkinReminder" },
   });
 }
 

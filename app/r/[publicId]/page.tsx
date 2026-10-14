@@ -17,6 +17,8 @@ import { parseEmailSettings } from "@/lib/email-templates";
 import { parsePhotos } from "@/lib/photos";
 import Image from "next/image";
 import { EmbedClose } from "@/components/EmbedClose";
+import { checkinToken, guestCryptoReady } from "@/lib/guest-crypto";
+import { checkinOpen, slotsOf } from "@/lib/guestbook-server";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +84,16 @@ export default async function ReservationPage({
       ? buildPayment(site.bankAccount, reservation.totalPrice, site.name, reservation.publicId)
       : null;
   const qr = payment ? await paymentQrDataUrl(payment) : null;
+
+  // Online check-in: u zaplacené rezervace před koncem pobytu (stránka ukáže jen stav, ne údaje)
+  const checkin =
+    reservation.status === "paid" && !ukazkova && site.checkinEnabled && guestCryptoReady() && checkinOpen(reservation)
+      ? {
+          link: `/checkin/${checkinToken(reservation)}`,
+          total: slotsOf(reservation, site).length,
+          filled: await prisma.guestRecord.count({ where: { reservationId: reservation.id } }),
+        }
+      : null;
 
   const state = expired
     ? { label: "Vypršelo", style: "bg-line/60 text-soft" }
@@ -267,8 +279,58 @@ export default async function ReservationPage({
           </div>
         )}
 
+        {/* Check-in před příjezdem — na počítači vpravo místo fotky */}
+        {checkin &&
+          (checkin.filled >= checkin.total ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-5 md:[grid-area:pay]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pine text-white">✓</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-lg font-semibold">Check-in hotový</p>
+                <p className="text-sm text-soft">
+                  Údaje za {checkin.total === 1 ? "tebe" : `${checkin.total} ${plural(checkin.total, "osobu", "osoby", "osob")}`} máme. Těšíme se!
+                </p>
+              </div>
+              <Link href={checkin.link} className="shrink-0 text-sm font-semibold text-pine hover:underline">
+                Upravit
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-2xl border-2 border-pine/25 bg-pine/[0.04] p-5 md:p-6 md:[grid-area:pay]">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pine/10 text-pine">
+                  <Icon name="clipboard" size={20} />
+                </span>
+                <div>
+                  <h2 className="font-display text-lg font-semibold">Check-in před příjezdem</h2>
+                  <p className="mt-0.5 text-sm text-soft">
+                    Vyplň údaje za {checkin.total === 1 ? "sebe" : `všechny ${checkin.total} ${plural(checkin.total, "osobu", "osoby", "osob")}`} — ze
+                    zákona vedeme knihu ubytovaných. Zabere to asi 2 minuty a při příjezdu už nic neřešíš.
+                  </p>
+                </div>
+              </div>
+              {checkin.total > 1 && (
+                <div className="mt-4 flex items-center gap-2">
+                  <div className="flex flex-1 gap-1">
+                    {Array.from({ length: checkin.total }, (_, i) => (
+                      <span key={i} className={`h-1.5 flex-1 rounded-full ${i < checkin.filled ? "bg-pine" : "bg-line"}`} />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium text-soft">
+                    {checkin.filled} z {checkin.total}
+                  </span>
+                </div>
+              )}
+              <Link href={checkin.link} className="btn-primary mt-4 w-full">
+                Vyplnit check-in →
+              </Link>
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-soft">
+                <Icon name="lock" size={13} /> Šifrované, vidí jen ubytovatel
+              </p>
+            </div>
+          ))}
+
         {/* Zaplaceno — vpravo náhled úvodní fotky ubytování */}
-        {reservation.status === "paid" && coverPhoto && !site.widgetOnly && (
+        {reservation.status === "paid" && !checkin && coverPhoto && !site.widgetOnly && (
           <Link
             href={`/${site.slug}`}
             className="group relative block aspect-[4/3] overflow-hidden rounded-2xl border border-line bg-line/40 md:aspect-auto md:min-h-64 md:self-stretch md:[grid-area:pay]"

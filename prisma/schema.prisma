@@ -124,6 +124,17 @@ model Site {
   geo            String @default("")
   // Externí rezervace: tajný odkaz na kalendář webu pro portály (/api/ical/<token>.ics)
   icalToken      String? @unique
+  // Online check-in (kniha ubytovaných): zapnutí (tlačítko u rezervace hosta);
+  // e-mail s odkazem je v emailSettings.checkin, ráno v den příjezdu připomínka
+  checkinEnabled  Boolean @default(true)
+  checkinReminder Boolean @default(true)
+  // Ubyport (hlášení cizinců): identifikátor ubytovatele a zkratka od policie
+  ubyportIdub     String  @default("")
+  ubyportAbbr     String  @default("")
+  // Poplatek z pobytu: jak často se odvádí obci (month | quarter | half | year)
+  // a výsledek dohledání vyhlášky obce ve Sbírce (JSON, lib/tourist-tax.ts)
+  taxPeriod       String  @default("quarter")
+  taxSource       String  @default("")
 
   createdAt    DateTime      @default(now())
   reservations Reservation[]
@@ -135,6 +146,9 @@ model Site {
   cleanings    Cleaning[]
   todos        Todo[]
   feeds        CalendarFeed[]
+  guestRecords GuestRecord[]
+  remittances  TaxRemittance[]
+  accessLogs   GuestAccessLog[]
 
   @@index([ownerId])
 }
@@ -213,6 +227,14 @@ model Reservation {
   cancelMailAt      DateTime?
   arrivalMailAt     DateTime?
   arrivalCodeMailAt DateTime? // kód k zámku zadaný až po e-mailu „Před příjezdem“
+
+  // Online check-in: nonce podepsaného odkazu (změna = starý odkaz přestane platit),
+  // kdy odešel odkaz / připomínka a kdy host vyplnil všechny osoby
+  checkinNonce      String    @default("")
+  checkinMailAt     DateTime?
+  checkinReminderAt DateTime?
+  checkinDoneAt     DateTime?
+  guestRecords      GuestRecord[]
 
   @@unique([feedId, externalUid])
   @@index([siteId, startDate, endDate])
@@ -405,4 +427,55 @@ model EarlyAccessRequest {
 
   @@index([createdAt])
   @@index([ipHash, createdAt])
+}
+
+/// Kniha ubytovaných: jedna osoba pobytu. Údaje jsou šifrované v aplikaci
+/// (AES-256-GCM, lib/guest-crypto.ts) — v databázi je jen „v1:…“. Po uplynutí
+/// zákonné lhůty (purgeAt) je denní cron smaže.
+model GuestRecord {
+  id            String      @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  siteId        String
+  site          Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  position      Int
+  data          String
+  /// Cizinec (jiné občanství než ČR) — pro export do Ubyportu bez dešifrování
+  foreign       Boolean     @default(false)
+  /// guest = vyplnil host přes odkaz, owner = majitel v administraci
+  filledBy      String      @default("guest")
+  purgeAt       DateTime
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([reservationId, position])
+  @@index([siteId, purgeAt])
+}
+
+/// Odvod poplatku z pobytu obci za období (např. 2026-Q4).
+model TaxRemittance {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period    String
+  amount    Int
+  paidAt    DateTime @db.Date
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([siteId, period])
+}
+
+/// Kdo a kdy si zobrazil nebo exportoval údaje z knihy ubytovaných.
+model GuestAccessLog {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  userEmail String
+  /// view | export | edit | delete
+  action    String
+  target    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
 }

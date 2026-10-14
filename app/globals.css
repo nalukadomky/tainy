@@ -64,6 +64,21 @@ body {
 }
 
 /* Kompaktní ovládací prvek do lišty filtrů (hledání, výběry). */
+/* Výběr (select) se stejnou výškou jako pole a vlastní šipkou — v Safari jinak nižší systémový vzhled */
+select.field,
+select.control {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%235a6557' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 11px 8px;
+}
+select.field {
+  min-height: 3.125rem;
+}
+
 .control {
   @apply h-10 appearance-none rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition placeholder:text-soft/70 focus:border-pine focus:ring-2 focus:ring-pine/15;
 }

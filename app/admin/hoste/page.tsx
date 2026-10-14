@@ -612,6 +612,10 @@ function DeleteGuestDialog({
             "Rezervace zmizí i z tržeb a statistik, včetně informací o ubytování."
           )}
         </div>
+        <p className="mt-3 text-xs leading-relaxed text-soft">
+          Údaje v knize ubytovaných (check-in) zůstanou ve všech případech po zákonnou dobu 6 let — vede je ze zákona o místních
+          poplatcích, pak se smažou samy. Pobyty zapsané v knize se proto ani při úplném smazání neodstraní, jen ztratí kontakt na hosta.
+        </p>
 
         {guest.next && mode === "full" && (
           <p className="mt-3 rounded-xl bg-amber/15 px-4 py-2.5 text-sm text-[#92600a]">

@@ -6,6 +6,7 @@ import {
   useAdminData,
   fmtDate,
   guestsLabel,
+  checkinPeople,
   usesLockCodes,
   norm,
   SOURCE_LABEL,
@@ -27,6 +28,8 @@ import { arrivalDaysOf } from "@/lib/email-templates";
 import { AccessCode, AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { SwipeToPay } from "@/components/SwipeToPay";
 import { MailTimeline } from "@/components/MailTimeline";
+import { CheckinCard } from "@/components/CheckinCard";
+import { ReservationTabs } from "@/components/ReservationTabs";
 import { Icon, type IconName } from "@/components/Icon";
 import { ListMore, usePaged } from "@/components/ListMore";
 
@@ -199,6 +202,7 @@ export default function ReservationsPage() {
     <div className="space-y-5">
       {toast.node}
       {confirmDlg.node}
+      <ReservationTabs active="list" />
       <h1 className="font-display text-3xl font-semibold tracking-tight">Rezervace</h1>
 
       <div className="flex flex-wrap gap-2">
@@ -389,6 +393,7 @@ export default function ReservationsPage() {
                               <VoucherBadge code={r.voucherCode} discount={r.discount} />
                               <CleaningBadge alert={r.cleaningAlert} small />
                             </span>
+                            <CheckinBadge r={r} site={site} />
                           </p>
                           <p className="text-sm text-soft sm:truncate">
                             <span className="sm:hidden">{dayMonthRange(r.startDate, r.endDate)}</span>
@@ -612,6 +617,10 @@ function StayDetail({ r, site, onChange }: { r: Reservation; site: Site | null; 
           </Row>
         )}
       </Group>
+
+      {r.source !== "demo" && r.status !== "cancelled" && site?.checkinEnabled !== false && (
+        <CheckinCard r={r} site={site} onChange={onChange} />
+      )}
 
       <MailTimeline r={r} site={site} onChange={onChange} />
     </div>
@@ -878,4 +887,19 @@ function dayMonthRange(startIso: string, endIso: string): string {
   const [, sm, sd] = startIso.slice(0, 10).split("-").map(Number);
   const [, em, ed] = endIso.slice(0, 10).split("-").map(Number);
   return sm === em ? `${sd}.–${ed}. ${em}.` : `${sd}. ${sm}.–${ed}. ${em}.`;
+}
+
+/** Stav check-inu v řádku rezervace — jen u nadcházejících a nedávných pobytů. */
+function CheckinBadge({ r, site }: { r: Reservation; site: Site | null }) {
+  if (!site?.checkinEnabled || r.status === "cancelled" || r.source === "demo") return null;
+  if (r.endDate.slice(0, 10) < addDays(todayISO(), -7) || r.startDate.slice(0, 10) > addDays(todayISO(), 60)) return null;
+  const n = r.checkinCount ?? 0;
+  const done = !!r.checkinDoneAt;
+  const tone = done ? "bg-pine/10 text-pine" : n ? "bg-amber/20 text-[#92600a]" : "bg-bg text-soft";
+  return (
+    <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`} title="Check-in (kniha ubytovaných)">
+      <Icon name="clipboard" size={12} />
+      <span className="max-sm:hidden">Check-in</span> {done ? "✓" : `${n}/${checkinPeople(r, site)}`}
+    </span>
+  );
 }

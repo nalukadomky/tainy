@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAdminData, type Site, type PriceRule } from "@/lib/admin";
+import { TaxSourceCard } from "@/components/TaxSourceCard";
 import { applyAdjust, czk } from "@/lib/pricing";
 import { AdjustField } from "@/components/AdjustField";
 import { NumberField } from "@/components/NumberField";
@@ -760,8 +761,26 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
                   value={form.touristTax}
                   onChange={(v) => set("touristTax", v)}
                 />
-                <span className="mt-1 block text-xs text-soft">Sazbu určuje obec — u většiny obcí 0–50 Kč.</span>
+                <span className="mt-1 block text-xs text-soft">Sazbu určuje obec vyhláškou — nejvýš 50 Kč.</span>
               </label>
+              {slug && (
+                <TaxSourceCard
+                  slug={slug}
+                  address={site?.arrivalAddress ?? ""}
+                  taxSource={form.taxSource}
+                  touristTax={form.touristTax}
+                  taxPeriod={form.taxPeriod}
+                  // Výsledek hledání se ukládá na serveru hned — ve formuláři není neuloženou změnou
+                  onSource={(taxSource, touristTax) => {
+                    // Server mohl doplnit sazbu (jen když byla 0) — uložené, ne neuložená změna
+                    const fill = form.touristTax === 0 && site?.touristTax === 0 ? { touristTax } : {};
+                    setForm((f) => (f ? { ...f, taxSource, ...fill } : f));
+                    setSite((s) => (s ? { ...s, taxSource, ...fill } : s));
+                  }}
+                  onRate={(v) => set("touristTax", v)}
+                  onPeriod={(v) => set("taxPeriod", v)}
+                />
+              )}
             </div>
 
             <CancellationField

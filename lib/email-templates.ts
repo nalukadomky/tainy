@@ -14,7 +14,7 @@ import { parseGeo } from "@/lib/location";
 
 /* ---------- Druhy e-mailů a jejich nastavení ---------- */
 
-export type EmailKind = "booking" | "paid" | "arrival" | "cancelled" | "thanks";
+export type EmailKind = "booking" | "paid" | "checkin" | "arrival" | "cancelled" | "thanks";
 export type EmailGroup = "info" | "marketing";
 
 export type EmailConfig = {
@@ -82,6 +82,19 @@ export const EMAIL_KINDS: EmailMeta[] = [
     },
   },
   {
+    kind: "checkin",
+    group: "info",
+    title: "Check-in před příjezdem",
+    includes: "Tlačítko na online check-in a počet osob k vyplnění; ráno v den příjezdu připomínka, pokud někdo chybí",
+    timing: "before",
+    subject: "Check-in před příjezdem do {ubytování}",
+    text: "# Těšíme se na tebe, {jméno}!\n\nZe zákona vedeme knihu ubytovaných. Vyplň prosím předem údaje za všechny, kdo do **{ubytování}** přijedou — zabere to asi dvě minuty a při příjezdu už nic řešit nebudeš.",
+    formal: {
+      subject: "Check-in před příjezdem do {ubytování}",
+      text: "# Těšíme se na vás\n\nDobrý den, ze zákona vedeme knihu ubytovaných. Vyplňte prosím předem údaje za všechny, kdo do **{ubytování}** přijedou — zabere to asi dvě minuty a při příjezdu už nic řešit nebudete.",
+    },
+  },
+  {
     kind: "arrival",
     group: "info",
     title: "Před příjezdem",
@@ -145,7 +158,7 @@ export function switchTone(s: EmailSettings, formal: boolean): { settings: Email
 
 export const emailMeta = (kind: EmailKind) => EMAIL_KINDS.find((m) => m.kind === kind)!;
 
-const DEFAULT_DAYS: Partial<Record<EmailKind, number>> = { arrival: 2, thanks: 1 };
+const DEFAULT_DAYS: Partial<Record<EmailKind, number>> = { checkin: 1, arrival: 2, thanks: 1 };
 const DEFAULT_DISCOUNT = { enabled: true, percent: 10, months: 12 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -357,6 +370,8 @@ export type EmailExtras = {
   voucher?: { code: string; percent: number; validTo: string } | null;
   /** Komerční e-maily: odkaz na odhlášení. */
   unsubscribeUrl?: string;
+  /** Check-in: odkaz na formulář, kolik osob vyplnit a jestli jde o připomínku. */
+  checkin?: { link: string; people: number; missing: number; reminder?: boolean };
 };
 
 /* ---------- HTML ---------- */
@@ -575,7 +590,15 @@ export function renderEmailParts(
     body = `${stayBlock(d)}${paymentBlock(d, x, t)}<p style="margin:0 0 20px;font-size:14px;${MUTED}">Příjezd od ${esc(d.checkInTime)}, odjezd do ${esc(d.checkOutTime)}.</p>${button(x.link, x.payment && !d.paid && !d.demo ? "Zobrazit platbu a QR kód" : "Zobrazit rezervaci")}${code}`;
   else if (kind === "paid")
     body = `${stayBlock(d)}<p style="margin:0 0 20px;font-size:14px;${MUTED}">Příjezd od ${esc(d.checkInTime)}, odjezd do ${esc(d.checkOutTime)}.</p>${button(x.link, "Zobrazit rezervaci")}${code}`;
-  else if (kind === "arrival")
+  else if (kind === "checkin") {
+    const c = x.checkin ?? { link: x.link, people: d.guests, missing: d.guests };
+    const who = c.people === 1 ? "za sebe" : `za ${c.people} ${plural(c.people, "osobu", "osoby", "osob")}`;
+    body = `${
+      c.reminder
+        ? `<p style="${P}"><strong>Připomínka:</strong> ${t("dnes přijíždíš", "dnes přijíždíte")} a v check-inu ještě ${c.missing === 1 ? "chybí 1 osoba" : `chybí ${c.missing} ${plural(c.missing, "osoba", "osoby", "osob")}`}.</p>`
+        : ""
+    }<div style="${BOX}"><strong>Online check-in</strong> — údaje ${who}: jméno, datum narození, adresa a číslo dokladu.</div><p style="margin:0 0 16px">${button(c.link, "Vyplnit check-in")}</p><p style="margin:0 0 16px;font-size:13px;${MUTED}">Údaje se ukládají šifrovaně a vidí je jen ubytovatel. Odkaz platí do konce pobytu.</p>${contactLine(site)}`;
+  } else if (kind === "arrival")
     body = `${arrivalBlock(d, site, x, t)}${contactLine(site)}<p style="margin:20px 0 0">${button(x.link, "Zobrazit rezervaci")}</p>`;
   else if (kind === "cancelled")
     body = `<div style="${BOX}"><strong>Zrušený termín:</strong> <s>${fmt(d.startDate)} – ${fmt(d.endDate)}</s></div>${
