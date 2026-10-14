@@ -11,6 +11,8 @@ import {
   defaultsOf,
   parseEmailSettings,
   parseLocks,
+  handoverOf,
+  type LockType,
   renderEmailParts,
   serializeEmailSettings,
   switchTone,
@@ -145,8 +147,14 @@ export function AutomationSettings({ form, set }: { form: Site; set: SetField })
         title="Příjezd a zámky"
         hint={`Posílá se hostům v e-mailu Před příjezdem (${settings.arrival.days} ${plural(settings.arrival.days, "den", "dny", "dní")} předem).`}
       >
-        <KeyHandoverCard value={form.keyHandover === "key" ? "key" : "code"} onChange={(v) => set("keyHandover", v)} />
-        {form.keyHandover !== "key" && <LocksCard value={form.locks} onChange={(v) => set("locks", v)} />}
+        <KeysCard
+          value={form.locks}
+          handover={form.keyHandover}
+          onChange={(locks, handover) => {
+            set("locks", locks);
+            if (handover !== form.keyHandover) set("keyHandover", handover);
+          }}
+        />
         <ArrivalCard form={form} set={set} />
       </Section>
     </div>
@@ -536,101 +544,181 @@ function NumberField({
   );
 }
 
-const HANDOVER = [
-  { value: "code", title: "Elektronický zámek", text: "Host dostane kód (u rezervace nebo stálé kódy níže) v e-mailu Před příjezdem." },
-  { value: "key", title: "Fyzický klíč", text: "Klíče předáváš osobně nebo jinak — kódy se u rezervací nedoplňují." },
-] as const;
+const KEY_TYPES: Record<LockType, string> = { code: "Elektronický zámek", box: "Schránka na klíče", key: "Fyzický klíč" };
 
-function KeyHandoverCard({ value, onChange }: { value: "code" | "key"; onChange: (v: "code" | "key") => void }) {
+/** Schránka na klíče (malý trezor s klávesnicí) */
+function BoxIcon({ className = "" }: { className?: string }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
-      <div>
-        <h3 className="font-semibold">Předání klíčů</h3>
-        <p className="text-sm text-soft">Podle toho se u rezervací doplňuje kód k zámku, nebo ne.</p>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Předání klíčů">
-        {HANDOVER.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={value === o.value}
-            onClick={() => onChange(o.value)}
-            className={`flex flex-col items-start justify-start rounded-xl border px-4 py-3 text-left transition ${
-              value === o.value ? "border-pine bg-pine/5 ring-1 ring-pine" : "border-line hover:border-ink/30"
-            }`}
-          >
-            <span className="flex items-center gap-2 font-medium">
-              {o.value === "code" ? <Icon name="lock" size={16} className="text-pine" /> : <KeyIcon className="h-4 w-4 text-pine" />}
-              {o.title}
-            </span>
-            <span className="mt-1 block text-xs text-soft">{o.text}</span>
-          </button>
-        ))}
-      </div>
-      {value === "key" && (
-        <p className="text-xs text-soft">Jak a kde si host klíče vyzvedne, napiš do Informací k příjezdu — pošlou se mu v e-mailu.</p>
-      )}
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <rect x="5" y="3" width="14" height="18" rx="2.5" />
+      <path d="M9 8h.01M12 8h.01M15 8h.01M9 11h.01M12 11h.01M15 11h.01M10 16h4" />
+    </svg>
   );
 }
 
-function LocksCard({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const TypeIcon = ({ type, className }: { type: LockType; className: string }) =>
+  type === "code" ? <Icon name="lock" size={14} className={className} /> : type === "box" ? <BoxIcon className={`h-3.5 w-3.5 ${className}`} /> : <KeyIcon className={`h-3.5 w-3.5 ${className}`} />;
+
+const emptyLock = (type: LockType): Lock => ({ type, mode: "fixed", name: "", code: "", note: "" });
+
+/**
+ * Klíče a přístup: libovolná kombinace elektronických zámků a fyzických klíčů.
+ * Zámek má stálý kód (zadá se tady), nebo kód pro každého hosta (přidělí se
+ * u rezervace). Fyzický klíč má pokyn, kde si ho host vyzvedne. Všechno odejde
+ * v e-mailu Před příjezdem. keyHandover se odvodí samo (jen fyzické klíče = "key").
+ */
+function KeysCard({ value, handover, onChange }: { value: string; handover: string; onChange: (locks: string, handover: "code" | "key") => void }) {
   // Rozepsané řádky (i prázdné) drží komponenta, uloží se jen vyplněné
-  const [rows, setRows] = useState<Lock[]>(() => {
-    const saved = parseLocks(value);
-    return saved.length ? saved : [{ name: "", code: "" }];
-  });
+  const [rows, setRows] = useState<Lock[]>(() => parseLocks(value));
   const commit = (next: Lock[]) => {
     setRows(next);
-    onChange(
-      JSON.stringify(next.map((l) => ({ name: l.name.trim(), code: l.code.trim() })).filter((l) => l.name || l.code)),
-    );
+    const clean = parseLocks(JSON.stringify(next));
+    onChange(JSON.stringify(clean), handoverOf(clean, handover));
   };
+  const update = (i: number, patch: Partial<Lock>) => commit(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  // Nový prázdný řádek se neuloží, dokud se nevyplní — „pro každého hosta“ se ale uloží hned
+  const add = (type: LockType) => setRows([...rows, emptyLock(type)]);
+  const full = rows.length >= 10;
+
   return (
-    <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
-      <div>
-        <h3 className="font-semibold">Kódy k zámkům</h3>
-        <p className="text-sm text-soft">
-          Stálé kódy (vchod, branka, schránka na klíče). Kód zadaný přímo u rezervace má přednost.
-        </p>
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold">Klíče a přístup</h3>
+          <p className="text-sm text-soft">Jak se host dostane dovnitř. Všechno mu pošleme v e-mailu Před příjezdem.</p>
+        </div>
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          {(
+            [
+              ["code", "Zámek"],
+              ["box", "Schránka"],
+              ["key", "Klíč"],
+            ] as const
+          ).map(([type, short]) => (
+            <button
+              key={type}
+              type="button"
+              disabled={full}
+              onClick={() => add(type)}
+              aria-label={`Přidat: ${KEY_TYPES[type].toLowerCase()}`}
+              className="btn-ghost !gap-1.5 !px-2 !py-2 text-sm disabled:opacity-40 sm:!px-3.5"
+            >
+              <span className="text-base leading-none text-pine">+</span>
+              <TypeIcon type={type} className="text-pine max-sm:hidden" />
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{KEY_TYPES[type]}</span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {rows.length === 0 && (
+        <p className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-sm text-soft">
+          {handover === "key"
+            ? "Klíče předáváš osobně. Přidej klíč nebo zámek, ať host ví, jak se dostane dovnitř."
+            : "Zatím žádný zámek ani klíč — kód k zámku přidělíš u každé rezervace."}
+        </p>
+      )}
+
       {rows.map((l, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <input
-            className="field min-w-0 flex-1"
-            placeholder="Např. Vchod"
-            maxLength={40}
-            value={l.name}
-            onChange={(e) => commit(rows.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))}
-          />
-          <input
-            className="field tabular-nums"
-            style={{ width: "8rem" }}
-            placeholder="Kód"
-            maxLength={40}
-            value={l.code}
-            onChange={(e) => commit(rows.map((r, j) => (j === i ? { ...r, code: e.target.value } : r)))}
-          />
-          <button
-            type="button"
-            aria-label="Odebrat zámek"
-            onClick={() => commit(rows.length > 1 ? rows.filter((_, j) => j !== i) : [{ name: "", code: "" }])}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl text-soft transition hover:bg-bg hover:text-coral"
-          >
-            ×
-          </button>
+        <div key={i} className="space-y-2.5 rounded-xl border border-line p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pine/10 text-pine">
+                <TypeIcon type={l.type} className="" />
+              </span>
+              {KEY_TYPES[l.type]}
+            </span>
+            <button
+              type="button"
+              aria-label={`Odebrat ${KEY_TYPES[l.type].toLowerCase()}`}
+              onClick={() => commit(rows.filter((_, j) => j !== i))}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-soft transition hover:bg-bg hover:text-coral"
+            >
+              ×
+            </button>
+          </div>
+
+          {l.type !== "key" ? (
+            <>
+              <div className="flex rounded-xl bg-bg p-1 text-sm" role="radiogroup" aria-label="Kód k zámku">
+                {(
+                  [
+                    ["fixed", "Stálý kód"],
+                    ["stay", "Pro každého hosta"],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={l.mode === m}
+                    onClick={() => update(i, { mode: m })}
+                    className={`flex-1 rounded-lg px-3 py-1.5 font-medium transition ${l.mode === m ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="field min-w-0 flex-1"
+                  placeholder={l.type === "box" ? "Např. Schránka u dveří" : "Např. Vchod, branka"}
+                  aria-label={l.type === "box" ? "Název schránky" : "Název zámku"}
+                  maxLength={40}
+                  value={l.name}
+                  onChange={(e) => update(i, { name: e.target.value })}
+                />
+                {l.mode === "fixed" && (
+                  <input
+                    className="field shrink-0 tabular-nums"
+                    style={{ width: "8rem" }}
+                    placeholder="Kód"
+                    aria-label="Kód"
+                    maxLength={40}
+                    value={l.code}
+                    onChange={(e) => update(i, { code: e.target.value })}
+                  />
+                )}
+              </div>
+              {l.type === "box" && (
+                <input
+                  className="field"
+                  placeholder="Kde je — např. vlevo od vchodových dveří"
+                  aria-label="Kde je schránka"
+                  maxLength={200}
+                  value={l.note}
+                  onChange={(e) => update(i, { note: e.target.value })}
+                />
+              )}
+              <p className="text-xs text-soft">
+                {l.mode === "fixed"
+                  ? "Stejný kód dostane každý host."
+                  : "Každý host dostane vlastní kód — přidělíš ho u rezervace a připomeneme ti ho před příjezdem."}
+              </p>
+            </>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <input
+                className="field"
+                placeholder="Např. Klíč od chaty"
+                aria-label="Název klíče"
+                maxLength={40}
+                value={l.name}
+                onChange={(e) => update(i, { name: e.target.value })}
+              />
+              <input
+                className="field"
+                placeholder="Kde je — např. ve schránce u branky"
+                aria-label="Kde si host klíč vyzvedne"
+                maxLength={200}
+                value={l.note}
+                onChange={(e) => update(i, { note: e.target.value })}
+              />
+            </div>
+          )}
         </div>
       ))}
-      {rows.length < 10 && (
-        <button
-          type="button"
-          onClick={() => setRows([...rows, { name: "", code: "" }])}
-          className="text-sm font-medium text-pine hover:underline"
-        >
-          + Přidat zámek
-        </button>
-      )}
     </div>
   );
 }

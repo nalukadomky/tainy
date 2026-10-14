@@ -198,19 +198,56 @@ export const arrivalDaysOf = (site: { emailSettings?: string } | null | undefine
 
 /* ---------- Kódy k zámkům ---------- */
 
-export type Lock = { name: string; code: string };
+/**
+ * Klíč k ubytování: elektronický zámek, schránka na klíče (kód + kde je),
+ * nebo fyzický klíč s pokynem, kde je. Zámek a schránka mají buď stálý kód
+ * (fixed, zadaný tady), nebo kód pro každého hosta zvlášť (stay — přidělí se
+ * u rezervace, Reservation.accessCode).
+ */
+export type LockType = "code" | "box" | "key";
+/** Typy s kódem (elektronický zámek, schránka na klíče). */
+export const hasCode = (t: LockType) => t !== "key";
+export type CodeMode = "fixed" | "stay";
+export type Lock = { type: LockType; mode: CodeMode; name: string; code: string; note: string };
 
 export function parseLocks(raw: string | null | undefined): Lock[] {
   try {
     const list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) return [];
     return list
-      .map((l) => ({ name: str(l?.name, 40, "").trim(), code: str(l?.code, 40, "").trim() }))
-      .filter((l) => l.name || l.code)
+      .map((l) => {
+        const type: LockType = l?.type === "key" || l?.type === "box" ? l.type : "code";
+        const mode: CodeMode = hasCode(type) && l?.mode === "stay" ? "stay" : "fixed";
+        return {
+          type,
+          mode,
+          name: str(l?.name, 40, "").trim(),
+          code: hasCode(type) && mode === "fixed" ? str(l?.code, 40, "").trim() : "",
+          note: type !== "code" ? str(l?.note, 200, "").trim() : "",
+        };
+      })
+      .filter((l) => l.name || l.code || l.note || l.mode === "stay")
       .slice(0, 10);
   } catch {
     return [];
   }
+}
+
+/**
+ * Přiděluje se kód ke každé rezervaci? Ano, když je zámek „pro každého hosta“, nebo
+ * (starší nastavení) když web nemá žádný zámek ani klíč a nepředává fyzický klíč.
+ */
+export function needsStayCode(site: { locks?: string | null; keyHandover?: string | null } | null | undefined): boolean {
+  if (!site || site.keyHandover === "key") return false;
+  const locks = parseLocks(site.locks);
+  if (!locks.length) return true;
+  return locks.some((l) => hasCode(l.type) && l.mode === "stay");
+}
+
+/** Předání klíčů podle seznamu: jen fyzické klíče = "key" (u rezervací se kód nedoplňuje). */
+export function handoverOf(locks: Lock[], fallback: string): "code" | "key" {
+  if (!locks.length) return fallback === "key" ? "key" : "code";
+  return locks.some((l) => hasCode(l.type)) ? "code" : "key";
 }
 
 /* ---------- Proměnné v textu ---------- */
@@ -465,18 +502,21 @@ function arrivalBlock(d: StayMail, site: EmailSite, x: EmailExtras, t: Tone): st
   rows.push(
     `<strong>Příjezd:</strong> ${fmt(d.startDate)} od ${esc(d.checkInTime)} · <strong>odjezd:</strong> ${fmt(d.endDate)} do ${esc(d.checkOutTime)}`,
   );
-  // Fyzický klíč: žádné kódy (jak se klíč předá, píše majitel do informací k příjezdu)
-  const keys = site.keyHandover === "key";
-  const locks = keys ? [] : parseLocks(site.locks);
-  if (x.accessCode && !keys)
-    rows.push(
-      `<strong>Kód k zámku:</strong> <span style="font-size:17px;letter-spacing:.08em"><strong>${esc(x.accessCode)}</strong></span>`,
-    );
-  else
-    for (const l of locks)
-      rows.push(
-        `<strong>${esc(l.name || "Kód")}:</strong> <span style="font-size:17px;letter-spacing:.08em"><strong>${esc(l.code)}</strong></span>`,
-      );
+  // Elektronické zámky: stálý kód, nebo kód přidělený k téhle rezervaci.
+  // Fyzické klíče: kde si je host vyzvedne.
+  const locks = parseLocks(site.locks);
+  const big = (code: string) => `<span style="font-size:17px;letter-spacing:.08em"><strong>${esc(code)}</strong></span>`;
+  const stayCode = x.accessCode?.trim() ?? "";
+  if (site.keyHandover !== "key" && !locks.some((l) => hasCode(l.type)) && stayCode)
+    rows.push(`<strong>Kód k zámku:</strong> ${big(stayCode)}`); // starší nastavení bez zámků
+  for (const l of locks.filter((l) => hasCode(l.type))) {
+    const code = l.mode === "stay" ? stayCode : l.code;
+    const label = l.name || (l.type === "box" ? "Schránka na klíče" : "Kód k zámku");
+    const where = l.type === "box" && l.note ? ` · ${esc(l.note)}` : "";
+    if (code) rows.push(`<strong>${esc(label)}:</strong> ${big(code)}${where}`);
+  }
+  for (const l of locks.filter((l) => l.type === "key"))
+    rows.push(`<strong>${esc(l.name || "Klíč")}:</strong> ${esc(l.note || "předáme osobně")}`);
   if (site.wifiName.trim() || site.wifiPassword.trim())
     rows.push(
       `<strong>Wi‑Fi:</strong> ${esc(site.wifiName.trim())}${site.wifiPassword.trim() ? ` · heslo <strong>${esc(site.wifiPassword.trim())}</strong>` : ""}`,

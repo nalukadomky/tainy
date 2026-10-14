@@ -6,7 +6,7 @@ import type { Repeat } from "@/lib/costs";
 import { plural, pricedCategories } from "@/lib/pricing";
 import { DELETED_GUEST, describeCounts, parseCategories, parseCounts } from "@/lib/guests";
 import { stayTimes } from "@/lib/stay";
-import { parseEmailSettings } from "@/lib/email-templates";
+import { needsStayCode, parseEmailSettings } from "@/lib/email-templates";
 
 export type Unit = "pct" | "czk";
 
@@ -171,8 +171,8 @@ export type Reservation = {
   arrivalCodeMailAt?: string | null;
 };
 
-/** Předává se kód k zámku (ne fyzický klíč) — jen pak má smysl kód u rezervace. */
-export const usesLockCodes = (site: Pick<Site, "keyHandover"> | null | undefined) => site?.keyHandover !== "key";
+/** Přiděluje se kód k zámku ke každé rezervaci zvlášť — jen pak má smysl kód u rezervace. */
+export const usesLockCodes = (site: Pick<Site, "keyHandover" | "locks"> | null | undefined) => needsStayCode(site);
 
 /** Hláška po změně stavu, že hostovi za chvíli odejde e-mail (stejné podmínky jako lib/guest-mails.ts). */
 export function statusMailNote(r: Reservation, status: Reservation["status"], site: Pick<Site, "emailSettings"> | null): string | null {

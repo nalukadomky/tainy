@@ -6,7 +6,6 @@ import { guestsLabel, usesLockCodes, type Reservation, type Site } from "@/lib/a
 import {
   arrivalDaysOf,
   parseEmailSettings,
-  parseLocks,
   renderEmail,
   SCHEDULED_TIME,
   type EmailKind,
@@ -456,7 +455,7 @@ export function MailTimeline({
           content={current.mail ?? preview(current, r, site)}
           loading={!!current.at && !current.mail && !loaded}
           onSendNow={current.sendNow ? (code) => sendNow(current.kind, code) : undefined}
-          needsCode={usesLockCodes(site) && !r.accessCode.trim() && !parseLocks(site?.locks).some((l) => l.code.trim())}
+          needsCode={usesLockCodes(site) && !r.accessCode.trim()}
           onClose={() => setOpen(null)}
         />
       )}
