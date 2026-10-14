@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getUser, deny } from "@/lib/auth";
 import { IMPORT_LIMITS, importEnabled } from "@/lib/import/flag";
 import { createSite } from "@/lib/create-site";
+import { EARLY_ACCESS_DENIED, mayCreateSite } from "@/lib/early-access";
 import { storeSitePhoto } from "@/lib/site-photos";
 import { safeFetch } from "@/lib/safe-fetch";
 import { geocodeAddress } from "@/lib/geocode";
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const user = await getUser();
   if (!user) return deny(401);
   if (!importEnabled()) return deny(403);
+  if (!(await mayCreateSite(user))) return NextResponse.json(EARLY_ACCESS_DENIED, { status: 403 });
 
   const job = await prisma.importJob.findUnique({ where: { id: (await params).id } });
   if (!job || job.ownerId !== user.id) return deny(404);

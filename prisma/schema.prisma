@@ -384,3 +384,25 @@ model ImportJob {
 
   @@index([ownerId, createdAt])
 }
+
+/// Žádost o přístup do aplikace před veřejným spuštěním (early access).
+model EarlyAccessRequest {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String    @default("")
+  /// chata | tiny house | apartmán | glamping | jiné
+  propertyType String    @default("")
+  website      String    @default("")
+  /// Odkud žádost přišla: landing | register | onboarding | import
+  source       String    @default("")
+  /// SHA-256 IP adresy (jen kvůli limitu žádostí, IP se neukládá)
+  ipHash       String    @default("")
+  /// Kdy dal souhlas se zpracováním osobních údajů (doklad pro GDPR)
+  consentAt    DateTime?
+  createdAt    DateTime  @default(now())
+  /// Kdy jsme poslali přístup (označí se ručně ve správě)
+  invitedAt    DateTime?
+
+  @@index([createdAt])
+  @@index([ipHash, createdAt])
+}

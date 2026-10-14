@@ -41,6 +41,11 @@ export default function FinalizePage() {
           body: raw, // ownerId doplní server ze session
         });
         const data = await res.json();
+        if (data?.code === "early_access") {
+          // tainy zatím není veřejné — místo webu žádost o přístup
+          router.replace("/early-access?z=onboarding");
+          return;
+        }
         if (!res.ok) {
           setMsg(data.error ?? "Web se nepodařilo vytvořit. Zkus to prosím znovu.");
           return;

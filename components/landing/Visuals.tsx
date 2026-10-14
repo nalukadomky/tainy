@@ -50,7 +50,7 @@ const BOOKED = "#ddd3c1";
 const SEL = "var(--pine)";
 
 /**
- * Přesná podoba výběru termínu z rezervace (components/DayPicker.tsx), jen zmenšená:
+ * Podoba výběru termínu z rezervace (components/DayPicker.tsx), zmenšená a bez cen:
  * půldny jako úhlopříčně rozdělené buňky, obsazeno béžově, vybraný pobyt barvou webu.
  * Vybraný pobyt 12.–15., obsazeno 5.–8. (odjezd 8. dopoledne).
  */
@@ -89,19 +89,13 @@ export function MiniDayPicker() {
           const full = h.am === BOOKED && h.pm === BOOKED;
           const edge = h.am === SEL || h.pm === SEL;
           const free = h.am === "transparent" && h.pm === "transparent";
-          const weekend = (lead + i) % 7 >= 4;
           return (
             <span
               key={d}
               className={`flex aspect-square flex-col items-center justify-center rounded-[5px] leading-none ${full ? "text-soft/50" : "text-ink"} ${edge ? "font-semibold" : ""}`}
               style={free ? undefined : { background: `linear-gradient(to bottom right, ${h.am} 50%, ${h.pm} 50%)` }}
             >
-              <span className={`text-[9px] tabular-nums ${h.am === SEL ? "text-white drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]" : ""}`}>{d}</span>
-              {h.pm !== BOOKED && (
-                <span className={`mt-[1px] text-[6px] font-medium tabular-nums ${h.pm === SEL ? "text-white" : "text-ink/60"}`}>
-                  {weekend ? "3,9k" : "3,5k"}
-                </span>
-              )}
+              <span className={`text-[10px] tabular-nums ${h.am === SEL ? "text-white drop-shadow-[0_1px_2px_rgba(30,42,32,0.9)]" : ""}`}>{d}</span>
             </span>
           );
         })}
@@ -119,14 +113,14 @@ export function HeroVisual() {
           <span className="h-2 w-2 rounded-full bg-[#e4ddcf]" />
           <span className="h-2 w-2 rounded-full bg-[#e4ddcf]" />
           <span className="h-2 w-2 rounded-full bg-[#e4ddcf]" />
-          <span className="ml-3 rounded-md bg-surface px-2.5 py-0.5 text-[10px] text-soft">chataulesa.cz</span>
+          <span className="ml-3 rounded-md bg-surface px-2.5 py-0.5 text-[10px] text-soft">tinyvyhlidka.cz</span>
         </div>
         <div className="relative aspect-[16/10]">
-          <Image src="/demo/01-chata-v-lese.jpg" alt="" fill priority sizes="(min-width: 1024px) 480px, 90vw" className="object-cover" />
+          <Image src="/demo/10-tiny-vyhlidka.jpg" alt="" fill priority sizes="(min-width: 1024px) 480px, 90vw" className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
           <div className="absolute bottom-4 right-5 text-right text-white">
-            <p className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Chata U Lesa</p>
-            <p className="mt-0.5 text-xs opacity-90">Roubenka se saunou na kraji Krkonoš</p>
+            <p className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Tiny Vyhlídka</p>
+            <p className="mt-0.5 text-xs opacity-90">Prosklený tiny house s výhledem do krajiny</p>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 px-5 py-3.5">
@@ -153,15 +147,6 @@ export function HeroVisual() {
       </div>
 
       {/* Plovoucí oznámení */}
-      <Chip className="float-slow -top-1 left-[8%] sm:left-[14%]">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-pine/10 text-pine">
-          <Icon name="calendar" size={18} />
-        </span>
-        <span>
-          <span className="block text-[11px] text-soft">Nová rezervace</span>
-          <span className="block text-sm font-semibold">Petra K. · 3 noci</span>
-        </span>
-      </Chip>
       <Chip className="float bottom-4 right-0 sm:-bottom-2 sm:right-2">
         <Qr size={48} className="rounded text-ink" />
         <span>
@@ -172,10 +157,22 @@ export function HeroVisual() {
           </span>
         </span>
       </Chip>
-      <Chip className="float-slow right-[-4px] top-[22%] hidden !px-3 !py-2 sm:flex">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ff5a5f]/12 text-[11px] font-bold text-[#e0484d]">A</span>
-        <span className="text-xs font-medium">Airbnb · kalendář sladěn</span>
-      </Chip>
+      {/* Oznámení vpravo nahoře pod sebou — vznáší se společně */}
+      <div className="float-slow absolute -right-3 top-[22%] z-10 flex flex-col items-end gap-2 sm:-right-8">
+        <Chip className="!relative">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-pine/10 text-pine">
+            <Icon name="calendar" size={18} />
+          </span>
+          <span>
+            <span className="block text-[11px] text-soft">Nová rezervace</span>
+            <span className="block text-sm font-semibold">Petra K. · 3 noci</span>
+          </span>
+        </Chip>
+        <Chip className="!relative hidden !px-3 !py-2 sm:flex">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ff5a5f]/12 text-[11px] font-bold text-[#e0484d]">A</span>
+          <span className="text-xs font-medium">Airbnb · kalendář sladěn</span>
+        </Chip>
+      </div>
     </div>
   );
 }
@@ -194,14 +191,14 @@ export function SiteVisual() {
           <span className="h-2 w-2 rounded-full bg-line" />
           <span className="h-2 w-2 rounded-full bg-line" />
           <span className="h-2 w-2 rounded-full bg-line" />
-          <span className="ml-3 rounded-md bg-surface px-2.5 py-0.5 text-[10px] text-soft">chataulesa.cz</span>
+          <span className="ml-3 rounded-md bg-surface px-2.5 py-0.5 text-[10px] text-soft">tinyvyhlidka.cz</span>
         </div>
         <div className="relative aspect-[16/9]">
-          <Image src="/demo/01-chata-v-lese.jpg" alt="" fill sizes="(min-width: 1024px) 480px, 90vw" className="object-cover" />
+          <Image src="/demo/10-tiny-vyhlidka.jpg" alt="" fill sizes="(min-width: 1024px) 480px, 90vw" className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
           <div className="absolute bottom-4 right-5 text-right text-white">
-            <p className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Chata U Lesa</p>
-            <p className="mt-0.5 text-xs opacity-90">Roubenka se saunou na kraji Krkonoš</p>
+            <p className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Tiny Vyhlídka</p>
+            <p className="mt-0.5 text-xs opacity-90">Prosklený tiny house s výhledem do krajiny</p>
           </div>
         </div>
         <div className="grid grid-cols-[1fr_1.2fr] gap-4 p-4">
@@ -213,12 +210,12 @@ export function SiteVisual() {
             ))}
           </div>
           <div className="space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-pine">O chatě</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-pine">O domku</p>
             <div className="h-1.5 w-full rounded-full bg-line" />
             <div className="h-1.5 w-11/12 rounded-full bg-line" />
             <div className="h-1.5 w-4/5 rounded-full bg-line" />
             <div className="flex flex-wrap gap-1 pt-1.5">
-              {["Sauna", "Krb", "Wi-Fi"].map((a) => (
+              {["Terasa", "Výhled", "Wi-Fi"].map((a) => (
                 <span key={a} className="rounded-full bg-pine/10 px-2 py-0.5 text-[9px] font-medium text-pine">
                   {a}
                 </span>
@@ -240,8 +237,8 @@ export function SiteVisual() {
           <Image src="/demo/03-kamna.jpg" alt="" fill sizes="200px" className="object-cover" />
         </div>
         <div className="space-y-2 p-3">
-          <p className="font-display text-base font-semibold leading-tight text-pine">Chata U Lesa</p>
-          <p className="text-[10px] text-soft">až 6 hostů · 3 ložnice · sauna</p>
+          <p className="font-display text-base font-semibold leading-tight text-pine">Tiny Vyhlídka</p>
+          <p className="text-[10px] text-soft">až 4 hosté · výhled · terasa</p>
           <span className="block rounded-full bg-pine py-2 text-center text-[11px] font-semibold text-white">Vybrat termín</span>
         </div>
       </div>
@@ -341,7 +338,7 @@ export function EmailVisual() {
         <p className="text-[11px] text-soft">Před příjezdem</p>
         <p className="mt-1 text-sm">Kód k zámku</p>
         <p className="font-display text-3xl font-semibold tracking-[0.2em] text-pine">4821</p>
-        <p className="mt-1 text-[11px] text-soft">Wi-Fi: ChataULesa · les2026</p>
+        <p className="mt-1 text-[11px] text-soft">Wi-Fi: TinyVyhlidka · vyhled2026</p>
       </div>
     </div>
   );

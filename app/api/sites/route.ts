@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUser, deny } from "@/lib/auth";
 import { createSite } from "@/lib/create-site";
+import { EARLY_ACCESS_DENIED, mayCreateSite } from "@/lib/early-access";
 
 
 // Vrací pouze weby přihlášeného uživatele (napájí přepínač webů v administraci).
@@ -18,6 +19,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return deny(401);
+
+  if (!(await mayCreateSite(user))) return NextResponse.json(EARLY_ACCESS_DENIED, { status: 403 });
 
   const body = await req.json();
   if (!body.name || !body.pricePerNight) {

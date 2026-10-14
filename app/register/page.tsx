@@ -1,9 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
+import { earlyAccess, validInvite } from "@/lib/early-access";
 
-export default function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ pozvanka?: string }> }) {
+  // Dokud není tainy veřejné, registrace jen s pozvánkou (/register?pozvanka=…)
+  if (earlyAccess() && !(await validInvite((await searchParams).pozvanka))) redirect("/early-access?z=register");
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-10">
       <header className="flex items-center justify-between py-5">

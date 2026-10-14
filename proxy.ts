@@ -8,7 +8,7 @@ import { slugForDomain } from "@/lib/domain-cache";
 // 2) Supabase session a ochrana /admin
 
 /** Části aplikace, které na vlastní doméně webu nemají co dělat → na hlavní adresu aplikace. */
-const APP_ONLY = ["/admin", "/login", "/register", "/auth", "/onboarding", "/zapomenute-heslo", "/uklid"];
+const APP_ONLY = ["/admin", "/login", "/register", "/auth", "/onboarding", "/zapomenute-heslo", "/uklid", "/early-access", "/import"];
 
 async function customDomain(request: NextRequest, host: string): Promise<NextResponse | null> {
   const { pathname } = request.nextUrl;

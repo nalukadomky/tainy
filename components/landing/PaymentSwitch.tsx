@@ -49,7 +49,7 @@ export function PaymentSwitch({ qr }: { qr: React.ReactNode }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-soft">Rezervace potvrzena</p>
-            <p className="mt-1 font-display text-2xl font-semibold">Chata U Lesa</p>
+            <p className="mt-1 font-display text-2xl font-semibold">Tiny Vyhlídka</p>
             <p className="text-sm text-soft">16.–19. října · 2 dospělí, 1 dítě</p>
           </div>
           <span className="shrink-0 rounded-full bg-amber/15 px-2.5 py-1 text-[11px] font-semibold text-[#92600a]">Čeká na platbu</span>

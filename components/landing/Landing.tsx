@@ -3,15 +3,16 @@ import { Logo } from "@/components/Logo";
 import { Icon, type IconName } from "@/components/Icon";
 import { ThemeSwitch } from "@/components/landing/ThemeSwitch";
 import { RotatingWord } from "@/components/landing/RotatingWord";
+import { EarlyAccessForm } from "@/components/landing/EarlyAccessForm";
 import { CleaningVisual, EarningsVisual, EmailVisual, HeroVisual, PaymentVisual, SiteVisual, SyncVisual } from "@/components/landing/Visuals";
 
 // Prezentační web tainy (úvodní stránka). Hlavní výzva všude stejná:
-// měsíc zdarma → průvodce. Barvy jsou v proměnných (PALETTE), takže stránka
+// early access → formulář dole (#early-access); veřejně se zatím nic nezakládá. Barvy jsou v proměnných (PALETTE), takže stránka
 // umí světlou i tmavou variantu se stejným obsahem; nasazená je světlá.
 
-const TRY = "/onboarding";
-const TRY_LABEL = "Vyzkoušet měsíc zdarma";
-const MICRO = "Měsíc zdarma · bez platební karty · web hotový za pár minut";
+const TRY = "#early-access";
+const TRY_LABEL = "Chci early access";
+const MICRO = "Spouštíme brzy · prvním uživatelům měsíc zdarma · přístupy posíláme postupně";
 
 function Header({ dark = false }: { dark?: boolean }) {
   const link = `hover:text-[var(--lp-fg)] ${dark ? "text-white/70" : "text-soft"}`;
@@ -37,10 +38,9 @@ function Header({ dark = false }: { dark?: boolean }) {
           <Link href="/login" className={`text-sm font-medium ${link}`}>
             Přihlásit se
           </Link>
-          <Link href={TRY} className="inline-flex items-center rounded-full bg-[var(--lp-btn)] px-4 py-2.5 text-sm font-semibold text-[var(--lp-btn-fg)] sm:px-5">
-            <span className="sm:hidden">Zkusit zdarma</span>
-            <span className="hidden sm:inline">Vyzkoušet zdarma</span>
-          </Link>
+          <a href={TRY} className="inline-flex items-center rounded-full bg-[var(--lp-btn)] px-4 py-2.5 text-sm font-semibold text-[var(--lp-btn-fg)] sm:px-5">
+            Early access
+          </a>
         </div>
       </div>
     </header>
@@ -133,8 +133,8 @@ const BEFORE = ["Stavebnice webu a k tomu rezervační systém", "Tabulka v Exce
 const AFTER = ["Web s rezervacemi v jednom", "Jeden kalendář sladěný s portály", "E-maily a kódy odcházejí samy", "Přímé rezervace bez provize", "Uklízečka vidí rozpis ve svém odkazu"];
 
 const FAQ: [string, string][] = [
-  ["Potřebuju na zkoušku platební kartu?", "Ne. Web si sestavíš a měsíc používáš zdarma, kartu nikam nezadáváš."],
-  ["Co se stane po zkušebním měsíci?", "Před koncem ti napíšeme a sám se rozhodneš, jestli pokračovat. Nic se nestrhne automaticky."],
+  ["Kdy se dostanu dovnitř?", "tainy spouštíme postupně. Zapiš se o early access a jakmile na tebe přijde řada, pošleme ti přístup e-mailem."],
+  ["Kolik to bude stát?", "Prvním uživatelům dáme první měsíc zdarma. Pak férová měsíční cena bez provizí z rezervací — přesnou cenu pošleme spolu s přístupem."],
   ["Už mám vlastní web. Musím ho zrušit?", "Nemusíš. Buď k němu přidáš tlačítko Rezervovat, nebo ho do tainy přeneseme i s fotkami a texty."],
   ["Pronajímám i přes Airbnb a Booking.com.", "Kalendáře se navzájem sladí, takže se ti termíny nikdy nepřekryjí. Portály můžeš dál používat vedle přímých rezervací."],
   ["Jak hosté platí?", "QR kódem ze své bankovní aplikace, rovnou na tvůj účet a bez poplatků. Brzy přidáme i platbu kartou, Apple Pay a Google Pay přes Stripe — pak si vybereš, co nabídneš, nebo obojí."],
@@ -164,9 +164,9 @@ export function Landing({ light = false }: { light?: boolean }) {
               </span>
             </h1>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Link href={TRY} className="inline-flex items-center justify-center rounded-full bg-[var(--lp-btn)] px-7 py-4 font-semibold text-[var(--lp-btn-fg)]">
+              <a href={TRY} className="inline-flex items-center justify-center rounded-full bg-[var(--lp-btn)] px-7 py-4 font-semibold text-[var(--lp-btn-fg)]">
                 {TRY_LABEL} →
-              </Link>
+              </a>
               <Link href="/demo" className="inline-flex items-center justify-center rounded-full border border-[var(--lp-line-strong)] px-7 py-4 font-semibold hover:border-[var(--lp-faint)]">
                 Prohlédnout demo
               </Link>
@@ -358,15 +358,15 @@ export function Landing({ light = false }: { light?: boolean }) {
           <div className="p-8 sm:p-12">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2c5e3f]">Cena</p>
             <h2 className="mt-4 text-balance font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Měsíc <em className="font-normal text-[#2c5e3f]">zdarma</em>
+              Měsíc <em className="font-normal text-[#2c5e3f]">zdarma</em> pro první
             </h2>
             <p className="mt-4 text-[17px] leading-relaxed text-[#14261b]/70">
-              Pak férová měsíční cena. Z rezervací si nebereme žádnou provizi — co host zaplatí, je tvoje.
+              Kdo se zapíše o early access, má první měsíc zdarma. Pak férová měsíční cena. Z rezervací si nebereme žádnou provizi — co host zaplatí, je tvoje.
             </p>
-            <Link href={TRY} className="mt-8 inline-flex items-center justify-center rounded-full bg-[#14261b] px-7 py-4 font-semibold text-white">
+            <a href={TRY} className="mt-8 inline-flex items-center justify-center rounded-full bg-[#14261b] px-7 py-4 font-semibold text-white">
               {TRY_LABEL} →
-            </Link>
-            <p className="mt-3 text-sm text-[#14261b]/60">Bez platební karty</p>
+            </a>
+            <p className="mt-3 text-sm text-[#14261b]/60">Přístupy posíláme postupně</p>
           </div>
           <ul className="grid content-center gap-3 bg-white/50 p-8 text-[15px] sm:grid-cols-2 sm:p-12">
             {["Vlastní web a doména", "Rezervace s půldny", "QR platby (karty brzy)", "Sladění s Airbnb a Booking", "Automatické e-maily", "Kódy k zámku", "Úklid a úkoly", "Přehled tržeb a nákladů", "Vouchery a slevy", "Podmínky a GDPR"].map((f) => (
@@ -402,7 +402,7 @@ export function Landing({ light = false }: { light?: boolean }) {
       </section>
 
       {/* Závěrečná výzva — světlá karta jako cena */}
-      <section className="px-5 pb-20 sm:pb-28">
+      <section id="early-access" className="scroll-mt-20 px-5 pb-20 sm:pb-28">
         <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] px-6 py-16 text-center text-[#14261b] sm:px-12 sm:py-24" style={{ background: CREAM }}>
           <div
             aria-hidden
@@ -415,12 +415,14 @@ export function Landing({ light = false }: { light?: boolean }) {
             style={{ background: "radial-gradient(circle, #9cc3a6, transparent 70%)" }}
           />
           <h2 className="relative text-balance font-display text-4xl font-semibold tracking-tight sm:text-6xl">
-            Vyzkoušej tainy <em className="font-normal text-[#2c5e3f]">měsíc zdarma</em>
+            Buď mezi <em className="font-normal text-[#2c5e3f]">prvními</em>
           </h2>
-          <p className="relative mx-auto mt-5 max-w-md text-lg text-[#14261b]/70">Web s rezervacemi si sestavíš za pár minut. Platební kartu nepotřebuješ.</p>
-          <Link href={TRY} className="relative mt-9 inline-flex items-center justify-center rounded-full bg-[#14261b] px-8 py-4 font-semibold text-white transition hover:bg-[#2c5e3f]">
-            {TRY_LABEL} →
-          </Link>
+          <p className="relative mx-auto mt-5 max-w-lg text-lg text-[#14261b]/70">
+            tainy spouštíme postupně. Zapiš se a pošleme ti přístup, jakmile na tebe přijde řada. První měsíc zdarma.
+          </p>
+          <div className="relative mt-9">
+            <EarlyAccessForm />
+          </div>
         </div>
       </section>
 

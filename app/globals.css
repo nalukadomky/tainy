@@ -135,6 +135,33 @@ body {
   .reveal { animation: reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
 }
 
+/* Posuvník barvy (výběr vlastní barvy na úvodní stránce) */
+.color-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+.color-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(30, 42, 32, 0.25), 0 2px 6px rgba(30, 42, 32, 0.3);
+}
+.color-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(30, 42, 32, 0.25), 0 2px 6px rgba(30, 42, 32, 0.3);
+}
+
 @keyframes pop {
   0% { transform: scale(0.4); }
   100% { transform: scale(1); }
