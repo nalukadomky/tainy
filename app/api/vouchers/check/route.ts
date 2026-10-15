@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     categories: parseCategories(site.guestCategories, site.pricingMode),
   });
   const quote = quoteForSite(site, start, end, parseCounts(body.guests, categories));
-  const result = applyVoucher(found.rule, found.uses, quote, todayISO());
+  const result = applyVoucher(found.rule, found.uses, quote, todayISO(), { start, end });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({

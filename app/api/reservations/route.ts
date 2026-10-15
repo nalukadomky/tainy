@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       if (typeof body.voucherCode === "string" && body.voucherCode.trim()) {
         const found = await findVoucher(site.id, body.voucherCode, tx);
         if (!found) throw new VoucherError("Tenhle kód voucheru neznáme.");
-        const applied = applyVoucher(found.rule, found.uses, quote, todayISO());
+        const applied = applyVoucher(found.rule, found.uses, quote, todayISO(), { start: startIso, end: endIso });
         if ("error" in applied) throw new VoucherError(applied.error);
         voucher = {
           voucherCode: found.rule.code,

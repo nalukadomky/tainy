@@ -36,7 +36,13 @@ export default async function SitePage({
   // Obsazenost se načítá spolu se stránkou, takže kalendář je vyplněný
   // hned v prvním renderu a neprobliká prázdný.
   // Souřadnice pro „Kde nás najdete“ (u adresy zadané dřív se dohledají jednou)
-  const [booked, geo] = await Promise.all([blockedRanges(site.id, addDays(todayISO(), -40)), ensureGeo(site)]);
+  const [booked, geo, gifts] = await Promise.all([
+    blockedRanges(site.id, addDays(todayISO(), -40)),
+    ensureGeo(site),
+    prisma.giftOffer.count({ where: { siteId: site.id, onSale: true } }),
+  ]);
+  // Na vlastní doméně je web v kořeni, jinak pod /adresa
+  const onDomain = !!site.customDomain && site.domainStatus === "active";
   // Lišta „ukázkový web“ jen pro návštěvníky — majitel (např. přes „Zobrazit web“) vidí čistý web
   const demoBar = site.id === DEMO_SITE_ID && (await getUser())?.id !== site.ownerId;
 
@@ -45,11 +51,14 @@ export default async function SitePage({
       {demoBar && <DemoBar />}
       <SiteView
         booked={booked}
-        site={toSiteViewData({
-          ...site,
-          geo,
-          priceRules: site.priceRules.map((r) => ({ ...r, startDate: toISO(r.startDate), endDate: toISO(r.endDate) })),
-        })}
+        site={{
+          ...toSiteViewData({
+            ...site,
+            geo,
+            priceRules: site.priceRules.map((r) => ({ ...r, startDate: toISO(r.startDate), endDate: toISO(r.endDate) })),
+          }),
+          ...(gifts > 0 && { giftsUrl: onDomain ? "/poukazy" : `/${site.slug}/poukazy` }),
+        }}
       />
     </>
   );

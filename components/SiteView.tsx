@@ -38,6 +38,8 @@ const BLOCK_LABEL: Record<MovableSection, string> = {
 };
 
 export type SiteViewData = {
+  /** Odkaz na stránku dárkových poukazů (jen když je nějaký v nabídce). */
+  giftsUrl?: string;
   slug?: string;
   name: string;
   tagline: string;
@@ -435,9 +437,16 @@ export function SiteView({
           className={`mx-auto flex items-center justify-between py-3.5 ${edge ? EDGE : "max-w-4xl px-5 lg:max-w-6xl lg:px-8 2xl:max-w-7xl"}`}
         >
           <span className="font-display text-xl font-semibold tracking-tight">{site.name || "Tvůj web"}</span>
-          <a href="#rezervace" className="btn-primary !px-5 !py-2 text-sm max-sm:!hidden">
-            Rezervovat
-          </a>
+          <span className="flex items-center gap-4">
+            {site.giftsUrl && (
+              <a href={site.giftsUrl} className="text-sm font-semibold text-pine hover:underline">
+                Dárkové poukazy
+              </a>
+            )}
+            <a href="#rezervace" className="btn-primary !px-5 !py-2 text-sm max-sm:!hidden">
+              Rezervovat
+            </a>
+          </span>
         </div>
       </header>
 

@@ -12,8 +12,8 @@ const APP_ONLY = ["/admin", "/login", "/register", "/auth", "/onboarding", "/zap
 
 async function customDomain(request: NextRequest, host: string): Promise<NextResponse | null> {
   const { pathname } = request.nextUrl;
-  // Rezervace (/r/…), check-in, API a soubory fungují na kterékoli adrese
-  if (pathname.startsWith("/api") || pathname.startsWith("/r/") || pathname.startsWith("/checkin/") || pathname.startsWith("/_next") || /\.[a-z0-9]+$/i.test(pathname)) {
+  // Rezervace (/r/…), check-in, dárkové poukazy, API a soubory fungují na kterékoli adrese
+  if (pathname.startsWith("/api") || pathname.startsWith("/r/") || pathname.startsWith("/checkin/") || pathname.startsWith("/darek/") || pathname.startsWith("/_next") || /\.[a-z0-9]+$/i.test(pathname)) {
     return NextResponse.next();
   }
   if (APP_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

@@ -17,6 +17,10 @@ export type VoucherRule = {
   validTo: string | null;
   maxUses: number | null;
   active: boolean;
+  /** Dárkový poukaz: hodnota se uplatní i na pobyt stejně drahý (zbytek propadá). */
+  gift?: boolean;
+  /** Dárkový víkend: pobyt musí obsahovat noci pá→so a so→ne. */
+  weekend?: boolean;
 };
 
 export type VoucherStatus = "active" | "inactive" | "upcoming" | "expired" | "used-up";
@@ -69,8 +73,11 @@ export function discountBase(quote: Pick<Quote, "nightsTotal" | "fees">): number
 export function discountFor(
   kind: VoucherKind,
   value: number,
-  base: number
+  base: number,
+  gift = false,
 ): { discount: number } | { error: string } {
+  // Dárkový poukaz: odečte se až do výše ceny, dražší pobyt host doplatí
+  if (kind === "czk" && gift) return base > 0 ? { discount: Math.min(value, base) } : { error: "Poukaz jde uplatnit jen na pobyt." };
   if (kind === "czk") {
     if (base <= value) {
       return { error: `Voucher na ${czk(value)} jde uplatnit jen na pobyt dražší než ${czk(value)}.` };
@@ -92,11 +99,27 @@ export function applyVoucher(
   v: VoucherRule,
   uses: number,
   quote: Pick<Quote, "nightsTotal" | "fees">,
-  todayIso: string
+  todayIso: string,
+  stay?: { start: string; end: string },
 ): { discount: number } | { error: string } {
   const status = voucherStatus(v, uses, todayIso);
   if (status !== "active") return { error: STATUS_ERROR[status] };
-  return discountFor(v.kind, v.value, discountBase(quote));
+  if (v.weekend && stay && !hasWeekend(stay.start, stay.end)) {
+    return { error: "Poukaz platí na víkend — vyber pobyt s nocemi z pátku na sobotu a ze soboty na neděli." };
+  }
+  return discountFor(v.kind, v.value, discountBase(quote), v.gift);
+}
+
+/** Obsahuje pobyt noci pá→so a so→ne? (ISO data, odjezd exkluzivně) */
+export function hasWeekend(start: string, end: string): boolean {
+  const day = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
+  const next = (iso: string) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  for (let d = start; d < end; d = next(d)) if (day(d) === 5 && next(next(d)) <= end) return true;
+  return false;
 }
 
 /** Krátký popis hodnoty: „−15 %“ / „−1 000 Kč“. */

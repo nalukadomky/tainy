@@ -11,7 +11,16 @@ import { MIN_CONTRAST, THEMES, contrastWithWhite, normalizeHex, readable, themeH
 
 const SWATCH = 26;
 
-export function ThemePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function ThemePicker({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  /** Úsporně (průvodce poukazem): kód barvy a kontrast jen u vlastní barvy, užší výběr. */
+  compact?: boolean;
+}) {
   const current = themeHex(value);
   const preset = THEMES.find((t) => t.key === value);
   const [text, setText] = useState(current);
@@ -93,7 +102,7 @@ export function ThemePicker({ value, onChange }: { value: string; onChange: (val
       </div>
 
       {open && (
-        <div className="theme-picker rounded-xl border border-line bg-surface p-3 shadow-sm">
+        <div className={`theme-picker rounded-xl border border-line bg-surface p-3 shadow-sm ${compact ? "max-w-[300px]" : ""}`}>
           <HexColorPicker
             color={raw}
             onChange={(hex) => {
@@ -113,7 +122,10 @@ export function ThemePicker({ value, onChange }: { value: string; onChange: (val
         </div>
       )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }} className="text-xs text-soft">
+      <div
+        style={{ display: compact && preset && !open ? "none" : "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}
+        className="text-xs text-soft"
+      >
         <input
           className="rounded-lg border border-line bg-surface font-mono uppercase text-ink outline-none focus:border-pine"
           style={{ width: 84, padding: "4px 8px", fontSize: 12 }}

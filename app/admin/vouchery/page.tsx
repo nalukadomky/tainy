@@ -19,6 +19,7 @@ import {
   type VoucherStatus,
 } from "@/lib/voucher";
 import { ListPageSkeleton } from "@/components/Skeleton";
+import { VoucherTabs } from "@/components/VoucherTabs";
 
 type Voucher = {
   id: string;
@@ -263,14 +264,15 @@ export default function VouchersPage() {
     <div className="space-y-5">
       {toast.node}
       {confirmDlg.node}
+      <VoucherTabs active="codes" />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Vouchery</h1>
-          <p className="mt-1 text-sm text-soft">Slevové kódy a dárkové poukazy, které hosté zadají při rezervaci.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Slevové kódy</h1>
+          <p className="mt-1 text-sm text-soft">Kódy na slevu, které hosté zadají při rezervaci.</p>
         </div>
         {editing === null && (
           <button type="button" className="btn-primary h-10 !px-4 !py-0 text-sm" onClick={startNew}>
-            + Nový voucher
+            + Nový kód
           </button>
         )}
       </div>
@@ -509,12 +511,12 @@ export default function VouchersPage() {
       <div className="space-y-2">
         {withStatus.length === 0 && editing === null && (
           <div className="rounded-2xl border-2 border-dashed border-line bg-surface p-8 text-center">
-            <p className="font-semibold">Zatím žádné vouchery</p>
+            <p className="font-semibold">Zatím žádné slevové kódy</p>
             <p className="mt-1 text-sm text-soft">
-              Vytvoř slevový kód pro akci, věrné hosty nebo dárkový poukaz.
+              Vytvoř slevový kód pro akci nebo věrné hosty. Poukazy k prodeji najdeš v Dárkových poukazech.
             </p>
             <button type="button" className="btn-primary mt-4 h-10 !px-4 !py-0 text-sm" onClick={startNew}>
-              + Nový voucher
+              + Nový kód
             </button>
           </div>
         )}

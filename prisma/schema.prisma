@@ -149,6 +149,8 @@ model Site {
   guestRecords GuestRecord[]
   remittances  TaxRemittance[]
   accessLogs   GuestAccessLog[]
+  giftOffers   GiftOffer[]
+  giftOrders   GiftOrder[]
 
   @@index([ownerId])
 }
@@ -307,6 +309,10 @@ model Voucher {
   maxUses   Int?                           // null = bez omezení
   note      String    @default("")         // interní poznámka majitele
   active    Boolean   @default(true)
+  /// Vznikl prodejem dárkového poukazu (GiftOrder) — v seznamu slevových kódů se neukazuje
+  gift      Boolean   @default(false)
+  /// Dárkový víkend: pobyt musí obsahovat noc z pátku na sobotu a ze soboty na neděli
+  weekend   Boolean   @default(false)
   createdAt DateTime  @default(now())
 
   @@unique([siteId, code])
@@ -480,6 +486,54 @@ model GuestAccessLog {
   action    String
   target    String   @default("")
   createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
+}
+
+/// Dárkový poukaz v nabídce na webu (Vouchery → Dárkové poukazy).
+model GiftOffer {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// value = částka na pobyt, weekend = víkend pá–ne (2 noci) pro `persons` osob
+  kind        String   @default("value")
+  value       Int      @default(0)
+  persons     Int      @default(2)
+  price       Int
+  headline    String   @default("")
+  message     String   @default("")
+  validMonths Int      @default(12)
+  template    String   @default("klasik") // klasik | fotka | minimal | tma
+  color       String   @default("#2c5e3f")
+  photo       String   @default("")
+  onSale      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  orders      GiftOrder[]
+
+  @@index([siteId])
+}
+
+/// Objednávka dárkového poukazu z webu. Po zaplacení vznikne kód (Voucher, gift).
+model GiftOrder {
+  id          String    @id @default(cuid())
+  publicId    String    @unique
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  offerId     String?
+  offer       GiftOffer? @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  /// Snímek poukazu v době nákupu (JSON) — pozdější úprava nabídky ho nemění
+  design      String
+  price       Int
+  buyerName   String
+  buyerEmail  String
+  recipient   String    @default("")
+  dedication  String    @default("")
+  status      String    @default("pending") // pending | paid | cancelled
+  paidAt      DateTime?
+  code        String    @default("")        // kód poukazu (Voucher.code) po zaplacení
+  validTo     DateTime? @db.Date
+  termsAcceptedAt DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([siteId, createdAt])
 }

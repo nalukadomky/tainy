@@ -17,6 +17,8 @@ export function toRule(v: Voucher): VoucherRule {
     validTo: v.validTo ? toISO(v.validTo) : null,
     maxUses: v.maxUses,
     active: v.active,
+    gift: v.gift,
+    weekend: v.weekend,
   };
 }
 

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const siteId = guard.site.id;
 
   const [vouchers, used] = await Promise.all([
-    prisma.voucher.findMany({ where: { siteId }, orderBy: { createdAt: "desc" } }),
+    prisma.voucher.findMany({ where: { siteId, gift: false }, orderBy: { createdAt: "desc" } }),
     prisma.reservation.findMany({
       where: { siteId, voucherCode: { not: "" }, status: { not: "cancelled" } },
       select: { id: true, publicId: true, guestName: true, startDate: true, endDate: true, discount: true, voucherCode: true, status: true },
