@@ -6,10 +6,12 @@ import { Icon } from "@/components/Icon";
 import { GiftVoucherCard } from "@/components/GiftVoucherCard";
 import { czk } from "@/lib/pricing";
 import { giftHeadline, type GiftDesign } from "@/lib/gift";
+import type { LegalKind } from "@/lib/legal";
 
 // Dárkové poukazy na webu ubytování: nabídka a objednávka. Kupující vyplní,
 // pro koho je poukaz a věnování (hned je vidí na poukazu), a kam ho poslat.
-// Po objednání přejde na stránku s platbou QR kódem (/darek/…).
+// Po objednání přejde na stránku s platbou QR kódem (/darek/…). Ve widgetu
+// (embed) zůstává v okně nad webem majitele a podmínky otevírá v okně.
 
 export type ShopOffer = GiftDesign & { id: string };
 
@@ -19,9 +21,12 @@ type Props = {
   base: string; // „/adresa“ nebo „“ na vlastní doméně
   hasTerms: boolean;
   hasPrivacy: boolean;
+  /** Ve widgetu na cizím webu: objednávka zůstane v okně, podmínky přes onOpenDoc. */
+  embed?: boolean;
+  onOpenDoc?: (kind: LegalKind) => void;
 };
 
-export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy }: Props) {
+export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy, embed, onOpenDoc }: Props) {
   const [pick, setPick] = useState<string | null>(offers.length === 1 ? offers[0].id : null);
   const offer = offers.find((o) => o.id === pick) ?? null;
 
@@ -54,7 +59,7 @@ export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy }: Props
           </div>
         </>
       ) : (
-        <Order offer={offer} siteName={siteName} base={base} hasTerms={hasTerms} hasPrivacy={hasPrivacy} onBack={offers.length > 1 ? () => setPick(null) : undefined} />
+        <Order offer={offer} siteName={siteName} base={base} hasTerms={hasTerms} hasPrivacy={hasPrivacy} embed={embed} onOpenDoc={onOpenDoc} onBack={offers.length > 1 ? () => setPick(null) : undefined} />
       )}
     </main>
   );
@@ -66,6 +71,8 @@ function Order({
   base,
   hasTerms,
   hasPrivacy,
+  embed,
+  onOpenDoc,
   onBack,
 }: {
   offer: ShopOffer;
@@ -73,6 +80,8 @@ function Order({
   base: string;
   hasTerms: boolean;
   hasPrivacy: boolean;
+  embed?: boolean;
+  onOpenDoc?: (kind: LegalKind) => void;
   onBack?: () => void;
 }) {
   const router = useRouter();
@@ -105,14 +114,21 @@ function Order({
       setSending(false);
       return setError({ text: data?.error ?? "Objednávku se nepodařilo odeslat. Zkus to prosím znovu.", field: data?.field });
     }
-    router.push(`/darek/${data.token}`);
+    // Ve widgetu: okno nad webem (?embed=1), nebo sekce ve stránce (?embed=sekce)
+    const inline = embed && new URLSearchParams(window.location.search).get("inline") === "1";
+    router.push(`/darek/${data.token}${embed ? `?embed=${inline ? "sekce" : "1"}` : ""}`);
   }
 
-  const doc = (path: string, label: string) => (
+  const doc = (path: string, label: string) =>
+    onOpenDoc ? (
+      <button type="button" onClick={() => onOpenDoc(path === "podminky" ? "terms" : "privacy")} className="underline underline-offset-2 hover:text-ink">
+        {label}
+      </button>
+    ) : (
     <a href={`${base}/${path}`} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-ink">
       {label}
     </a>
-  );
+    );
 
   return (
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -145,7 +161,12 @@ function Order({
       <form onSubmit={submit} noValidate className="rounded-2xl border border-line bg-surface p-5 sm:p-7">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">Dárkový poukaz</p>
         <h1 className="mt-1 font-display text-3xl font-semibold">{giftHeadline(offer)}</h1>
-        <p className="mt-1 font-display text-2xl font-semibold text-pine">{czk(offer.price)}</p>
+        {/* Cenu zvlášť jen když není už v nadpisu (poukaz na částku = nadpis je cena) */}
+        {giftHeadline(offer) === czk(offer.price) ? (
+          <p className="mt-1 text-sm text-soft">Na libovolný pobyt · platí {offer.validMonths} měsíců</p>
+        ) : (
+          <p className="mt-1 font-display text-2xl font-semibold text-pine">{czk(offer.price)}</p>
+        )}
 
         <div className="mt-6 space-y-4">
           <p className="text-sm font-semibold">Na poukaz napíšeme</p>

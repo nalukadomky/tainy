@@ -12,6 +12,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = "Zrušit",
   tone = "danger",
+  wide,
   onConfirm,
   onCancel,
 }: {
@@ -21,6 +22,8 @@ export function ConfirmDialog({
   cancelLabel?: string;
   /** danger = červené potvrzení (mazání, rušení), primary = běžné. */
   tone?: "danger" | "primary";
+  /** Širší okno pro delší obsah (seznamy). */
+  wide?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -43,7 +46,7 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="rise w-full max-w-sm rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5"
+        className={`rise w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-t-3xl bg-surface p-5 pb-8 shadow-2xl sm:rounded-3xl sm:pb-5`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-display text-xl font-semibold">{title}</h2>
@@ -72,6 +75,7 @@ export type ConfirmOptions = {
   confirmLabel: string;
   cancelLabel?: string;
   tone?: "danger" | "primary";
+  wide?: boolean;
 };
 
 /**
@@ -96,6 +100,7 @@ export function useConfirm() {
       confirmLabel={state.opts.confirmLabel}
       cancelLabel={state.opts.cancelLabel}
       tone={state.opts.tone}
+      wide={state.opts.wide}
       onConfirm={() => close(true)}
       onCancel={() => close(false)}
     >

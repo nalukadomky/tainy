@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { newGiftPublicId, newGiftToken, offerDesign, sendGiftOrderMail, sendGiftOwnerMail } from "@/lib/gift-server";
 import { cleanGift } from "@/lib/gift";
 
-// Objednávka dárkového poukazu z webu (bez přihlášení). Kupující pak zaplatí
+// Objednávka dárkového poukazu z webu nebo widgetu (bez přihlášení). Kupující pak zaplatí
 // QR kódem na stránce /darek/<publicId>; poukaz s kódem dostane po potvrzení platby.
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   if (text(body.company, 100)) return NextResponse.json({ error: "Objednávku se nepodařilo odeslat." }, { status: 400 });
 
   const offer = await prisma.giftOffer.findUnique({ where: { id: String(body.offerId ?? "") }, include: { site: true } });
-  if (!offer || !offer.onSale || offer.site.widgetOnly) return NextResponse.json({ error: "Tenhle poukaz už není v nabídce." }, { status: 404 });
+  // Prodává se na webu v tainy i ve widgetu na webu majitele (i u účtu jen s widgetem)
+  if (!offer || !offer.onSale || !offer.site.bankAccount) return NextResponse.json({ error: "Tenhle poukaz už není v nabídce." }, { status: 404 });
 
   const buyerName = text(body.buyerName, 80);
   const buyerEmail = text(body.buyerEmail, 120).toLowerCase();

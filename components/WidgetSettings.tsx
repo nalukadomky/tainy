@@ -6,7 +6,6 @@ import { parseWidgetSettings, serializeWidgetSettings, widgetSnippet, type Widge
 import { themeHex } from "@/lib/theme";
 import { Icon } from "@/components/Icon";
 import { useToast } from "@/components/Toast";
-import { useConfirm } from "@/components/ConfirmDialog";
 import { ThemePicker } from "@/components/ThemePicker";
 import Link from "next/link";
 
@@ -35,46 +34,14 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
   const [label, setLabel] = useState(settings.label);
   const color = themeHex(form.themeColor);
   const toast = useToast();
-  const confirmDlg = useConfirm();
   // Po založení účtu jen s widgetem (?vitej=1) — co udělat jako první
   const [welcome, setWelcome] = useState(false);
   useEffect(() => setWelcome(new URLSearchParams(window.location.search).get("vitej") === "1"), []);
 
-  // Přepnutí mezi „jen widget“ a webem v tainy: uloží se hned a menu se přenačte
-  const [switching, setSwitching] = useState(false);
-  async function switchMode(widgetOnly: boolean) {
-    const ok = await confirmDlg.ask(
-      widgetOnly
-        ? {
-            title: "Používat jen widget?",
-            message: "Web v tainy přestane být veřejný a z menu zmizí Můj web. Fotky a texty zůstanou uložené, web můžeš kdykoli zase zapnout.",
-            confirmLabel: "Jen widget",
-          }
-        : {
-            title: "Vytvořit web v tainy?",
-            message: "Dostaneš i vlastní web s rezervacemi. Widget na tvém webu funguje dál.",
-            confirmLabel: "Vytvořit web",
-            tone: "primary",
-          }
-    );
-    if (!ok) return;
-    setSwitching(true);
-    const res = await fetch(`/api/sites/${form.slug}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetOnly }),
-    }).catch(() => null);
-    if (!res?.ok) {
-      setSwitching(false);
-      toast.show("Změnu se nepodařilo uložit. Zkus to prosím znovu.");
-      return;
-    }
-    window.location.href = widgetOnly ? "/admin/widget" : "/admin/web/builder?panel=galerie";
-  }
-
   const [origin, setOrigin] = useState("https://tainy.cz");
   useEffect(() => setOrigin(window.location.origin), []);
-  const snippet = widgetSnippet(origin, form.slug);
+  const section = settings.mode === "section";
+  const snippet = widgetSnippet(origin, form.slug, settings.mode);
 
   async function copy() {
     try {
@@ -92,7 +59,6 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
   return (
     <div className="space-y-4">
       {toast.node}
-      {confirmDlg.node}
       {welcome && (
         <div className="rise rounded-2xl border border-pine/20 bg-pine/5 p-5">
           <h2 className="font-display text-xl font-semibold">
@@ -113,18 +79,86 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
           </div>
         </div>
       )}
+      {form.widgetOnly && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-pine/30 bg-pine/5 p-4 text-sm">
+          <Icon name="checkCircle" size={18} className="shrink-0 text-pine" />
+          <p className="min-w-0 flex-1">
+            <strong className="font-semibold">Používáš jen widget.</strong>{" "}
+            <span className="text-soft">Web v tainy je vypnutý — rezervace, poukazy, e-maily i check-in běží dál přes widget.</span>
+          </p>
+          <Link href="/admin/nastaveni?sekce=domena" className="font-medium text-pine underline underline-offset-2">
+            Zapnout web v tainy
+          </Link>
+        </div>
+      )}
       <div className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="font-display text-lg font-semibold">Rezervace na tvém vlastním webu</h2>
         <p className="mt-1 text-sm text-soft">
-          {form.widgetOnly ? "Vlož na svůj web" : "Máš už web? Vlož na něj"} tlačítko <strong className="text-ink">{settings.label}</strong>. Hosté si rezervují přímo u tebe a všechno ostatní
-          — kalendář, platby, e-maily i kódy k zámku — běží dál tady v tainy.
+          Hosté si rezervují přímo na tvém webu a všechno ostatní — kalendář, platby, e-maily i kódy k zámku — běží dál tady v tainy. Když
+          prodáváš dárkové poukazy, přibude i záložka Dárkový poukaz.
         </p>
+      </div>
+
+      {/* Plovoucí tlačítko, nebo sekce přímo ve stránce */}
+      <div className="rounded-2xl border border-line bg-surface p-5">
+        <h3 className="font-semibold">Jak se rezervace ukáže na tvém webu</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Jak se rezervace ukáže">
+          {(
+            [
+              ["button", "Plovoucí tlačítko", "Tlačítko v rohu každé stránky. Po kliknutí se nad webem otevře okno s rezervací."],
+              ["section", "Sekce na stránce", "Kalendář s rezervací přímo v obsahu stránky — třeba na stránce Rezervace nebo Ceník."],
+            ] as const
+          ).map(([value, title, text]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={settings.mode === value}
+              onClick={() => update({ mode: value })}
+              className={`rounded-2xl border p-3 text-left transition ${
+                settings.mode === value ? "border-pine bg-pine/5 ring-1 ring-pine" : "border-line hover:border-pine/40"
+              }`}
+            >
+              <ModeSketch mode={value} color={color} />
+              <span className="mt-3 flex items-start gap-3">
+                <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${settings.mode === value ? "border-pine" : "border-line"}`}>
+                  {settings.mode === value && <span className="h-2.5 w-2.5 rounded-full bg-pine" />}
+                </span>
+                <span>
+                  <span className="block font-semibold">{title}</span>
+                  <span className="mt-0.5 block text-sm text-soft">{text}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Vzhled a náhled */}
       <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
         <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
-          <h3 className="font-semibold">Tlačítko</h3>
+          {section && (
+            <>
+              <h3 className="font-semibold">Sekce</h3>
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <input type="checkbox" checked={settings.gifts} onChange={(e) => update({ gifts: e.target.checked })} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--pine)]" />
+                <span>
+                  Záložka Dárkový poukaz
+                  <span className="block text-xs text-soft">Ukáže se, když máš poukazy v prodeji.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <input type="checkbox" checked={settings.floating} onChange={(e) => update({ floating: e.target.checked })} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--pine)]" />
+                <span>
+                  K tomu i plovoucí tlačítko
+                  <span className="block text-xs text-soft">Na všech stránkách, kam vložíš kód — i tam, kde sekce není.</span>
+                </span>
+              </label>
+            </>
+          )}
+          {(!section || settings.floating) && (
+          <>
+          <h3 className={`font-semibold ${section ? "border-t border-line pt-4" : ""}`}>{section ? "Plovoucí tlačítko" : "Tlačítko"}</h3>
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Text tlačítka</span>
             <input
@@ -157,6 +191,8 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
               ))}
             </div>
           </div>
+          </>
+          )}
           <div>
             <span className="mb-1 block text-sm font-medium">Barva</span>
             {/* Bez webu v tainy se barva vybírá tady (jinak ji určuje web v Můj web → Vzhled) */}
@@ -171,14 +207,18 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
           </div>
         </div>
 
-        <WidgetPreview slug={form.slug} label={settings.label} position={settings.position} color={color} />
+        {section ? <SectionPreview slug={form.slug} /> : <WidgetPreview slug={form.slug} label={settings.label} position={settings.position} color={color} />}
       </div>
 
       {/* Kód */}
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
         <div>
           <h3 className="font-semibold">Kód pro tvůj web</h3>
-          <p className="text-sm text-soft">Vlož ho jednou na všechny stránky webu. Tlačítko a jeho text se pak mění tady, kód zůstává stejný.</p>
+          <p className="text-sm text-soft">
+            {section
+              ? "Vlož ho na stránku do místa, kde má rezervace být — v editoru webu jako blok „HTML“ nebo „Vložit kód“. Nastavení se pak mění tady, kód zůstává stejný."
+              : "Vlož ho jednou na všechny stránky webu. Tlačítko a jeho text se pak mění tady, kód zůstává stejný."}
+          </p>
         </div>
         <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-ink px-4 py-3 font-mono text-[13px] leading-relaxed text-white/90">
           {snippet}
@@ -217,7 +257,9 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
               <p>
                 Rezervaci otevře i kterýkoli odkaz nebo tlačítko webu s atributem{" "}
                 <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">data-tainy-open</code>, případně{" "}
-                <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">Tainy.open()</code>. Bez plovoucího tlačítka:{" "}
+                <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">Tainy.open()</code>. Rovnou na dárkové poukazy:{" "}
+                <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">data-tainy-open=&quot;poukaz&quot;</code> nebo{" "}
+                <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">Tainy.open(&quot;poukaz&quot;)</code>. Bez plovoucích tlačítek:{" "}
                 <code className="rounded bg-bg px-1 py-0.5 text-[12px] text-ink">data-button=&quot;false&quot;</code> na značce skriptu.
               </p>
               <p>
@@ -230,20 +272,6 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
         </div>
       </div>
 
-      {/* Jen widget / i web v tainy */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-5">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">{form.widgetOnly ? "Chceš i web v tainy?" : "Máš vlastní web a ten v tainy nepotřebuješ?"}</h3>
-          <p className="text-sm text-soft">
-            {form.widgetOnly
-              ? "Vytvoříme ti web s rezervacemi za pár minut — za stejnou cenu."
-              : "Web v tainy můžeš vypnout a používat jen widget. Fotky a texty zůstanou uložené."}
-          </p>
-        </div>
-        <button type="button" disabled={switching} onClick={() => switchMode(!form.widgetOnly)} className="btn-ghost !px-4 !py-2 text-sm max-sm:w-full">
-          {form.widgetOnly ? "Vytvořit web v tainy" : "Používat jen widget"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -320,6 +348,77 @@ function WidgetPreview({ slug, label, position, color }: { slug: string; label: 
           "Náhled — klikni na tlačítko a vyzkoušej rezervaci."
         )}
       </p>
+    </div>
+  );
+}
+
+/** Malý náčrt režimu (plovoucí tlačítko / sekce ve stránce) pro výběr. */
+function ModeSketch({ mode, color }: { mode: Settings["mode"]; color: string }) {
+  return (
+    <span className="block overflow-hidden rounded-xl border border-line bg-white" aria-hidden>
+      <span className="flex gap-1 border-b border-line px-2.5 py-1.5">
+        {["#ff5f57", "#febc2e", "#28c840"].map((c) => (
+          <span key={c} className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+        ))}
+      </span>
+      <span className="relative block h-28 space-y-1.5 p-3">
+        <span className="mx-auto block h-1.5 w-1/3 rounded bg-black/10" />
+        <span className="mx-auto block h-1 w-1/2 rounded bg-black/[.06]" />
+        {mode === "section" ? (
+          <span className="mx-auto mt-2 block w-3/4 rounded-md border border-line p-1.5">
+            <span className="mb-1 flex h-1.5 overflow-hidden rounded-sm">
+              <span className="w-1/4" style={{ background: color }} />
+              <span className="flex-1 bg-bg" />
+            </span>
+            <span className="grid grid-cols-7 gap-0.5">
+              {Array.from({ length: 14 }, (_, i) => (
+                <span key={i} className="h-1.5 rounded-sm" style={{ background: i === 8 || i === 9 ? color : [3, 4].includes(i) ? "#ddd3c1" : "#f3efe6" }} />
+              ))}
+            </span>
+          </span>
+        ) : (
+          <>
+            <span className="mt-2 block h-10 rounded-md bg-black/[.04]" />
+            <span className="absolute bottom-2.5 right-3 rounded-full px-2.5 py-1 text-[9px] font-semibold text-white" style={{ background: color }}>
+              Rezervovat
+            </span>
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
+
+/** Náhled sekce: skutečná rezervace vložená do zástupné stránky, výška podle obsahu. */
+function SectionPreview({ slug }: { slug: string }) {
+  const [height, setHeight] = useState(560);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin === window.location.origin && e.data?.type === "tainy:height" && e.data.height > 0) setHeight(e.data.height);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      <div className="flex items-center gap-1.5 border-b border-line bg-bg/70 px-3 py-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+        <span className="ml-2 flex-1 truncate rounded-md bg-surface px-2.5 py-0.5 text-center text-[11px] text-soft">tvuj-web.cz/rezervace</span>
+      </div>
+      <div className="max-h-[640px] overflow-y-auto bg-white">
+        <div className="space-y-2 p-5 pb-3" aria-hidden>
+          <div className="h-4 w-1/3 rounded bg-black/15" />
+          <div className="h-2.5 w-2/3 rounded bg-black/[0.08]" />
+        </div>
+        <iframe src={`/embed/${slug}?inline=1`} title="Náhled sekce s rezervací" scrolling="no" className="block w-full border-0" style={{ height }} />
+        <div className="space-y-2 p-5" aria-hidden>
+          <div className="h-2.5 w-full rounded bg-black/[0.08]" />
+          <div className="h-2.5 w-4/5 rounded bg-black/[0.08]" />
+        </div>
+      </div>
+      <p className="border-t border-line px-4 py-2.5 text-xs text-soft">Náhled — takhle bude rezervace vypadat ve stránce. Dá se v ní rovnou vyzkoušet.</p>
     </div>
   );
 }

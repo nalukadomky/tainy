@@ -31,13 +31,14 @@ import { parseEmailSettings, parseLocks, serializeEmailSettings } from "@/lib/em
 import { Icon } from "@/components/Icon";
 import { DomainSettings } from "@/components/DomainSettings";
 import { WidgetSettings } from "@/components/WidgetSettings";
+import { BookingMode } from "@/components/BookingMode";
 
 type Tab = "zakladni" | "cenik" | "pravni" | "domena" | "portaly" | "automatizace" | "widget";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
   zakladni: { label: "Název a kontakt", short: "Název", hint: "Název, e-mail a telefon" },
   cenik: { label: "Ceník a pobyt", short: "Ceník", hint: "Ceny, hosté, pravidla a poplatky" },
   pravni: { label: "Firma a platby", short: "Firma", hint: "IČ, účet, DPH, podmínky a GDPR" },
-  domena: { label: "Doména", short: "Doména", hint: "Vlastní adresa webu" },
+  domena: { label: "Web a doména", short: "Web", hint: "Adresa webu, nebo jen widget" },
   portaly: { label: "Externí rezervace", short: "Portály", hint: "Airbnb, Booking.com a iCal" },
   automatizace: { label: "Automatizace", short: "E-maily", hint: "E-maily hostům a zámky" },
   widget: { label: "Widget na web", short: "Widget", hint: "Rezervace na tvém vlastním webu" },
@@ -52,7 +53,8 @@ export type EditorArea = "settings" | "widget";
 const MAIN_TABS: Tab[] = ["zakladni", "cenik", "pravni", "automatizace", "domena"];
 // Na telefonu se všechny hlavní záložky do řádku nevejdou — Doména je tam v „Další“
 const MOBILE_MORE: Tab[] = ["domena"];
-const MORE_TABS: Tab[] = ["portaly", "widget"];
+// Widget má vlastní stránku v menu (jen u účtu bez webu v tainy) — v nastavení se přepíná ve Web a doména
+const MORE_TABS: Tab[] = ["portaly"];
 const TAB_ORDER: Tab[] = [...MAIN_TABS, ...MORE_TABS];
 
 export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
@@ -62,8 +64,8 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
   const widgetPage = area === "widget";
   // Účet jen s widgetem nemá web v tainy: bez domény a náhledu webu, widget má v menu
   const widgetOnly = !!site?.widgetOnly;
-  const mainTabs = MAIN_TABS.filter((t) => !(widgetOnly && t === "domena"));
-  const moreTabs = MORE_TABS.filter((t) => !(widgetOnly && t === "widget"));
+  const mainTabs = MAIN_TABS;
+  const moreTabs = MORE_TABS;
   const [form, setForm] = useState<Site | null>(null);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -309,7 +311,7 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
       {widgetPage ? (
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Widget na web</h1>
-          <p className="mt-1 text-sm text-soft">Rezervační tlačítko pro tvůj vlastní web.</p>
+          <p className="mt-1 text-sm text-soft">Rezervace na tvém vlastním webu — plovoucí tlačítko, nebo sekce přímo ve stránce.</p>
         </div>
       ) : (
       <>
@@ -408,7 +410,9 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           />
         </>
       ) : tab === "domena" ? (
-        <DomainSettings
+        <div className="space-y-4">
+        <BookingMode form={form} />
+        {!widgetOnly && <DomainSettings
           slug={slug ?? form.slug}
           domain={form.customDomain}
           status={form.domainStatus}
@@ -417,7 +421,8 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
             setSite((s) => (s ? { ...s, ...patch } : s));
             setForm((f) => (f ? { ...f, ...patch } : f));
           }}
-        />
+        />}
+        </div>
       ) : tab === "portaly" ? (
         <ExternalCalendars />
       ) : tab === "automatizace" ? (

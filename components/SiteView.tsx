@@ -379,8 +379,7 @@ export function SiteView({
         <EditSection editing={editing} section="rezervace">
           <section id="rezervace" className="scroll-mt-16 border-t border-line bg-bg">
             {/* Rezervace v užším vystředěném sloupci — kalendář se vejde, nic se zbytečně neroztahuje */}
-            {/* Na širokém displeji vedle kalendáře karta s cenou (BookingWidget aside) */}
-            <div className="mx-auto max-w-[760px] px-5 py-10 sm:py-14 lg:max-w-[1100px]">
+            <div className="mx-auto max-w-[760px] px-5 py-10 sm:py-14">
               <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-center">{title("rezervace")}</h2>
               <p className="mt-2 text-soft sm:text-center">
                 Vyber termín a počet hostů. Uvidíš rovnou konečnou cenu včetně poplatků.
@@ -391,7 +390,6 @@ export function SiteView({
                   initialBooked={booked}
                   onOpenDoc={site.docs ? openDoc : undefined}
                   site={bookingSiteOf(site)}
-                  aside
                 />
               </div>
             </div>

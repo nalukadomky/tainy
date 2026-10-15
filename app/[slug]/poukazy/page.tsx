@@ -33,7 +33,7 @@ export default async function GiftsPage({ params }: { params: Promise<{ slug: st
           </a>
         </div>
       </header>
-      {site.giftOffers.length ? (
+      {site.giftOffers.length && site.bankAccount ? (
         <GiftShop
           siteName={site.name}
           base={base}

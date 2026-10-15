@@ -39,7 +39,8 @@ export default async function SitePage({
   const [booked, geo, gifts] = await Promise.all([
     blockedRanges(site.id, addDays(todayISO(), -40)),
     ensureGeo(site),
-    prisma.giftOffer.count({ where: { siteId: site.id, onSale: true } }),
+    // Poukazy jen s účtem pro QR platbu — bez něj by kupující neměl jak zaplatit
+    site.bankAccount ? prisma.giftOffer.count({ where: { siteId: site.id, onSale: true } }) : 0,
   ]);
   // Na vlastní doméně je web v kořeni, jinak pod /adresa
   const onDomain = !!site.customDomain && site.domainStatus === "active";

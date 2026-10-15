@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { platformAdmins } from "@/lib/early-access";
 import { appUrl, send } from "@/lib/email";
+import { layout } from "@/lib/email-templates";
 
-// Žádost o přístup (early access) z úvodní stránky. Žadateli se nic neposílá
-// (formulář nesmí jít zneužít k rozesílání e-mailů cizím lidem), správcům
-// platformy přijde upozornění. Opakovaný e-mail se jen tiše aktualizuje.
+const NOTIFY = "info@tainy.cz";
+
+// Žádost o přístup (early access) z úvodní stránky. Upozornění jde na
+// info@tainy.cz (a správcům platformy), žadateli jednou krátké poděkování.
+// Poděkování má pevný text bez ničeho, co vyplnil — formulář tak nejde zneužít
+// k rozesílání vlastních zpráv cizím lidem; opakovaný e-mail se jen tiše aktualizuje.
 
 const PER_IP_HOUR = 5;
 const TYPES = ["chata", "tiny house", "apartmán", "glamping", "jiné"];
@@ -47,30 +51,43 @@ export async function POST(req: NextRequest) {
 
   await prisma.earlyAccessRequest.create({ data: { email, ipHash, consentAt: new Date(), ...data } });
 
-  const admins = platformAdmins();
-  if (admins.length) {
-    const total = await prisma.earlyAccessRequest.count();
-    const rows = [
-      ["E-mail", email],
-      ["Jméno", data.name],
-      ["Ubytování", data.propertyType],
-      ["Web", data.website],
-      ["Odkud", data.source],
-    ]
-      .filter(([, v]) => v)
-      .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5a6557">${k}</td><td>${esc(v)}</td></tr>`)
-      .join("");
-    // Upozornění nesmí shodit uložení žádosti
-    await Promise.all(
-      admins.map((to) =>
-        send({
-          to,
-          subject: `Nová žádost o přístup: ${email}`,
-          html: `<p style="font-family:sans-serif">Nová žádost o early access (celkem ${total}).</p><table style="font-family:sans-serif;font-size:14px">${rows}</table><p style="font-family:sans-serif"><a href="${appUrl()}/admin/early-access">Všechny žádosti</a></p>`,
-        }).catch(() => false),
-      ),
-    );
-  }
+  const admins = [...new Set([NOTIFY, ...platformAdmins()])];
+  const total = await prisma.earlyAccessRequest.count();
+  const rows = [
+    ["E-mail", email],
+    ["Jméno", data.name],
+    ["Ubytování", data.propertyType],
+    ["Web", data.website],
+    ["Odkud", data.source],
+  ]
+    .filter(([, v]) => v)
+    .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5a6557">${k}</td><td>${esc(v)}</td></tr>`)
+    .join("");
+  // Upozornění nesmí shodit uložení žádosti
+  await Promise.all(
+    admins.map((to) =>
+      send({
+        to,
+        subject: `Nová žádost o přístup: ${email}`,
+        replyTo: email,
+        html: `<p style="font-family:sans-serif">Nová žádost o early access (celkem ${total}).</p><table style="font-family:sans-serif;font-size:14px">${rows}</table><p style="font-family:sans-serif"><a href="${appUrl()}/admin/early-access">Všechny žádosti</a></p>`,
+      }).catch(() => false),
+    ),
+  );
+
+
+  await send({
+    to: email,
+    subject: "Díky za zájem o tainy",
+    replyTo: NOTIFY,
+    html: layout(
+      `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">Ahoj,</p>
+       <p style="margin:0 0 16px;font-size:15px;line-height:1.6">díky za tvůj zájem o tainy. Aplikaci teď spouštíme postupně a tvoji žádost o přístup máme zapsanou.</p>
+       <p style="margin:0 0 16px;font-size:15px;line-height:1.6">Jakmile bude přihlášení do aplikace možné, dáme ti vědět e-mailem.</p>
+       <p style="margin:0;font-size:15px;line-height:1.6">Tým tainy</p>`,
+      "Díky za zájem o tainy",
+    ),
+  }).catch(() => false);
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

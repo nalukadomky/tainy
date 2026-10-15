@@ -12,9 +12,13 @@ import { toISO } from "@/lib/stay";
 import { greetingName } from "@/lib/vocative";
 import { GiftVoucherCard } from "@/components/GiftVoucherCard";
 import { PrintButton } from "@/components/PrintButton";
+import { EmbedClose } from "@/components/EmbedClose";
+import { EmbedHeight } from "@/components/EmbedHeight";
+import { Icon } from "@/components/Icon";
 
 // Objednávka dárkového poukazu: před zaplacením QR platba, po zaplacení
 // hotový poukaz s kódem (k vytištění / poslání dál). Odkaz zná jen kupující.
+// ?embed=1 = objednávka z widgetu na webu majitele (stránka je v okně nad ním).
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Dárkový poukaz", robots: { index: false, follow: false } };
@@ -24,8 +28,12 @@ const date = (iso: string) => {
   return `${Number(d)}. ${Number(m)}. ${y}`;
 };
 
-export default async function GiftOrderPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function GiftOrderPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ embed?: string }> }) {
   const token = (await params).token;
+  const embedParam = (await searchParams).embed;
+  const embed = embedParam === "1" || embedParam === "sekce";
+  // ?embed=sekce = objednávka ze sekce přímo ve stránce majitele (bez křížku, výška podle obsahu)
+  const inline = embedParam === "sekce";
   // Jen podle tajného klíče — krátké číslo objednávky jde uhodnout
   const order = token.length >= 20 ? await prisma.giftOrder.findUnique({ where: { accessToken: token }, include: { site: true } }) : null;
   if (!order) notFound();
@@ -34,16 +42,32 @@ export default async function GiftOrderPage({ params }: { params: Promise<{ toke
   const paid = order.status === "paid";
   const payment = order.status === "pending" && site.bankAccount ? buildPayment(site.bankAccount, order.price, site.name, order.publicId) : null;
   const qr = payment ? await paymentQrDataUrl(payment) : null;
-  const web = siteUrl(site);
+  // Bez webu v tainy (jen widget) vede rezervace na samostatnou stránku s rezervací
+  const web = site.widgetOnly ? null : siteUrl(site);
+  const bookUrl = embed || !web ? `/embed/${site.slug}${inline ? "?inline=1" : ""}` : `${web}#rezervace`;
 
   return (
-    <div className="min-h-dvh bg-cream print:bg-white" style={themeVars(site.themeColor, site.surfaceTone) as React.CSSProperties}>
+    <div className={`${inline ? "" : "min-h-dvh "}bg-cream print:bg-white`} style={themeVars(site.themeColor, site.surfaceTone) as React.CSSProperties}>
+      {inline && <EmbedHeight />}
       <header className="border-b border-line/70 bg-cream print:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3.5">
-          <a href={web} className="font-display text-xl font-semibold tracking-tight">
-            {site.name}
-          </a>
-          <span className="text-sm text-soft">Objednávka {orderLabel(order.publicId)}</span>
+          {web && !embed ? (
+            <a href={web} className="font-display text-xl font-semibold tracking-tight">
+              {site.name}
+            </a>
+          ) : (
+            <span className="min-w-0 truncate font-display text-xl font-semibold tracking-tight">{site.name}</span>
+          )}
+          {embed ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <a href={`/embed/${site.slug}?tab=poukaz${inline ? "&inline=1" : ""}`} className="text-sm font-medium text-soft hover:text-ink">
+                ← Poukazy
+              </a>
+              {!inline && <EmbedClose />}
+            </div>
+          ) : (
+            <span className="text-sm text-soft">Objednávka {orderLabel(order.publicId)}</span>
+          )}
         </div>
       </header>
 
@@ -56,7 +80,7 @@ export default async function GiftOrderPage({ params }: { params: Promise<{ toke
           </div>
           <div className="mt-6 flex flex-wrap gap-3 print:hidden">
             <PrintButton />
-            <a href={`${web}#rezervace`} className="btn-ghost">
+            <a href={bookUrl} className="btn-ghost">
               Rezervovat pobyt s poukazem
             </a>
           </div>
@@ -72,19 +96,29 @@ export default async function GiftOrderPage({ params }: { params: Promise<{ toke
           <p className="mt-2 text-soft">Pokud jde o omyl, napiš prosím ubytovateli{site.contactEmail ? ` na ${site.contactEmail}` : ""}.</p>
         </main>
       ) : (
-        <main className="mx-auto grid max-w-5xl gap-6 px-5 py-10 md:grid-cols-2">
-          <div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight">Díky, {greetingName(order.buyerName.split(" ")[0])}!</h1>
-            <p className="mt-1.5 text-soft">
-              Objednávka poukazu <strong className="text-ink">{orderLabel(order.publicId)}</strong>
-            </p>
-            <div className="mt-5 rounded-2xl border border-line bg-surface p-5">
-              <dl className="space-y-2 text-sm">
+        <main className="mx-auto max-w-5xl px-5 py-10">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pine text-white">
+              <Icon name="checkCircle" size={24} />
+            </span>
+            <div className="min-w-0">
+              <h1 className="font-display text-3xl font-semibold tracking-tight">Díky, {greetingName(order.buyerName.split(" ")[0])}!</h1>
+              <p className="mt-1 text-soft">
+                Objednávka poukazu <strong className="text-ink">{orderLabel(order.publicId)}</strong> je přijatá. Jakmile ji zaplatíš, pošleme
+                poukaz na <strong className="text-ink">{order.buyerEmail}</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid items-start gap-6 md:grid-cols-2">
+            {/* Co si kupuje: náhled poukazu (kód doplníme po zaplacení) a shrnutí */}
+            <div className="space-y-4">
+              <GiftVoucherCard d={d} site={site.name} />
+              <dl className="space-y-2 rounded-2xl border border-line bg-surface p-5 text-sm">
                 {[
                   ["Poukaz", giftHeadline(d)],
                   ...(order.recipient ? [["Pro", order.recipient]] : []),
                   ["Platí", `${d.validMonths} měsíců od zaplacení`],
-                  ["Poukaz pošleme na", order.buyerEmail],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <dt className="text-soft">{k}</dt>
@@ -97,40 +131,66 @@ export default async function GiftOrderPage({ params }: { params: Promise<{ toke
                 </div>
               </dl>
             </div>
-            <ol className="mt-5 space-y-3 text-sm">
-              {["Zaplať převodem přes QR kód", "Ubytovatel platbu potvrdí", "Poukaz ti přijde e-mailem"].map((t, i) => (
-                <li key={t} className="flex items-center gap-3">
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? "bg-pine text-white" : "bg-line/70 text-soft"}`}>{i + 1}</span>
-                  <span className={i === 0 ? "font-medium" : "text-soft"}>{t}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-          {payment && qr ? (
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="font-display text-lg font-semibold">Zaplať převodem</h2>
-              <p className="mt-1 text-sm text-soft">Načti QR kód v bankovní aplikaci — částka i variabilní symbol se doplní samy.</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr} alt="QR kód pro platbu" width={200} height={200} className="mx-auto mt-4 h-48 w-48 rounded-xl border border-line" />
-              <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
+
+            {/* Jak to bude dál: tři kroky, první rozbalený (platba QR kódem, nebo domluva s ubytovatelem) */}
+            <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
+              <h2 className="font-display text-xl font-semibold">Jak to bude dál</h2>
+              <ol className="mt-5">
                 {[
-                  ["Účet", formatIBAN(payment.iban)],
-                  ["Variabilní symbol", payment.vs],
-                  ["Částka", czk(order.price)],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-4">
-                    <dt className="text-soft">{k}</dt>
-                    <dd className="text-right font-mono text-xs sm:text-sm">{v}</dd>
-                  </div>
+                  {
+                    title: payment ? "Zaplať převodem" : "Domluvíte se na platbě",
+                    body:
+                      payment && qr ? (
+                        <>
+                          <p>Načti QR kód v bankovní aplikaci — částka i variabilní symbol se doplní samy.</p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={qr} alt="QR kód pro platbu" width={200} height={200} className="mt-3 h-44 w-44 rounded-xl border border-line bg-white" />
+                          <dl className="mt-3 space-y-1.5">
+                            {[
+                              ["Účet", formatIBAN(payment.iban)],
+                              ["Variabilní symbol", payment.vs],
+                              ["Částka", czk(order.price)],
+                            ].map(([k, v]) => (
+                              <div key={k} className="flex justify-between gap-4">
+                                <dt>{k}</dt>
+                                <dd className="text-right font-mono text-xs text-ink sm:text-sm">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </>
+                      ) : (
+                        <p>
+                          Ubytovatel se ti ozve na <strong className="text-ink">{order.buyerEmail}</strong> a domluvíte se, jak poukaz zaplatit.
+                        </p>
+                      ),
+                  },
+                  { title: "Ubytovatel platbu potvrdí", body: <p>Obvykle do pár dnů od připsání na účet.</p> },
+                  { title: "Po zaplacení ti přijde poukaz", body: <p>E-mailem, s kódem — připravený k vytištění nebo poslání dál.</p> },
+                ].map((step, i, all) => (
+                  <li key={step.title} className="relative flex gap-4 pb-6 last:pb-0">
+                    {i < all.length - 1 && <span className="absolute left-[15px] top-9 bottom-1 w-px bg-line" aria-hidden />}
+                    <span
+                      className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                        i === 0 ? "bg-pine text-white" : "bg-line/70 text-soft"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 pt-1">
+                      <p className={`font-semibold ${i === 0 ? "text-ink" : "text-soft"}`}>{step.title}</p>
+                      <div className="mt-1 text-sm leading-relaxed text-soft">{step.body}</div>
+                    </div>
+                  </li>
                 ))}
-              </dl>
+              </ol>
+              {site.contactEmail && (
+                <p className="mt-6 border-t border-line pt-4 text-sm text-soft">
+                  Dotazy: <span className="font-medium text-ink">{site.contactEmail}</span>
+                  {site.contactPhone && <> · {site.contactPhone}</>}
+                </p>
+              )}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="font-display text-lg font-semibold">Co bude dál</h2>
-              <p className="mt-1.5 text-sm text-soft">Ubytovatel se ti ozve a domluvíte se na platbě. Po zaplacení ti poukaz přijde e-mailem.</p>
-            </div>
-          )}
+          </div>
         </main>
       )}
     </div>

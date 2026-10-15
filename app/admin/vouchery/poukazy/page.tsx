@@ -69,7 +69,8 @@ export default function GiftVouchersPage() {
   if (siteError || failed || !site || !offers) return <p className="py-16 text-center text-soft">{siteError || "Dárkové poukazy se nepodařilo načíst."}</p>;
 
   const photos = [site.heroPhoto, ...parsePhotos(site.photos ?? "", site.name).map((p) => p.src)].filter((p, i, a): p is string => !!p && a.indexOf(p) === i);
-  const giftsUrl = `${siteUrl(site)}/poukazy`;
+  // Bez webu v tainy (jen widget) má nabídka samostatnou stránku okna widgetu
+  const giftsUrl = site.widgetOnly ? `/embed/${site.slug}?tab=poukaz` : `${siteUrl(site)}/poukazy`;
   const paidOrders = orders.filter((o) => o.status === "paid" || o.status === "used");
   const stats = {
     sold: paidOrders.length,
@@ -89,7 +90,7 @@ export default function GiftVouchersPage() {
     const offer: Offer = { ...cleanGift(saved), id: saved.id, onSale: saved.onSale, sold: editing?.sold ?? 0 };
     setOffers((all) => (editing ? all!.map((x) => (x.id === offer.id ? offer : x)) : [...all!, offer]));
     setWizard(null);
-    toast.show(onSale ? "Poukaz je na webu." : "Poukaz je uložený (zatím skrytý).", "success");
+    toast.show(onSale ? "Poukaz je v nabídce." : "Poukaz je uložený (zatím skrytý).", "success");
     return null;
   }
 
@@ -105,7 +106,7 @@ export default function GiftVouchersPage() {
   async function remove(o: Offer) {
     const ok = await confirm.ask({
       title: `Smazat poukaz „${giftHeadline(o)}“?`,
-      message: "Zmizí z nabídky na webu. Už prodané poukazy zůstanou platné.",
+      message: "Zmizí z nabídky. Už prodané poukazy zůstanou platné.",
       confirmLabel: "Smazat",
       tone: "danger",
     });
@@ -176,7 +177,7 @@ export default function GiftVouchersPage() {
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-xl font-semibold">Nabídka na webu</h2>
+          <h2 className="font-display text-xl font-semibold">{site.widgetOnly ? "Nabídka ve widgetu" : "Nabídka na webu"}</h2>
           {offers.some((o) => o.onSale) && (
             <a href={giftsUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-pine hover:underline">
               Stránka poukazů ↗
@@ -227,7 +228,7 @@ export default function GiftVouchersPage() {
         </div>
         {!site.bankAccount && (
           <p className="flex items-center gap-2 rounded-xl bg-amber/15 px-4 py-2.5 text-sm text-[#92600a]">
-            <Icon name="alert" size={16} /> Doplň číslo účtu v Nastavení → Firma a platby — jinak kupujícím nejde ukázat QR platba.
+            <Icon name="alert" size={16} /> Poukazy se kupujícím zobrazí, až doplníš číslo účtu v Nastavení → Firma a platby — platí se QR kódem.
           </p>
         )}
       </section>

@@ -1,7 +1,13 @@
 "use client";
 
-// Zavírací křížek stránky rezervace otevřené ve widgetu na cizím webu (public/widget.js).
+import { useEffect } from "react";
+
+// Zavírací křížek stránky otevřené ve widgetu na cizím webu (rezervace /r/…, objednávka poukazu /darek/…).
+// Dá widgetu vědět, že okno už neukazuje rezervaci — příště ji načte znovu.
 export function EmbedClose() {
+  useEffect(() => {
+    if (window.parent !== window) window.parent.postMessage({ type: "tainy:away" }, "*");
+  }, []);
   return (
     <button
       type="button"

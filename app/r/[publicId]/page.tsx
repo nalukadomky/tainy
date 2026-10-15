@@ -17,6 +17,7 @@ import { parseEmailSettings } from "@/lib/email-templates";
 import { parsePhotos } from "@/lib/photos";
 import Image from "next/image";
 import { EmbedClose } from "@/components/EmbedClose";
+import { EmbedHeight } from "@/components/EmbedHeight";
 import { checkinToken, guestCryptoReady } from "@/lib/guest-crypto";
 import { checkinOpen, slotsOf } from "@/lib/guestbook-server";
 
@@ -41,7 +42,10 @@ export default async function ReservationPage({
 }) {
   const { publicId } = await params;
   // ?embed=1 = otevřeno v okně widgetu na webu majitele: křížek místo odkazu na web, bez pozvánky na tainy
-  const embed = (await searchParams).embed === "1";
+  const embedParam = (await searchParams).embed;
+  const embed = embedParam === "1" || embedParam === "sekce";
+  // ?embed=sekce = rezervace dokončená v sekci přímo ve stránce majitele (bez křížku, výška podle obsahu)
+  const inline = embedParam === "sekce";
   const reservation = await prisma.reservation.findUnique({
     where: { publicId },
     include: { site: true },
@@ -104,7 +108,8 @@ export default async function ReservationPage({
       }[reservation.status] ?? { label: reservation.status, style: "bg-line/60 text-soft" };
 
   return (
-    <div className="min-h-dvh bg-bg">
+    <div className={inline ? "bg-bg" : "min-h-dvh bg-bg"}>
+      {inline && <EmbedHeight />}
       <header className="border-b border-line/70 bg-cream">
         <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-3.5 md:max-w-5xl">
           {site.widgetOnly || embed ? (
@@ -123,7 +128,7 @@ export default async function ReservationPage({
             <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${state.style}`}>
               {state.label}
             </span>
-            {embed && <EmbedClose />}
+            {embed && !inline && <EmbedClose />}
           </span>
         </div>
       </header>
@@ -142,7 +147,7 @@ export default async function ReservationPage({
             {reservation.status === "cancelled" || expired ? (
               <>
                 Termín je zase volný.{" "}
-                <Link href={embed ? `/embed/${site.slug}` : `/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
+                <Link href={embed ? `/embed/${site.slug}${inline ? "?inline=1" : ""}` : `/${site.slug}#rezervace`} className="underline decoration-line underline-offset-4 hover:text-ink">
                   Zkusit jiný termín
                 </Link>
               </>
