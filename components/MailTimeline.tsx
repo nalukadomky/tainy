@@ -44,7 +44,7 @@ const LABEL: Record<Kind, string> = {
 const PORTALS = ["airbnb", "booking"];
 
 function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
-  if (!r.email.trim() || r.anonymized || PORTALS.includes(r.source)) return [];
+  if (!r.email.trim() || r.anonymized || r.noGuestMail || PORTALS.includes(r.source)) return [];
   const settings = parseEmailSettings(site?.emailSettings);
   const automatic = r.source !== "demo"; // ukázkové rezervace dostanou jen potvrzení
   const upcoming = r.startDate.slice(0, 10) >= todayISO();
@@ -58,6 +58,8 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
     ["paid", r.paidMailAt],
     ["arrival", r.arrivalMailAt],
     ["arrivalCode", r.arrivalCodeMailAt],
+    ["checkin", r.checkinMailAt],
+    ["checkinReminder", r.checkinReminderAt],
     ["cancelled", r.cancelMailAt],
   ];
   for (const [kind, at] of older) if (at && !logged.has(kind)) sent.push({ key: kind, kind, label: LABEL[kind], at });
@@ -83,12 +85,16 @@ function steps(r: Reservation, site: Site | null, log: Sent[]): Step[] {
           ? future
             ? `${fmtSendAt(due)}, jen po zaplacení`
             : "hned po zaplacení"
-          : !r.paidAt
-            ? "neodejde samo — pošli ručně" // zaplaceno před zavedením automatických e-mailů
-            : future
-              ? fmtSendAt(due)
-              : "odchází…";
+          : future
+            ? `odejde samo ${fmtSendAt(due)}`
+            : "odchází…";
       planned.push({ key: "plan-arrival", kind: "arrival", label: LABEL.arrival, plan, sendNow: r.status === "paid" });
+    }
+    // Odkaz na check-in (pošle se jen, dokud host check-in nevyplnil; ručně z karty Check-in)
+    if (site?.checkinEnabled && settings.checkin.enabled && !r.checkinMailAt && !r.checkinDoneAt && !logged.has("checkin")) {
+      const due = cleaningStart(addDays(r.startDate.slice(0, 10), -settings.checkin.days), SCHEDULED_TIME);
+      const plan = r.status === "pending" ? `${fmtSendAt(due)}, jen po zaplacení` : due > new Date() ? `odejde samo ${fmtSendAt(due)}` : "odchází…";
+      planned.push({ key: "plan-checkin", kind: "checkin", label: LABEL.checkin, plan });
     }
   }
   return [...sent, ...planned];
@@ -441,7 +447,7 @@ export function MailTimeline({
                       <span className={`group-hover:underline ${s.at ? "" : "text-soft"}`}>{s.label}</span>
                       <span className="tabular-nums text-soft">
                         {s.at ? fmt(s.at) : s.plan}
-                        {s.sendNow && <span className="ml-2 font-medium text-pine">· poslat hned</span>}
+                        {s.sendNow && <span className="ml-2 font-medium text-pine">· nebo poslat hned</span>}
                       </span>
                     </span>
                     <Icon name="chevronDown" size={14} className="mt-1 -rotate-90 text-soft/70" />

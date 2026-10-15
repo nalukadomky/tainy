@@ -155,6 +155,8 @@ export type Reservation = {
   discount: number;
   note: string;
   source: string;
+  /** Testovací rezervace z vývoje — hostovi se nic neposílá. */
+  noGuestMail?: boolean;
   status: "pending" | "paid" | "cancelled";
   expiresAt: string | null;
   /** Hosté přijíždějí dnes/zítra a úklid po předchozím pobytu není hotový (jen s personálem úklidu). */

@@ -29,6 +29,7 @@ export function accessCodeMail(
     accessCodeSetAt: string | null;
     status: string;
     paidAt?: string | null;
+    noGuestMail?: boolean;
     arrivalMailAt?: string | null;
     arrivalCodeMailAt?: string | null;
   },
@@ -38,8 +39,8 @@ export function accessCodeMail(
   if (r.arrivalCodeMailAt) return { at: new Date(r.arrivalCodeMailAt), sent: true };
   const setAt = r.accessCodeSetAt ? new Date(r.accessCodeSetAt) : null;
   if (r.arrivalMailAt && (!setAt || setAt <= new Date(r.arrivalMailAt))) return { at: new Date(r.arrivalMailAt), sent: true };
-  // Zrušené a starší zaplacené rezervace (bez času zaplacení) se automaticky neposílají
-  if (r.status === "cancelled" || (r.status === "paid" && !r.paidAt)) return null;
+  // Zrušené a testovací rezervace se automaticky neposílají
+  if (r.status === "cancelled" || r.noGuestMail) return null;
   const planned = accessCodeSendAt(r, daysBefore);
   if (!planned) return null;
   return { at: planned > new Date() ? planned : new Date(), sent: false };

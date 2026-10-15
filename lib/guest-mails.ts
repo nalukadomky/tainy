@@ -9,8 +9,10 @@
 //
 // Každý e-mail odejde nanejvýš jednou: před odesláním se „zabere“ atomickým
 // updateMany (paralelní běh ho nepošle podruhé) a při selhání se uvolní.
-// Posílá se jen rezervacím, které změnily stav po zavedení (paidAt / cancelledAt),
-// takže staré rezervace e-maily zpětně nedostanou.
+// E-maily o zaplacení a zrušení jen rezervacím, které změnily stav po zavedení
+// (paidAt / cancelledAt). „Před příjezdem“ a check-in dostanou všechny
+// zaplacené rezervace (i starší bez paidAt). Testovací rezervace z vývoje
+// (noGuestMail) nedostanou nikdy nic.
 
 import type { Prisma, Reservation, Site } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +34,10 @@ const settled = (at: Date) => Date.now() - at.getTime() >= STATUS_MAIL_DELAY - 1
 
 /** Portály píšou hostům samy (a dávají jen přeposílací adresy), ukázky se neposílají. */
 const mailable = (r: Reservation) =>
-  !!r.email.trim() && !r.anonymized && !["airbnb", "booking", "demo"].includes(r.source);
+  !!r.email.trim() && !r.anonymized && !r.noGuestMail && !["airbnb", "booking", "demo"].includes(r.source);
+
+/** Zaplaceno a uplynul odklad na opravu omylu (starší rezervace bez paidAt = zaplaceno dávno). */
+const paidSettled = (r: Reservation) => r.status === "paid" && (!r.paidAt || settled(r.paidAt));
 
 const enabled = (site: Site, kind: EmailKind) => parseEmailSettings(site.emailSettings)[kind].enabled;
 
@@ -70,7 +75,7 @@ async function cancelMail(r: Loaded) {
 }
 
 async function arrivalMail(r: Loaded) {
-  if (r.status !== "paid" || !r.paidAt || !settled(r.paidAt) || !enabled(r.site, "arrival")) return;
+  if (!paidSettled(r) || !enabled(r.site, "arrival")) return;
   if (toISO(r.startDate) < todayISO()) return; // pobyt už začal
   const code = r.accessCode.trim() || undefined;
   if (!r.arrivalMailAt) {
@@ -103,7 +108,7 @@ async function checkinExtras(r: Loaded, reminder = false) {
 const checkinOn = (r: Loaded) => r.site.checkinEnabled && guestCryptoReady() && !r.checkinDoneAt;
 
 async function checkinMail(r: Loaded) {
-  if (r.status !== "paid" || !r.paidAt || !settled(r.paidAt) || r.checkinMailAt || !checkinOn(r) || !enabled(r.site, "checkin")) return;
+  if (!paidSettled(r) || r.checkinMailAt || !checkinOn(r) || !enabled(r.site, "checkin")) return;
   if (toISO(r.startDate) < todayISO() || checkinMailAt(r, r.site) > new Date()) return;
   const checkin = await checkinExtras(r);
   if (checkin?.missing) await claimAndSend(r, { status: "paid", checkinMailAt: null }, "checkinMailAt", "checkin", { checkin });
@@ -122,6 +127,7 @@ async function checkinReminder(r: Loaded) {
 export async function sendCheckinNow(id: string): Promise<string | null> {
   const r = await loadReservation(id);
   if (!r) return "Rezervace nenalezena.";
+  if (r.noGuestMail) return "Testovací rezervace — hostovi se e-maily neposílají.";
   if (!mailable(r)) return "Tahle rezervace nemá e-mail, na který by šlo psát.";
   if (r.status === "cancelled") return "Rezervace je zrušená.";
   const checkin = await checkinExtras(r);
@@ -140,6 +146,7 @@ export async function sendArrivalNow(id: string, accessCode?: string): Promise<s
   if (code) await prisma.reservation.updateMany({ where: { id, arrivalMailAt: null }, data: { accessCode: code, accessCodeSetAt: new Date() } });
   const r = await loadReservation(id);
   if (!r) return "Rezervace nenalezena.";
+  if (r.noGuestMail) return "Testovací rezervace — hostovi se e-maily neposílají.";
   if (!mailable(r)) return "Tahle rezervace nemá e-mail, na který by šlo psát.";
   // Informace k příjezdu (kódy, Wi-Fi) až po zaplacení
   if (r.status !== "paid") return "Informace k příjezdu jde poslat až u zaplacené rezervace.";
@@ -175,8 +182,8 @@ export async function dueReservationIds(now = new Date()): Promise<string[]> {
       OR: [
         { status: "paid", paidMailAt: null, paidAt: { lt: settledBefore, gt: recent } },
         { status: "cancelled", cancelMailAt: null, cancelledAt: { lt: settledBefore, gt: recent } },
-        { status: "paid", paidAt: { not: null }, arrivalMailAt: null, startDate: { gte: today, lte: new Date(today.getTime() + 31 * 86_400_000) } },
-        { status: "paid", paidAt: { not: null }, checkinDoneAt: null, checkinMailAt: null, startDate: { gte: today, lte: new Date(today.getTime() + 31 * 86_400_000) } },
+        { status: "paid", noGuestMail: false, arrivalMailAt: null, startDate: { gte: today, lte: new Date(today.getTime() + 31 * 86_400_000) } },
+        { status: "paid", noGuestMail: false, checkinDoneAt: null, checkinMailAt: null, startDate: { gte: today, lte: new Date(today.getTime() + 31 * 86_400_000) } },
         { status: "paid", checkinDoneAt: null, checkinReminderAt: null, checkinMailAt: { not: null }, startDate: today },
       ],
     },

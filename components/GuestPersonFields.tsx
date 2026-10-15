@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@/components/Icon";
 import {
   COUNTRY_OPTIONS,
   DOC_REQUIRED_AGE,
@@ -86,7 +87,10 @@ export function GuestPersonFields({ value: p, onChange, arrival, errorField, sam
           value={p.docNumber}
           onChange={(e) => set("docNumber", e.target.value)}
         />
+        {!owner && <span className="mt-1 block text-xs text-soft">Ubytovatel ho musí ze zákona zapsat do knihy ubytovaných.</span>}
       </label>
+
+      {!owner && <LawCard foreign={foreign} />}
 
       {sameAddress && (
         <label className="flex cursor-pointer items-center gap-2.5 text-sm sm:col-span-2">
@@ -166,5 +170,52 @@ export function GuestPersonFields({ value: p, onChange, arrival, errorField, sam
         </>
       )}
     </div>
+  );
+}
+
+/** Proč chceme údaje a číslo dokladu: zákonná povinnost ubytovatele, s odkazy na zákony. */
+function LawCard({ foreign }: { foreign: boolean }) {
+  return (
+    <details className="group rounded-xl bg-pine/5 px-4 py-3 text-sm sm:col-span-2">
+      <summary className="flex cursor-pointer list-none items-start gap-2.5 [&::-webkit-details-marker]:hidden">
+        <Icon name="file" size={16} className="mt-0.5 shrink-0 text-pine" />
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold">Proč po tobě chceme tyhle údaje?</span>
+          <span className="block text-soft">
+            Vyžaduje je zákon — ubytovatel je musí zapsat do evidenční knihy{foreign ? " a cizince nahlásit policii" : ""}.
+          </span>
+        </span>
+        <span className="mt-0.5 shrink-0 text-xs font-semibold text-pine group-open:hidden">Zobrazit zákon</span>
+        <span className="mt-0.5 hidden shrink-0 text-xs font-semibold text-pine group-open:inline">Skrýt</span>
+      </summary>
+      <div className="mt-3 space-y-3 border-t border-pine/15 pt-3 text-soft">
+        <div>
+          <p className="font-medium text-ink">Zákon o místních poplatcích (č. 565/1990 Sb., § 3g)</p>
+          <p className="mt-0.5">
+            Ubytovatel vede evidenční knihu a zapisuje do ní u každého hosta jméno, datum narození, adresu bydliště, číslo
+            dokladu totožnosti, dobu pobytu a případný důvod osvobození od poplatku z pobytu. Knihu musí uchovávat 6 let.
+          </p>
+          <a href="https://www.zakonyprolidi.cz/cs/1990-565#p3g" target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-pine hover:underline">
+            Přečíst zákon ↗
+          </a>
+        </div>
+        {foreign && (
+          <div>
+            <p className="font-medium text-ink">Zákon o pobytu cizinců (č. 326/1999 Sb., § 102)</p>
+            <p className="mt-0.5">
+              U cizinců ubytovatel navíc zapisuje státní občanství, číslo cestovního dokladu a víza a účel pobytu a do 3 pracovních
+              dnů je hlásí cizinecké policii.
+            </p>
+            <a href="https://www.zakonyprolidi.cz/cs/1999-326#p102" target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-pine hover:underline">
+              Přečíst zákon ↗
+            </a>
+          </div>
+        )}
+        <p className="flex items-start gap-2 text-xs">
+          <Icon name="lock" size={14} className="mt-0.5 shrink-0 text-pine" />
+          Údaje se ukládají šifrovaně, vidí je jen ubytovatel a použije je jen pro tyto povinnosti. Po uplynutí zákonné lhůty se smažou.
+        </p>
+      </div>
+    </details>
   );
 }

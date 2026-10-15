@@ -206,6 +206,8 @@ model Reservation {
 
   note       String   @default("")
   source     String   @default("web") // web | manual | airbnb | booking
+  // Testovací rezervace z vývoje — hostovi se nikdy nic automaticky neposílá
+  noGuestMail Boolean @default(false)
   status     String   @default("pending")
   expiresAt  DateTime?                // nezaplacená rezervace po expiraci uvolní termín
   // Souhlas hosta s obchodními podmínkami: kdy a s jakou verzí (termsUpdatedAt webu)
@@ -444,6 +446,8 @@ model GuestRecord {
   foreign       Boolean     @default(false)
   /// guest = vyplnil host přes odkaz, owner = majitel v administraci
   filledBy      String      @default("guest")
+  /// Cizinec nahlášený policii (Ubyport) — majitel označí po nahrání souboru
+  reportedAt    DateTime?
   purgeAt       DateTime
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

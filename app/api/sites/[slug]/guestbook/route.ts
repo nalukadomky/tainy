@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { guestCryptoReady } from "@/lib/guest-crypto";
-import { buildBook, logAccess } from "@/lib/guestbook-server";
+import { buildBook, logAccess, pendingForeigners } from "@/lib/guestbook-server";
 import { isTaxPeriod, periodKey, recentPeriods } from "@/lib/guestbook";
 import { parseTaxSource } from "@/lib/tourist-tax";
 import { todayISO } from "@/lib/stay";
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const asked = req.nextUrl.searchParams.get("period") ?? "";
   const period = periods.includes(asked) ? asked : periodKey(todayISO(), taxPeriod);
   const ready = guestCryptoReady();
-  const book = ready ? await buildBook(site, period) : null;
+  const [book, pending] = ready ? await Promise.all([buildBook(site, period), pendingForeigners(site.id)]) : [null, null];
   if (book?.rows.length) await logAccess(site.id, guard.user.email, "view", `kniha ${period}`);
   return NextResponse.json(
     {
@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       periods,
       taxPeriod,
       book,
+      ubyportPending: pending?.list ?? [],
       taxSource: parseTaxSource(site.taxSource),
       ubyport: { idub: site.ubyportIdub, abbr: site.ubyportAbbr },
     },

@@ -35,9 +35,15 @@ const date = (iso: string) => {
   const [y, m, d] = iso.split("-");
   return `${d}.${m}.${y}`;
 };
-const pad = (n: number) => String(n).padStart(2, "0");
-const stamp = (d: Date) =>
-  `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+/** Čas vytvoření souboru v českém čase: „15.10.2026 08:37:54“. */
+const stamp = (d: Date) => {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("cs-CZ", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}:${p.second}`;
+};
 
 export type UbyportProvider = {
   idub: string;

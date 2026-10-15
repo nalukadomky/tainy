@@ -89,6 +89,22 @@ export async function sendOwnerNotification(r: StayMail, ownerEmail: string): Pr
   });
 }
 
+/** Majiteli: cizinci čekají na nahlášení policii (Ubyport), lhůta končí nebo uplynula. */
+export async function sendUbyportReminder(ownerEmail: string, siteName: string, count: number, deadline: string, today: string): Promise<boolean> {
+  if (!ownerEmail) return false;
+  const when = deadline < today ? "Lhůta už uplynula" : deadline === today ? "Dnes je poslední den" : "Zítra je poslední den";
+  return send({
+    to: ownerEmail,
+    subject: `Nahlas cizince policii — ${siteName}`,
+    html: titled(
+      "Cizinci čekají na nahlášení",
+      `<p style="margin:0 0 16px;font-size:15px;line-height:1.6">V knize ubytovaných ${esc(siteName)} ${count === 1 ? "je 1 cizinec, který ještě není nahlášený" : `jsou cizinci (${count}), kteří ještě nejsou nahlášení`} cizinecké policii. ${when} (${fmt(deadline)}).</p>
+       <p style="margin:0 0 16px;font-size:14px;color:#5a6557">V Knize ubytovaných stáhneš soubor pro Ubyport, nahraješ ho na ubyport.policie.cz a označíš je jako nahlášené.</p>
+       <a href="${appUrl()}/admin/rezervace/kniha" style="display:inline-block;background:#2c5e3f;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;font-size:15px">Otevřít knihu ubytovaných</a>`
+    ),
+  });
+}
+
 /** Oznámení hostovi, že majitel změnil termín pobytu. `doplatek` > 0 = host doplácí. */
 export async function sendGuestDateChange(
   r: StayMail,

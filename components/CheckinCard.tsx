@@ -24,7 +24,7 @@ import {
 // historie přístupů) — seznam rezervací zná jen počet vyplněných osob.
 
 type Slot = { position: number; label: string };
-type Stored = { position: number; person: GuestPerson; filledBy: string };
+type Stored = { position: number; person: GuestPerson; filledBy: string; reportedAt?: string | null };
 type Data = {
   ready: boolean;
   enabled: boolean;
@@ -162,12 +162,14 @@ export function CheckinCard({ r, site, onChange }: { r: Reservation; site: Site 
         <>
           <ul className="divide-y divide-line">
             {data.slots.map((s) => {
-              const p = data.persons.find((x) => x.position === s.position)?.person;
+              const stored = data.persons.find((x) => x.position === s.position);
+              const p = stored?.person;
               const sub = p
                 ? [
                     `${ageAt(p.birthDate, start)} let`,
                     countryName(p.nationality),
                     p.docNumber ? `${docTypeShort(p.docType)} ${maskDoc(p.docNumber)}` : "bez dokladu",
+                    ...(p.nationality !== "CZE" ? [stored?.reportedAt ? "nahlášen policii ✓" : "čeká na nahlášení policii"] : []),
                   ].join(" · ")
                 : `${s.label} · zatím nevyplněno`;
               return (

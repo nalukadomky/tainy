@@ -5,6 +5,7 @@ import { decryptGuest, encryptGuest, parseCheckinToken, verifyCheckinToken } fro
 import { guestCounts } from "@/lib/stay-mail";
 import { taxableCount } from "@/lib/guests";
 import { addDays, toISO } from "@/lib/stay";
+import { ubyportDeadline } from "@/lib/workdays";
 import {
   exemptionOf,
   isForeign,
@@ -29,7 +30,7 @@ export function slotsOf(r: Pick<Reservation, "guests" | "guestBreakdown">, site:
   return slotsFor(counts, categories, r.guests);
 }
 
-export type StoredPerson = { position: number; person: GuestPerson; filledBy: string; updatedAt: Date };
+export type StoredPerson = { position: number; person: GuestPerson; filledBy: string; updatedAt: Date; reportedAt: Date | null };
 
 /** Dešifrované osoby rezervace (seřazené podle pozice). */
 export async function readPersons(reservationId: string): Promise<StoredPerson[]> {
@@ -39,6 +40,7 @@ export async function readPersons(reservationId: string): Promise<StoredPerson[]
     person: decryptGuest<GuestPerson>(row.data, aad(reservationId, row.position)),
     filledBy: row.filledBy,
     updatedAt: row.updatedAt,
+    reportedAt: row.reportedAt,
   }));
 }
 
@@ -104,24 +106,43 @@ export type BookRow = {
   tax: number;
 };
 
-export type MissingRow = { reservationId: string; guestName: string; start: string; end: string; filled: number; total: number };
 
-/** Osoby a souhrn poplatku za období. Dešifruje jen na serveru, doklady zkracuje. */
+/** Pobyt v přehledu knihy: stav check-inu a poplatek (z knihy, nebo odhad podle rezervace). */
+export type BookStay = {
+  reservationId: string;
+  guestName: string;
+  start: string;
+  end: string;
+  nights: number; // nocí v období
+  total: number; // osob k vyplnění
+  filled: number;
+  started: boolean; // příjezd dnes nebo dřív
+  paid: boolean;
+  tax: number;
+  estimated: boolean; // check-in neúplný → poplatek podle rezervace
+};
+
+/**
+ * Kniha za období: osoby (dešifrované jen tady, doklady zkrácené), pobyty se
+ * stavem check-inu a souhrn poplatku. Pobyt s kompletním check-inem se počítá
+ * z knihy (věk, osvobození), ostatní odhadem podle skladby rezervace.
+ */
 export async function buildBook(site: Site, period: string) {
   const range = periodRange(period);
   if (!range) return null;
   const from = new Date(`${range.start}T00:00:00.000Z`);
   const to = new Date(`${range.end}T00:00:00.000Z`);
-  // Pobyty, které mají v období aspoň jednu noc
+  const today = toISO(new Date());
   const reservations = await prisma.reservation.findMany({
-    where: { siteId: site.id, status: { not: "cancelled" }, startDate: { lt: to }, endDate: { gt: from } },
+    where: { siteId: site.id, status: { not: "cancelled" }, source: { not: "demo" }, startDate: { lt: to }, endDate: { gt: from } },
     include: { guestRecords: { orderBy: { position: "asc" } } },
     orderBy: { startDate: "asc" },
   });
   const rate = site.touristTax;
   const rows: BookRow[] = [];
-  const missing: MissingRow[] = [];
+  const stays: BookStay[] = [];
   let collected = 0;
+  let personNights = 0;
 
   for (const r of reservations) {
     const start = toISO(r.startDate);
@@ -129,14 +150,12 @@ export async function buildBook(site: Site, period: string) {
     const nights = nightsWithin(start, end, range.start, range.end);
     if (!nights) continue;
     const total = slotsOf(r, site).length;
+    const { categories, counts } = guestCounts(r, site);
+    const fromPrice = rate * taxableCount(counts, categories) * nights;
     // Vybráno od hostů: poplatek v ceně zaplacené rezervace (podle ceníku)
-    if (r.status === "paid" && r.source !== "demo") {
-      const { categories, counts } = guestCounts(r, site);
-      collected += rate * taxableCount(counts, categories) * nights;
-    }
-    if (r.guestRecords.length < total && r.source !== "demo")
-      missing.push({ reservationId: r.id, guestName: r.guestName, start, end, filled: r.guestRecords.length, total });
+    if (r.status === "paid") collected += fromPrice;
     const stayNights = nightsWithin(start, end, start, end);
+    const people: BookRow[] = [];
     for (const g of r.guestRecords) {
       let p: GuestPerson;
       try {
@@ -145,7 +164,7 @@ export async function buildBook(site: Site, period: string) {
         continue;
       }
       const exemption = exemptionOf(p, start, stayNights);
-      rows.push({
+      people.push({
         reservationId: r.id,
         publicId: r.publicId,
         position: g.position,
@@ -164,14 +183,32 @@ export async function buildBook(site: Site, period: string) {
         tax: exemption ? 0 : rate * nights,
       });
     }
+    rows.push(...people);
+    const complete = people.length >= total;
+    personNights += complete ? people.length * nights : total * nights;
+    stays.push({
+      reservationId: r.id,
+      guestName: r.guestName,
+      start,
+      end,
+      nights,
+      total,
+      filled: people.length,
+      started: start <= today,
+      paid: r.status === "paid",
+      tax: complete ? people.reduce((sum, x) => sum + x.tax, 0) : fromPrice,
+      estimated: !complete,
+    });
   }
 
   const remittance = await prisma.taxRemittance.findUnique({ where: { siteId_period: { siteId: site.id, period } } });
   const summary = {
+    expectedPeople: stays.reduce((sum, x) => sum + x.total, 0),
     people: rows.length,
-    personNights: rows.reduce((s, x) => s + x.nights, 0),
+    personNights,
     exempt: rows.filter((x) => x.exemption).length,
-    taxDue: rows.reduce((s, x) => s + x.tax, 0),
+    taxDue: stays.reduce((sum, x) => sum + x.tax, 0),
+    taxEstimated: stays.filter((x) => x.estimated).reduce((sum, x) => sum + x.tax, 0),
     collected,
     rate,
     foreign: rows.filter((x) => x.foreign).length,
@@ -179,8 +216,12 @@ export async function buildBook(site: Site, period: string) {
   return {
     period,
     range,
+    /** Období skončilo (poslední den je před dneškem) — teprve pak se odvádí. */
+    ended: range.end <= today,
     rows,
-    missing,
+    stays,
+    /** Pobyty, které už začaly a nemají kompletní check-in. */
+    missing: stays.filter((x) => x.started && x.filled < x.total),
     summary,
     remittance: remittance && { amount: remittance.amount, paidAt: toISO(remittance.paidAt), note: remittance.note },
   };
@@ -236,4 +277,73 @@ export async function guestView(r: Reservation & { site: Site }) {
     const p = persons.find((x) => x.position === s.position)?.person;
     return { ...s, filled: !!p, name: p ? `${p.firstName} ${p.lastName.charAt(0)}.` : "" };
   });
+}
+
+/* ---------- Hlášení cizinců (Ubyport) ---------- */
+
+// Cizince je potřeba nahlásit do 3 pracovních dnů ode dne ubytování. Seznam
+// „k nahlášení“ = cizinci z knihy, kteří ještě nejsou označení jako nahlášení,
+// s příjezdem v posledních 90 dnech nebo v příštích 30 dnech.
+
+export type PendingForeigner = {
+  reservationId: string;
+  position: number;
+  name: string;
+  nationality: string;
+  start: string;
+  end: string;
+  deadline: string;
+};
+
+function pendingWhere(siteId: string) {
+  const today = new Date(`${toISO(new Date())}T00:00:00.000Z`);
+  return {
+    siteId,
+    foreign: true,
+    reportedAt: null,
+    reservation: {
+      status: { not: "cancelled" },
+      startDate: { gte: new Date(today.getTime() - 90 * 86_400_000), lte: new Date(today.getTime() + 30 * 86_400_000) },
+    },
+  };
+}
+
+/** Cizinci k nahlášení (dešifrovaní kvůli jménu), nejbližší lhůta první. */
+export async function pendingForeigners(siteId: string): Promise<{ list: PendingForeigner[]; persons: { person: GuestPerson; start: string; end: string }[] }> {
+  const rows = await prisma.guestRecord.findMany({
+    where: pendingWhere(siteId),
+    include: { reservation: { select: { startDate: true, endDate: true } } },
+  });
+  const out = rows.flatMap((g) => {
+    try {
+      const person = decryptGuest<GuestPerson>(g.data, aad(g.reservationId, g.position));
+      const start = toISO(g.reservation.startDate);
+      const end = toISO(g.reservation.endDate);
+      return [{ person, item: { reservationId: g.reservationId, position: g.position, name: `${person.firstName} ${person.lastName}`.trim(), nationality: person.nationality, start, end, deadline: ubyportDeadline(start) } }];
+    } catch {
+      return [];
+    }
+  });
+  out.sort((a, b) => a.item.deadline.localeCompare(b.item.deadline) || a.item.name.localeCompare(b.item.name, "cs"));
+  return { list: out.map((x) => x.item), persons: out.map((x) => ({ person: x.person, start: x.item.start, end: x.item.end })) };
+}
+
+/** Počet cizinců k nahlášení a nejbližší lhůta — bez dešifrování (přehled, e-mail). */
+export async function pendingSummary(siteId: string): Promise<{ count: number; deadline: string | null }> {
+  const rows = await prisma.guestRecord.findMany({ where: pendingWhere(siteId), select: { reservation: { select: { startDate: true } } } });
+  const deadlines = rows.map((r) => ubyportDeadline(toISO(r.reservation.startDate))).sort();
+  return { count: rows.length, deadline: deadlines[0] ?? null };
+}
+
+/** Označí cizince jako nahlášené (null = vrátit zpět). */
+export async function markReported(siteId: string, items: { reservationId: string; position: number }[], at: Date | null) {
+  let count = 0;
+  for (const i of items.slice(0, 200)) {
+    const r = await prisma.guestRecord.updateMany({
+      where: { siteId, reservationId: String(i.reservationId), position: Number(i.position), foreign: true },
+      data: { reportedAt: at },
+    });
+    count += r.count;
+  }
+  return count;
 }

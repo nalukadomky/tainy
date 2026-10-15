@@ -3,14 +3,15 @@ import writeXlsxFile from "write-excel-file/node";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { guestCryptoReady } from "@/lib/guest-crypto";
-import { buildBook, logAccess, personsForExport } from "@/lib/guestbook-server";
+import { buildBook, logAccess, pendingForeigners, personsForExport } from "@/lib/guestbook-server";
 import { countryName, docTypeLabel, exemptionOf, periodLabel, periodRange, PURPOSES } from "@/lib/guestbook";
 import { buildUnl } from "@/lib/ubyport";
 import { providerLine } from "@/lib/legal";
 
 // Exporty knihy ubytovaných za období (každý se zapíše do historie přístupů):
 //   obec     — Excel: evidenční kniha a souhrn poplatku z pobytu k odvodu
-//   ubyport  — UNL soubor s cizinci k nahrání na ubyport.policie.cz
+//   ubyport-pending — UNL s cizinci, kteří ještě nejsou nahlášení (bez období)
+//   ubyport  — UNL se všemi cizinci za období (znovu stažení)
 
 export const maxDuration = 60;
 
@@ -23,13 +24,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   if (!guestCryptoReady()) return NextResponse.json({ error: "Chybí šifrovací klíč." }, { status: 503 });
   const site = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id } });
   const type = req.nextUrl.searchParams.get("type");
-  const period = req.nextUrl.searchParams.get("period") ?? "";
-  if (!periodRange(period)) return NextResponse.json({ error: "Neznámé období." }, { status: 400 });
+  const pendingOnly = type === "ubyport-pending";
+  const period = pendingOnly ? "k-nahlaseni" : req.nextUrl.searchParams.get("period") ?? "";
+  if (!pendingOnly && !periodRange(period)) return NextResponse.json({ error: "Neznámé období." }, { status: 400 });
   const noStore = { "Cache-Control": "no-store" };
 
-  if (type === "ubyport") {
+  if (type === "ubyport" || pendingOnly) {
     if (!site.ubyportIdub) return NextResponse.json({ error: "Doplň v Nastavení → Automatizace identifikátor ubytovatele (IDUB)." }, { status: 400 });
-    const guests = await personsForExport(site, period, true);
+    const guests = pendingOnly ? (await pendingForeigners(site.id)).persons : await personsForExport(site, period, true);
     const file = buildUnl(
       {
         idub: site.ubyportIdub,

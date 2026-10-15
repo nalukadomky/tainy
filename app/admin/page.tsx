@@ -16,6 +16,7 @@ import { stayTimes, todayISO } from "@/lib/stay";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { hasDoc } from "@/lib/legal";
 import { CleaningAlerts, CleaningBadge } from "@/components/CleaningAlert";
+import { UbyportAlert } from "@/components/UbyportAlert";
 import { SourceMix } from "@/components/SourceMix";
 import { Icon } from "@/components/Icon";
 import { TodoSummary } from "@/components/TodoSummary";
@@ -212,6 +213,7 @@ function Dashboard() {
 
       {/* Úklid po předchozím pobytu není hotový a dnes/zítra přijíždějí další hosté */}
       <CleaningAlerts reservations={reservations} />
+      <UbyportAlert slug={site?.slug ?? null} />
 
       {/* Otevřené úkoly (To-Do) majitele a personálu */}
       <TodoSummary slug={site.slug} />
