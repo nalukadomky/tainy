@@ -101,11 +101,11 @@ function Order({
       body: JSON.stringify({ offerId: offer.id, recipient, dedication, buyerName, buyerEmail, terms, company }),
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
-    if (!res?.ok || !data?.publicId) {
+    if (!res?.ok || !data?.token) {
       setSending(false);
       return setError({ text: data?.error ?? "Objednávku se nepodařilo odeslat. Zkus to prosím znovu.", field: data?.field });
     }
-    router.push(`/darek/${data.publicId}`);
+    router.push(`/darek/${data.token}`);
   }
 
   const doc = (path: string, label: string) => (

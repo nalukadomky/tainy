@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
       return {
         id: o.id,
         publicId: o.publicId,
+        token: o.accessToken,
         design: o.design,
         price: o.price,
         buyerName: o.buyerName,

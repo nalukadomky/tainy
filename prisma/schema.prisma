@@ -516,7 +516,10 @@ model GiftOffer {
 /// Objednávka dárkového poukazu z webu. Po zaplacení vznikne kód (Voucher, gift).
 model GiftOrder {
   id          String    @id @default(cuid())
+  /// Číslo objednávky pro lidi a variabilní symbol (krátké, jde uhodnout)
   publicId    String    @unique
+  /// Tajný klíč do odkazu /darek/… (stránka ukazuje kód poukazu)
+  accessToken String    @unique @default(cuid())
   siteId      String
   site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
   offerId     String?

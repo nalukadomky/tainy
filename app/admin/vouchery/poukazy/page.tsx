@@ -22,6 +22,7 @@ type Offer = GiftDesign & { id: string; onSale: boolean; sold: number };
 type Order = {
   id: string;
   publicId: string;
+  token: string;
   design: string;
   price: number;
   buyerName: string;
@@ -264,7 +265,7 @@ export default function GiftVouchersPage() {
                     </span>
                   ) : o.status === "paid" || o.status === "used" ? (
                     <span className="flex items-center gap-3 text-xs">
-                      <a href={`/darek/${o.publicId}`} target="_blank" rel="noreferrer" className="font-medium text-pine hover:underline">
+                      <a href={`/darek/${o.token}`} target="_blank" rel="noreferrer" className="font-medium text-pine hover:underline">
                         Poukaz
                       </a>
                       {o.status === "paid" && (

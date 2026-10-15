@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { newGiftPublicId, offerDesign, sendGiftOrderMail, sendGiftOwnerMail } from "@/lib/gift-server";
+import { newGiftPublicId, newGiftToken, offerDesign, sendGiftOrderMail, sendGiftOwnerMail } from "@/lib/gift-server";
 import { cleanGift } from "@/lib/gift";
 
 // Objednávka dárkového poukazu z webu (bez přihlášení). Kupující pak zaplatí
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
   const order = await prisma.giftOrder.create({
     data: {
       publicId: await newGiftPublicId(),
+      accessToken: newGiftToken(),
       siteId: offer.siteId,
       offerId: offer.id,
       design: JSON.stringify(design),
@@ -49,5 +50,5 @@ export async function POST(req: NextRequest) {
     await sendGiftOrderMail(order, offer.site, design).catch(() => {});
     await sendGiftOwnerMail(order, offer.site, design).catch(() => {});
   });
-  return NextResponse.json({ publicId: order.publicId }, { status: 201 });
+  return NextResponse.json({ token: order.accessToken }, { status: 201 });
 }

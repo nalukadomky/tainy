@@ -24,8 +24,10 @@ const date = (iso: string) => {
   return `${Number(d)}. ${Number(m)}. ${y}`;
 };
 
-export default async function GiftOrderPage({ params }: { params: Promise<{ publicId: string }> }) {
-  const order = await prisma.giftOrder.findUnique({ where: { publicId: (await params).publicId }, include: { site: true } });
+export default async function GiftOrderPage({ params }: { params: Promise<{ token: string }> }) {
+  const token = (await params).token;
+  // Jen podle tajného klíče — krátké číslo objednávky jde uhodnout
+  const order = token.length >= 20 ? await prisma.giftOrder.findUnique({ where: { accessToken: token }, include: { site: true } }) : null;
   if (!order) notFound();
   const { site } = order;
   const d = orderDesign(order);
@@ -50,7 +52,7 @@ export default async function GiftOrderPage({ params }: { params: Promise<{ publ
           <h1 className="font-display text-3xl font-semibold tracking-tight print:hidden">Dárkový poukaz je připravený</h1>
           <p className="mt-1.5 text-soft print:hidden">Vytiskni ho, nebo pošli tenhle odkaz dál.</p>
           <div className="mt-6 print:mt-0">
-            <GiftVoucherCard d={d} site={site.name} code={order.code} validTo={order.validTo ? toISO(order.validTo) : null} qrUrl={giftLink(order.publicId)} />
+            <GiftVoucherCard d={d} site={site.name} code={order.code} validTo={order.validTo ? toISO(order.validTo) : null} qrUrl={giftLink(order.accessToken)} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3 print:hidden">
             <PrintButton />

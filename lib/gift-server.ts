@@ -1,5 +1,5 @@
 import "server-only";
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { GiftOffer, GiftOrder, Site } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { appUrl, send } from "@/lib/email";
@@ -23,8 +23,11 @@ export const orderDesign = (o: GiftOrder): GiftDesign => {
   }
 };
 
-/** Odkaz na objednávku / hotový poukaz (stránka /darek/…). */
-export const giftLink = (publicId: string) => `${appUrl()}/darek/${publicId}`;
+/** Odkaz na objednávku / hotový poukaz (stránka /darek/<tajný klíč>). */
+export const giftLink = (accessToken: string) => `${appUrl()}/darek/${accessToken}`;
+
+/** Tajný klíč do odkazu — 128 bitů náhody, nejde uhodnout ani projít. */
+export const newGiftToken = () => randomBytes(16).toString("base64url");
 
 /** Číslo objednávky pro lidi a variabilní symbol: P-4821. */
 export async function newGiftPublicId(): Promise<string> {
@@ -87,7 +90,7 @@ export async function sendGiftOrderMail(order: GiftOrder, site: Site, d: GiftDes
   const html = layout(
     `<p style="${P}">Dobrý den, děkujeme za objednávku dárkového poukazu <strong>${esc(giftHeadline(d))}</strong> do ${esc(site.name)}.</p>
      <p style="${P}">Částka <strong>${czk(order.price)}</strong>. Po připsání platby vám poukaz pošleme e-mailem — k vytištění nebo přeposlání.</p>
-     <p style="margin:0 0 16px">${button(giftLink(order.publicId), "Zobrazit platbu a QR kód")}</p>
+     <p style="margin:0 0 16px">${button(giftLink(order.accessToken), "Zobrazit platbu a QR kód")}</p>
      <p style="margin:0;font-size:13px;${MUTED}">Objednávka ${orderLabel(order.publicId)}</p>`,
     "Objednávka dárkového poukazu",
   );
@@ -116,7 +119,7 @@ export async function sendGiftVoucher(order: GiftOrder & { code: string; validTo
        <span style="${MUTED};font-size:13px">Platí do ${fmt(toISO(order.validTo))}${d.kind === "weekend" ? " · na víkend pá–ne" : ""}</span>
      </div>
      <p style="${P}">Poukaz si otevřete, vytisknete nebo pošlete dál přes tlačítko níže. Obdarovaný zadá kód při rezervaci na webu ${esc(site.name)}${d.kind === "weekend" ? " — v dražším termínu doplatí rozdíl" : ""}.</p>
-     ${button(giftLink(order.publicId), "Zobrazit poukaz")}`,
+     ${button(giftLink(order.accessToken), "Zobrazit poukaz")}`,
     "Váš dárkový poukaz",
   );
   return send({ to: order.buyerEmail, subject: `Dárkový poukaz ${site.name} — kód ${order.code}`, html, replyTo: site.contactEmail });
