@@ -124,6 +124,12 @@ model Site {
   geo            String @default("")
   // Externí rezervace: tajný odkaz na kalendář webu pro portály (/api/ical/<token>.ics)
   icalToken      String? @unique
+  /// Tajná adresa pro přeposílané e-maily z Airbnb/Bookingu: <slug>-<token>@in.tainy.cz
+  inboundToken   String? @unique
+  /// Volitelná pojistka: přijímat jen e-maily přeposlané z této adresy
+  inboundFrom    String  @default("")
+  /// Kdy majitel naposledy potvrdil nové rezervace na Přehledu („Od minula přišly…“)
+  newSeenAt      DateTime?
   // Online check-in (kniha ubytovaných): zapnutí (tlačítko u rezervace hosta);
   // e-mail s odkazem je v emailSettings.checkin, ráno v den příjezdu připomínka
   checkinEnabled  Boolean @default(true)
@@ -147,6 +153,7 @@ model Site {
   todos        Todo[]
   feeds        CalendarFeed[]
   guestRecords GuestRecord[]
+  inboundMails InboundMail[]
   remittances  TaxRemittance[]
   accessLogs   GuestAccessLog[]
   giftOffers   GiftOffer[]
@@ -241,6 +248,16 @@ model Reservation {
   checkinReminderAt DateTime?
   checkinDoneAt     DateTime?
   guestRecords      GuestRecord[]
+
+  // Údaje z přeposlaného e-mailu Airbnb/Bookingu (lib/portal-mail.ts): kód rezervace
+  // na portálu, vytažená data (JSON: hosté, cena pro hosta, výplata, měna…) a kdy přišla
+  // Nabídky dalšího pobytu (§ 7 odst. 3 z. 480/2004 Sb.): kdy host odmítl / se odhlásil
+  offersOptOutAt DateTime?
+
+  portalCode    String    @default("")
+  portalData    String    @default("")
+  portalMailAt  DateTime?
+  inboundMails  InboundMail[]
 
   @@unique([feedId, externalUid])
   @@index([siteId, startDate, endDate])
@@ -552,4 +569,26 @@ model GiftOrder {
   createdAt   DateTime  @default(now())
 
   @@index([siteId, createdAt])
+}
+
+/// Přeposlaný e-mail z Airbnb/Bookingu (nebo ověření přeposílání Gmailu) na tajnou
+/// adresu nemovitosti. Text a HTML se po spárování / po 30 dnech mažou, zůstane `parsed`.
+model InboundMail {
+  id            String       @id @default(cuid())
+  resendId      String       @unique
+  siteId        String
+  site          Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  receivedAt    DateTime     @default(now())
+  from          String       @default("")
+  subject       String       @default("")
+  provider      String       @default("other") // airbnb | booking | gmail | other
+  kind          String       @default("unknown") // new | cancel | change | verify | unknown
+  parsed        String       @default("{}") // JSON (lib/portal-mail.ts)
+  status        String       @default("pending") // matched | pending | unreadable | ignored
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  text          String       @default("")
+  html          String       @default("")
+
+  @@index([siteId, receivedAt])
 }

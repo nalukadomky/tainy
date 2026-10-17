@@ -144,6 +144,8 @@ export async function POST(req: NextRequest) {
         data: {
           publicId: newPublicId(),
           siteId: site.id,
+          // Host u rezervace odmítl nabídky dalšího pobytu
+          ...(body.noOffers === true && { offersOptOutAt: new Date() }),
           ...(hasTerms && {
             termsAcceptedAt: new Date(),
             // Vlastní podmínky = datum jejich verze; výchozí = otisk textu, který host viděl

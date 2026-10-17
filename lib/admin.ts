@@ -24,6 +24,8 @@ export type Site = {
   id: string;
   slug: string;
   name: string;
+  /** Kdy majitel naposledy potvrdil nové rezervace na Přehledu (null = ještě nikdy). */
+  newSeenAt?: string | null;
   tagline: string;
   description: string;
   propertyType: string;

@@ -25,6 +25,7 @@ import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
 import { SwipeToPay } from "@/components/SwipeToPay";
 import { createPortal } from "react-dom";
+import { BadgeMenu } from "@/components/StatusMenu";
 import { HelpTip } from "@/components/HelpTip";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
@@ -594,7 +595,26 @@ function CleaningCard({
   );
   const badges = (
     <>
-          {status && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>}
+          {/* Stav jde přepnout rovnou na štítku (jako u rezervací) — bez tlačítek navíc */}
+          {status &&
+            (c?.paid || item.key.startsWith("tmp-") ? (
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>
+            ) : (
+              <BadgeMenu
+                label={status.label}
+                className={status.cls}
+                current=""
+                options={
+                  c?.status === "done"
+                    ? [{ key: "reopen", label: "Povolit úpravu personálu" }]
+                    : [{ key: "done", label: "✓ Označit jako hotový" }]
+                }
+                onPick={async (k) => {
+                  if (k === "done") setCompleting(true);
+                  else run({ reopen: true }, "Personál teď může úklid upravit a znovu ukončit.");
+                }}
+              />
+            ))}
           {c?.note && (
             <button
               type="button"
@@ -624,7 +644,8 @@ function CleaningCard({
               <span className="text-soft sm:mt-0.5 sm:block">dokončeno {fmtFinished(c.finishedAt)}</span>
             </span>
           )}
-          {c?.status !== "done" && !item.key.startsWith("tmp-") && (
+          {/* Nepřiřazený úklid nemá štítek — hotový jde označit tady */}
+          {!c?.cleanerId && c?.status !== "done" && !item.key.startsWith("tmp-") && (
             <button
               type="button"
               onClick={() => setCompleting(true)}
@@ -632,16 +653,6 @@ function CleaningCard({
               title="Když to personál sám nemůže označit"
             >
               ✓ Označit jako hotový
-            </button>
-          )}
-          {c?.status === "done" && !c.paid && (
-            <button
-              type="button"
-              onClick={() => run({ reopen: true }, "Personál teď může úklid upravit a znovu ukončit.")}
-              className="text-xs font-medium text-pine hover:underline"
-              title="Ukončený úklid už personál sám měnit nemůže"
-            >
-              Povolit úpravu
             </button>
           )}
     </>

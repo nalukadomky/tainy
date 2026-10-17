@@ -17,7 +17,7 @@
 import type { Prisma, Reservation, Site } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { appUrl, logGuestMail, send } from "@/lib/email";
-import { arrivalDaysOf, parseEmailSettings, renderEmail, SCHEDULED_TIME, type EmailKind } from "@/lib/email-templates";
+import { arrivalDaysOf, EMAIL_KINDS, parseEmailSettings, renderEmail, SCHEDULED_TIME, type EmailKind } from "@/lib/email-templates";
 import { cleaningStart } from "@/lib/cleaning";
 import { addDays, toISO, todayISO } from "@/lib/stay";
 import { loadReservation, stayMailOf } from "@/lib/stay-mail";
@@ -53,9 +53,11 @@ async function claimAndSend(
   kind: EmailKind,
   extras: { accessCode?: string; checkin?: { link: string; people: number; missing: number; reminder?: boolean } } = {},
 ): Promise<boolean> {
+  // Nabídky (komerční e-maily) jen hostům, kteří je neodmítli / se neodhlásili
+  if (EMAIL_KINDS.find((m) => m.kind === kind)?.group === "marketing" && r.offersOptOutAt) return false;
   const claimed = await prisma.reservation.updateMany({ where: { id: r.id, ...where }, data: { [field]: new Date() } });
   if (!claimed.count) return false;
-  const { subject, html } = renderEmail(kind, r.site, stayMailOf(r, r.site), { link: `${appUrl()}/r/${r.publicId}`, ...extras });
+  const { subject, html } = renderEmail(kind, r.site, stayMailOf(r, r.site), { link: `${appUrl()}/r/${r.publicId}`, unsubscribeUrl: `${appUrl()}/odhlasit/${r.publicId}`, ...extras });
   const ok = await send({ to: r.email, subject, html, replyTo: r.site.contactEmail });
   if (!ok) await prisma.reservation.update({ where: { id: r.id }, data: { [field]: r[field] } });
   else await logGuestMail(r.id, field === "arrivalCodeMailAt" ? "arrivalCode" : field === "checkinReminderAt" ? "checkinReminder" : kind, subject, html);

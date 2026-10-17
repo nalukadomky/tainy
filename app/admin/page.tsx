@@ -20,6 +20,7 @@ import { UbyportAlert } from "@/components/UbyportAlert";
 import { SourceMix } from "@/components/SourceMix";
 import { Icon } from "@/components/Icon";
 import { ActionInbox } from "@/components/ActionInbox";
+import { NewReservations } from "@/components/NewReservations";
 import { siteUrl } from "@/lib/domains";
 
 function monthKey(d: Date) {
@@ -224,6 +225,9 @@ function Dashboard() {
       <CleaningAlerts reservations={reservations} />
       <UbyportAlert slug={site?.slug ?? null} />
 
+      {/* Nové rezervace od poslední návštěvy (zmizí po potvrzení) */}
+      <NewReservations site={site} reservations={reservations} onStatus={changeStatus} />
+
       {/* Na telefonu: co čeká na majitele jako první */}
       <div className="lg:hidden">{inbox}</div>
 
@@ -405,19 +409,19 @@ function shortRange(startIso: string, endIso: string): string {
 /** Jeden krok přípravy pobytu v kartě nejbližšího pobytu: hotovo ✓ / čeká ○ / problém. */
 function Step({ state, title, children }: { state: "done" | "wait" | "warn"; title: React.ReactNode; children?: React.ReactNode }) {
   return (
-    // Úzká karta: krok = řádek (název vlevo, podrobnost vpravo); široká: sloupce vedle sebe
-    <div className="flex min-w-0 items-center gap-2.5 px-4 py-3 @[46rem]:items-start @[46rem]:px-5 @[46rem]:py-3.5">
+    // Úzká karta: krok = řádek (název vlevo, podrobnost vpravo); jinak sloupce vedle sebe
+    <div className="flex min-w-0 items-center gap-2.5 px-4 py-3 @[28rem]:items-start @[28rem]:px-5 @[28rem]:py-3.5">
       {state === "done" ? (
-        <span className="flex h-[18px] w-[18px] shrink-0 @[46rem]:mt-0.5 items-center justify-center rounded-full bg-pine text-[10px] font-bold text-white" aria-label="Hotovo">
+        <span className="flex h-[18px] w-[18px] shrink-0 @[28rem]:mt-0.5 items-center justify-center rounded-full bg-pine text-[10px] font-bold text-white" aria-label="Hotovo">
           ✓
         </span>
       ) : (
         <span
-          className={`h-[18px] w-[18px] shrink-0 rounded-full border-2 @[46rem]:mt-0.5 ${state === "warn" ? "border-coral" : "border-amber"}`}
+          className={`h-[18px] w-[18px] shrink-0 rounded-full border-2 @[28rem]:mt-0.5 ${state === "warn" ? "border-coral" : "border-amber"}`}
           aria-label={state === "warn" ? "Pozor" : "Čeká"}
         />
       )}
-      <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 text-sm @[46rem]:block">
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 text-sm @[28rem]:block">
         <p className="font-semibold">{title}</p>
         {children && <div className="text-[13px] text-soft">{children}</div>}
       </div>
@@ -427,7 +431,7 @@ function Step({ state, title, children }: { state: "done" | "wait" | "warn"; tit
 
 /**
  * Karta s nejbližším (nebo právě probíhajícím) pobytem — nahoře host, termín a cena,
- * dole kroky přípravy (platba, kód k zámku, check-in / úklid). Klik otevře detail rezervace.
+ * dole kroky přípravy (kód k zámku, úklid, check-in) — platbu ukazuje štítek stavu nahoře. Klik otevře detail rezervace.
  */
 function NextStay({
   r,
@@ -443,26 +447,11 @@ function NextStay({
   const router = useRouter();
   const c = countdown(r);
   const times = site ? stayTimes(r, site) : r;
-  const now = new Date();
-  const overdue = r.status === "pending" && !!r.expiresAt && new Date(r.expiresAt) <= now;
   const lock = r.status !== "cancelled" && usesLockCodes(site);
   const mail = accessCodeMail(r, arrivalDaysOf(site));
   const checkin = r.checkinDoneAt || r.checkinMailAt;
   const [codeOpen, setCodeOpen] = useState(false);
   const steps = [
-    <Step
-      key="pay"
-      state={r.status === "paid" ? "done" : overdue ? "warn" : "wait"}
-      title={r.status === "paid" ? "Zaplaceno" : overdue ? "Platba po lhůtě" : "Čeká na platbu"}
-    >
-      {r.status === "paid"
-        ? r.paidAt
-          ? `${czk(r.totalPrice)} · ${fmtDate(r.paidAt)}`
-          : czk(r.totalPrice)
-        : r.expiresAt
-          ? `splatné do ${fmtDate(r.expiresAt)}`
-          : czk(r.totalPrice)}
-    </Step>,
     // Kód k zámku: kód + kdy hostovi odejde; klik otevře úpravu kódu
     lock && (
       <Step
@@ -500,7 +489,14 @@ function NextStay({
       <Step
         key="clean"
         state={r.cleaningBefore.state === "done" ? "done" : r.cleaningBefore.state === "unassigned" ? "warn" : "wait"}
-        title={r.cleaningBefore.state === "done" ? "Uklizeno" : r.cleaningBefore.state === "unassigned" ? "Úklid nikdo nemá" : "Úklid čeká"}
+        // Úklid PŘED příjezdem (po předchozích hostech) — úklid po tomhle pobytu je v sekci Úklid zvlášť
+        title={
+          r.cleaningBefore.state === "done"
+            ? "Uklizeno před příjezdem"
+            : r.cleaningBefore.state === "unassigned"
+              ? "Úklid před příjezdem nikdo nemá"
+              : "Úklid před příjezdem čeká"
+        }
       >
         {r.cleaningBefore.state === "unassigned" ? (
           <Link href="/admin/kalendar/uklid" className="font-medium text-pine hover:underline">
@@ -569,8 +565,8 @@ function NextStay({
       {/* Kroky přípravy pobytu */}
       <div className="@container border-t border-line bg-cream">
         <div
-          className={`grid divide-y divide-line @[46rem]:divide-x @[46rem]:divide-y-0 ${
-            steps.length === 4 ? "@[46rem]:grid-cols-4" : steps.length === 3 ? "@[46rem]:grid-cols-3" : steps.length === 2 ? "@[46rem]:grid-cols-2" : ""
+          className={`grid divide-y divide-line @[28rem]:divide-x @[28rem]:divide-y-0 ${
+            steps.length >= 3 ? "@[28rem]:grid-cols-2 @[46rem]:grid-cols-3" : steps.length === 2 ? "@[28rem]:grid-cols-2" : ""
           }`}
         >
           {steps}

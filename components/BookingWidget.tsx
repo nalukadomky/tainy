@@ -105,6 +105,8 @@ export function BookingWidget({
   const contactOk = namesOk && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) && isPhoneComplete(phone);
   const [note, setNote] = useState("");
   const [consent, setConsent] = useState(false);
+  // Nabídky dalšího pobytu: bez souhlasu (vlastním hostům), host je může rovnou odmítnout
+  const [noOffers, setNoOffers] = useState(false);
   // Zaškrtnutí je potřeba, jen když je s čím souhlasit (obchodní/storno podmínky).
   const needsConsent = !!site.hasTerms || !!site.cancellationPolicy;
   const [payment, setPayment] = useState<Payment>(site.paymentMode === "onsite" ? "onsite" : "qr");
@@ -286,6 +288,7 @@ export function BookingWidget({
           phone,
           note,
           termsAccepted: consent,
+          noOffers,
           payment,
           voucherCode: voucher?.code ?? "",
           ...(embed && { source: "widget" }),
@@ -733,7 +736,16 @@ export function BookingWidget({
                   </>
                 ) : (
                   "."
-                )}
+                )}{" "}
+                Občas ti můžeme poslat nabídku na další pobyt — z každého e-mailu se odhlásíš jedním klikem.{" "}
+                <button
+                  type="button"
+                  onClick={() => setNoOffers((v) => !v)}
+                  aria-pressed={noOffers}
+                  className={`font-medium underline underline-offset-2 ${noOffers ? "text-ink" : "hover:text-ink"}`}
+                >
+                  {noOffers ? "✓ Nabídky nechci" : "Nechci nabídky"}
+                </button>
               </p>
 
               {error && (
