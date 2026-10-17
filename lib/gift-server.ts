@@ -17,7 +17,9 @@ export const offerDesign = (o: GiftOffer): GiftDesign =>
 
 export const orderDesign = (o: GiftOrder): GiftDesign => {
   try {
-    return cleanGift(JSON.parse(o.design));
+    const raw = JSON.parse(o.design);
+    const recipient = typeof raw?.recipient === "string" ? raw.recipient.trim().slice(0, 60) : "";
+    return { ...cleanGift(raw), ...(recipient && { recipient }) };
   } catch {
     return cleanGift({});
   }

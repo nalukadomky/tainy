@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSiteOwnerBySlug, deny } from "@/lib/auth";
 import { guestCryptoReady } from "@/lib/guest-crypto";
@@ -10,16 +10,19 @@ import { todayISO } from "@/lib/stay";
 // Kniha ubytovaných za období (měsíc / čtvrtletí / pololetí / rok podle
 // nastavení odvodu). Údaje se dešifrují jen tady, doklady jsou zkrácené.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const guard = await requireSiteOwnerBySlug((await params).slug);
+  const slug = (await params).slug;
+  // Ověření vlastníka a celý web souběžně; data webu se použijí až po ověření
+  const [guard, site] = await Promise.all([requireSiteOwnerBySlug(slug), prisma.site.findUnique({ where: { slug } })]);
   if (!guard.ok) return deny(guard.status);
-  const site = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id } });
+  if (!site) return deny(404);
   const taxPeriod = isTaxPeriod(site.taxPeriod) ? site.taxPeriod : "quarter";
   const periods = recentPeriods(taxPeriod, 12);
   const asked = req.nextUrl.searchParams.get("period") ?? "";
   const period = periods.includes(asked) ? asked : periodKey(todayISO(), taxPeriod);
   const ready = guestCryptoReady();
   const [book, pending] = ready ? await Promise.all([buildBook(site, period), pendingForeigners(site.id)]) : [null, null];
-  if (book?.rows.length) await logAccess(site.id, guard.user.email, "view", `kniha ${period}`);
+  // Zápis do historie přístupů až po odpovědi — majitel na něj nemusí čekat
+  if (book?.rows.length) after(() => logAccess(site.id, guard.user.email, "view", `kniha ${period}`));
   return NextResponse.json(
     {
       ready,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchJson, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
@@ -42,7 +43,8 @@ const currentSlug = () => {
 export default function PropertiesPage() {
   const router = useRouter();
   const toast = useToast();
-  const [list, setList] = useState<Property[] | null>(null);
+  // Z mezipaměti hned, obnova na pozadí
+  const [list, setList] = useCachedJson<Property[]>(SECTION_URL.overview());
   // Import existujícího webu (zatím jen pro testery)
   const [canImport, setCanImport] = useState(false);
   useEffect(() => {
@@ -60,8 +62,7 @@ export default function PropertiesPage() {
   useEffect(() => setChoosing(new URLSearchParams(window.location.search).get("vyber") === "1"), []);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/sites/overview").catch(() => null);
-    const data = await res?.json().catch(() => null);
+    const data = await fetchJson<Property[]>(SECTION_URL.overview());
     if (Array.isArray(data)) setList(data);
     else toast.show("Nemovitosti se nepodařilo načíst.");
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -87,6 +87,11 @@ function Order({
   const router = useRouter();
   const [recipient, setRecipient] = useState("");
   const [dedication, setDedication] = useState("");
+  // Bez věnování: na poukazu nebude ani text, který majitel předvyplnil
+  const [noMessage, setNoMessage] = useState(false);
+  // Bez jména: poukaz nebude nikomu konkrétnímu určený
+  const [noRecipient, setNoRecipient] = useState(false);
+  const who = noRecipient ? "" : recipient.trim();
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [terms, setTerms] = useState(false);
@@ -94,7 +99,11 @@ function Order({
   const [error, setError] = useState<{ text: string; field?: string } | null>(null);
   const [sending, setSending] = useState(false);
 
-  const preview: GiftDesign = { ...offer, message: [recipient.trim() && `Pro ${recipient.trim()}.`, dedication.trim() || offer.message].filter(Boolean).join(" ") };
+  const preview: GiftDesign = {
+    ...offer,
+    recipient: who,
+    message: noMessage ? "" : dedication.trim() || offer.message,
+  };
   const bad = (f: string) => (error?.field === f ? "!border-coral ring-2 ring-coral/15" : "");
 
   async function submit(e: React.FormEvent) {
@@ -107,7 +116,7 @@ function Order({
     const res = await fetch("/api/gift-orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ offerId: offer.id, recipient, dedication, buyerName, buyerEmail, terms, company }),
+      body: JSON.stringify({ offerId: offer.id, recipient: who, dedication: noMessage ? "" : dedication, noMessage, buyerName, buyerEmail, terms, company }),
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
     if (!res?.ok || !data?.token) {
@@ -170,14 +179,46 @@ function Order({
 
         <div className="mt-6 space-y-4">
           <p className="text-sm font-semibold">Na poukaz napíšeme</p>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-soft">Pro koho (nepovinné)</span>
-            <input className="field" maxLength={60} placeholder="např. Petru a Honzu" value={recipient} onChange={(e) => setRecipient(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-soft">Věnování (nepovinné)</span>
-            <textarea className="field min-h-20" maxLength={240} placeholder={offer.message} value={dedication} onChange={(e) => setDedication(e.target.value)} />
-          </label>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-soft">Komu</span>
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-soft">
+                <input type="checkbox" checked={noRecipient} onChange={(e) => setNoRecipient(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--pine)]" />
+                Bez jména
+              </label>
+            </div>
+            {noRecipient ? (
+              <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-sm text-soft">Poukaz nebude nikomu konkrétnímu určený.</p>
+            ) : (
+              <input
+                className="field"
+                aria-label="Komu"
+                maxLength={60}
+                placeholder="např. Pro Janu a Honzu / Milé mamince"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+              />
+            )}
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-soft">Věnování</span>
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-soft">
+                <input type="checkbox" checked={noMessage} onChange={(e) => setNoMessage(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--pine)]" />
+                Bez věnování
+              </label>
+            </div>
+            {noMessage ? (
+              <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-sm text-soft">Na poukazu nebude žádný text, jen {who ? "komu je určený" : "částka a kód"}.</p>
+            ) : (
+              <>
+                <textarea className="field min-h-20" maxLength={240} placeholder={offer.message} value={dedication} onChange={(e) => setDedication(e.target.value)} />
+                {offer.message && !dedication.trim() && (
+                  <p className="mt-1 text-xs text-soft">Když nic nenapíšeš, na poukazu bude text výše.</p>
+                )}
+              </>
+            )}
+          </div>
           <p className="pt-2 text-sm font-semibold">Kam poslat poukaz</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">

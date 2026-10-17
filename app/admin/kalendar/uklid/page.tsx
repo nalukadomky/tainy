@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchJson, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import Link from "next/link";
 import { useAdminData, guestsLabel, type Reservation } from "@/lib/admin";
 import { czk } from "@/lib/pricing";
@@ -83,19 +84,19 @@ const cleanerLink = (token: string) =>
 export default function CleaningPage() {
   const { slug, site, setSite, loading, error } = useAdminData();
   const [tab, setTab] = useState<Tab>("uklidy");
-  const [cleaners, setCleaners] = useState<Cleaner[] | null>(null);
-  const [items, setItems] = useState<Item[] | null>(null);
+  // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
+  const cleanersUrl = slug ? SECTION_URL.cleaners(slug) : null;
+  const itemsUrl = slug ? SECTION_URL.cleanings(slug) : null;
+  const [cleaners, setCleaners] = useCachedJson<Cleaner[]>(cleanersUrl);
+  const [items, setItems] = useCachedJson<Item[]>(itemsUrl);
   const toast = useToast();
 
   const load = useCallback(async () => {
-    if (!slug) return;
-    const [c, i] = await Promise.all([
-      fetch(`/api/cleaners?site=${slug}`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/cleanings?site=${slug}`).then((r) => (r.ok ? r.json() : [])),
-    ]);
-    setCleaners(c);
-    setItems(i);
-  }, [slug]);
+    if (!cleanersUrl || !itemsUrl) return;
+    const [c, i] = await Promise.all([fetchJson<Cleaner[]>(cleanersUrl), fetchJson<Item[]>(itemsUrl)]);
+    setCleaners((prev) => c ?? prev ?? []);
+    setItems((prev) => i ?? prev ?? []);
+  }, [cleanersUrl, itemsUrl, setCleaners, setItems]);
 
   // Načíst znovu i po návratu na stránku — uklízečka mezitím mohla úklid
   // dokončit, nebo se v jiném okně změnil seznam uklízeček.

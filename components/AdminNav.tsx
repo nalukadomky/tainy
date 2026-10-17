@@ -7,6 +7,7 @@ import { PrefetchKind } from "next/dist/client/components/router-reducer/router-
 import { Logo } from "@/components/Logo";
 import { Dropdown } from "@/components/Dropdown";
 import { createClient } from "@/lib/supabase/client";
+import { prefetchSection, WARM_SECTIONS } from "@/lib/section-cache";
 
 // Navigace administrace:
 // - telefon (< 640 px): plovoucí spodní lišta s ikonami, zbytek pod „Více",
@@ -83,16 +84,21 @@ export function AdminNav() {
   const isActive = (href: string) => matches(href) && !ALL.some((h) => h.length > href.length && h.startsWith(href) && matches(h));
   const moreActive = MORE.some((i) => isActive(i.href));
 
-  // Všechny sekce se po otevření administrace přednačtou (i ty schované v „Více"),
-  // takže klik mezi nimi nečeká na server. Data si stránky berou z paměti
-  // (useAdminData) a obnovují je na pozadí.
+  // Po otevření administrace se na pozadí postupně přednačtou data sekcí (vouchery,
+  // úkoly, úklid, kniha…) a pak stránky samotné (i ty schované v „Více“), takže klik
+  // mezi nimi nečeká na server. Po jednom s odstupem — naráz by zahltily spojení
+  // k databázi právě ve chvíli, kdy se načítá aktuální stránka.
   useEffect(() => {
     const hrefs = [...MAIN, WIDGET_ITEM, ...MORE].map((i) => i.href);
-    const warm = () => {
-      for (const href of hrefs) router.prefetch(href, { kind: PrefetchKind.FULL });
+    const steps = [...WARM_SECTIONS.map((h) => () => prefetchSection(h)), ...hrefs.map((h) => () => router.prefetch(h, { kind: PrefetchKind.FULL }))];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const warm = () => steps.forEach((step, i) => timers.push(setTimeout(step, i * 250)));
+    const id = "requestIdleCallback" in window ? requestIdleCallback(warm, { timeout: 2000 }) : setTimeout(warm, 800);
+    return () => {
+      if ("cancelIdleCallback" in window) cancelIdleCallback(id as number);
+      else clearTimeout(id);
+      timers.forEach(clearTimeout);
     };
-    const id = "requestIdleCallback" in window ? requestIdleCallback(warm) : setTimeout(warm, 300);
-    return () => ("cancelIdleCallback" in window ? cancelIdleCallback(id as number) : clearTimeout(id));
   }, [router]);
 
   // Nabídky: zavřít po přechodu na jinou stránku, klikem mimo a Esc.
@@ -291,6 +297,7 @@ function NavLink({ item, active, tabIndex }: { item: Item; active: boolean; tabI
     <Link
       href={item.href}
       prefetch
+      onPointerEnter={() => prefetchSection(item.href)}
       tabIndex={tabIndex}
       className={`whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition ${
         active ? "bg-ink text-white" : "text-soft hover:bg-line/50 hover:text-ink"
@@ -319,6 +326,7 @@ function MenuLink({ item, active }: { item: Item; active: boolean }) {
     <Link
       href={item.href}
       prefetch
+      onPointerEnter={() => prefetchSection(item.href)}
       role="menuitem"
       className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition hover:bg-bg ${
         active ? "bg-pine/10 font-semibold text-pine" : "text-ink"
@@ -337,7 +345,7 @@ const tabClass = (active: boolean) =>
 
 function TabLink({ item, active }: { item: Item; active: boolean }) {
   return (
-    <Link href={item.href} prefetch aria-current={active ? "page" : undefined} className={tabClass(active)}>
+    <Link href={item.href} prefetch onTouchStart={() => prefetchSection(item.href)} aria-current={active ? "page" : undefined} className={tabClass(active)}>
       <Icon name={item.icon} />
       <span className="truncate">{item.label}</span>
     </Link>

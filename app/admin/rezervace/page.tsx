@@ -431,27 +431,34 @@ export default function ReservationsPage() {
                         </div>
                         <div className="w-9 shrink-0">
                           <ActionsMenu
+                            header={{
+                              title: r.guestName,
+                              subtitle: `${fmtStay(r.startDate, r.endDate)} · ${czk(r.totalPrice)}`,
+                              status: r.status,
+                            }}
                             items={[
-                              r.status === "pending" && { label: "✓ Označit zaplaceno", run: () => setStatus(r.id, "paid") },
+                              r.status === "pending" && { label: "Označit zaplaceno", icon: "checkCircle", run: () => setStatus(r.id, "paid") },
                               r.status === "paid" && {
-                                label: "↺ Vrátit na nezaplaceno",
+                                label: "Vrátit na nezaplaceno",
+                                icon: "card",
                                 run: () => {
                                   setStatus(r.id, "pending");
                                   toast.show(`${r.guestName}: vráceno na nezaplaceno`, "success");
                                 },
                               },
-                              editable(r) && { label: "✎ Doplnit údaje", run: () => setEditing(r) },
-                              r.status !== "cancelled" && !r.feedId && { label: "Změnit termín", run: () => setRescheduling(r) },
+                              editable(r) && { label: "Doplnit údaje", icon: "pen", run: () => setEditing(r) },
+                              r.status !== "cancelled" && !r.feedId && { label: "Změnit termín", icon: "calendar", run: () => setRescheduling(r) },
                               usesLockCodes(site) &&
                                 r.status !== "cancelled" &&
                                 r.endDate.slice(0, 10) >= todayISO() && {
                                   label: r.accessCode ? `Kód k zámku: ${r.accessCode}` : "Doplnit kód k zámku",
+                                  icon: "lock",
                                   run: () => setCodeFor(r),
                                 },
-                              { label: "Zobrazit detail", run: () => setSheetId(r.id) },
+                              { label: "Zobrazit detail", icon: "eye", run: () => setSheetId(r.id) },
                               r.status !== "cancelled"
-                                ? { label: "✕ Zrušit rezervaci", run: () => cancelStay(r), danger: true }
-                                : { label: "↺ Obnovit", run: () => setStatus(r.id, "pending") },
+                                ? { label: "Zrušit rezervaci", icon: "trash", run: () => cancelStay(r), danger: true }
+                                : { label: "Obnovit", icon: "checkCircle", run: () => setStatus(r.id, "pending") },
                             ]}
                           />
                         </div>
@@ -627,11 +634,31 @@ function StayDetail({ r, site, onChange }: { r: Reservation; site: Site | null; 
   );
 }
 
-type MenuItem = { label: string; run: () => void; danger?: boolean };
+type MenuItem = { label: string; icon: IconName; run: () => void; danger?: boolean };
 
-/** Mobil: tlačítko „⋯“ s nabídkou akcí rezervace (na větší obrazovce jsou tlačítka v kartě). */
-function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
+/** Termín pro hlavičku nabídky: „20.–22. 10. 2026 · 2 noci“. */
+function fmtStay(start: string, end: string) {
+  const [, m1, d1] = start.slice(0, 10).split("-").map(Number);
+  const [y2, m2, d2] = end.slice(0, 10).split("-").map(Number);
+  const nights = nightsBetween(new Date(start), new Date(end));
+  const from = m1 === m2 ? `${d1}.` : `${d1}. ${m1}.`;
+  return `${from}–${d2}. ${m2}. ${y2} · ${nights} ${plural(nights, "noc", "noci", "nocí")}`;
+}
+
+/**
+ * Tlačítko „⋯“ s akcemi rezervace. Na telefonu se nabídka otevře jako okno zespodu
+ * s hlavičkou rezervace (přes spodní lištu, nic se neschová); na větší obrazovce
+ * jako rozbalovací nabídka pod tlačítkem.
+ */
+function ActionsMenu({
+  items,
+  header,
+}: {
+  items: (MenuItem | false)[];
+  header: { title: string; subtitle: string; status: Reservation["status"] };
+}) {
   const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -646,6 +673,10 @@ function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
     };
   }, [open]);
   const list = items.filter(Boolean) as MenuItem[];
+  const pick = (item: MenuItem) => {
+    setOpen(false);
+    item.run();
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -653,7 +684,10 @@ function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
         type="button"
         aria-label="Akce rezervace"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setPhone(window.matchMedia("(max-width: 639px)").matches);
+          setOpen((o) => !o);
+        }}
         className="flex h-9 w-9 items-center justify-center rounded-full text-soft transition hover:bg-bg hover:text-ink"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
@@ -662,29 +696,71 @@ function ActionsMenu({ items }: { items: (MenuItem | false)[] }) {
           <circle cx="18.5" cy="12" r="1.6" />
         </svg>
       </button>
-      {open && (
+      {open && !phone && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-lg"
+          className="absolute right-0 top-full z-30 mt-1 w-60 overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-lg"
         >
           {list.map((item) => (
             <button
               key={item.label}
               type="button"
               role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                item.run();
-              }}
-              className={`block w-full rounded-xl px-3.5 py-2.5 text-left text-sm transition hover:bg-bg ${
+              onClick={() => pick(item)}
+              className={`flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm transition hover:bg-bg ${
                 item.danger ? "text-coral" : "text-ink"
               }`}
             >
+              <Icon name={item.icon} size={16} className={item.danger ? "" : "text-soft"} />
               {item.label}
             </button>
           ))}
         </div>
       )}
+      {open &&
+        phone &&
+        // Do <body>: okno musí překrýt i spodní lištu navigace
+        createPortal(
+          <div className="fixed inset-0 z-[80] flex items-end bg-ink/50 backdrop-blur-sm" onMouseDown={() => setOpen(false)}>
+            <div
+              role="menu"
+              aria-label={`Akce rezervace ${header.title}`}
+              className="rise w-full rounded-t-3xl bg-surface px-4 pt-2.5 shadow-2xl"
+              style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto h-1.5 w-10 rounded-full bg-line" aria-hidden />
+              <div className="mt-4 flex items-start justify-between gap-3 border-b border-line pb-4">
+                <div className="min-w-0">
+                  <p className="truncate font-display text-xl font-semibold">{header.title}</p>
+                  <p className="text-sm text-soft">{header.subtitle}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[header.status]}`}>
+                  {STATUS_LABEL[header.status]}
+                </span>
+              </div>
+              <div className="mt-1">
+                {list.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => pick(item)}
+                    className={`flex w-full items-center gap-3.5 rounded-xl px-2 py-2.5 text-left text-[15px] transition active:bg-bg ${
+                      item.danger ? "text-coral" : "text-ink"
+                    }`}
+                  >
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.danger ? "bg-coral/10" : "bg-bg"}`}>
+                      <Icon name={item.icon} size={17} />
+                    </span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ export async function GET() {
   const sites = await prisma.site.findMany({
     where: { ownerId: user.id },
     orderBy: { createdAt: "asc" },
+    // Přepínači stačí název a adresa — ne celé řádky s texty a fotkami
+    select: { slug: true, name: true, widgetOnly: true },
   });
   return NextResponse.json(sites);
 }

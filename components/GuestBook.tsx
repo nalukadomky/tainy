@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fetchJson, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { NumberField } from "@/components/NumberField";
@@ -54,27 +55,30 @@ const full = (iso: string) => {
 const persons = (n: number) => `${n} ${plural(n, "osoba", "osoby", "osob")}`;
 
 export function GuestBook({ slug }: { slug: string }) {
-  const [data, setData] = useState<Data | null>(null);
   const [period, setPeriod] = useState("");
+  // Aktuální období z mezipaměti hned (i přednačtené z menu), obnova na pozadí
+  const url = SECTION_URL.guestbook(slug, period);
+  const [cached, setData] = useCachedJson<Data>(url);
+  // Při přepnutí na ještě nenačtené období zůstane vidět předchozí, jen zešedne
+  const last = useRef<Data | null>(null);
+  if (cached) last.current = cached;
+  const data = cached ?? last.current;
   const [failed, setFailed] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    fetch(`/api/sites/${slug}/guestbook${period ? `?period=${period}` : ""}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: Data) => {
-        if (!alive) return;
-        setData(d);
-        setFailed(false);
-      })
-      .catch(() => alive && setFailed(true))
-      .finally(() => alive && setLoading(false));
+    fetchJson<Data>(url).then((d) => {
+      if (!alive) return;
+      if (d) setData(d);
+      setFailed(!d);
+      setLoading(false);
+    });
     return () => {
       alive = false;
     };
-  }, [slug, period]);
+  }, [url, setData]);
 
   if (failed && !data) return <p className="py-16 text-center text-soft">Knihu ubytovaných se nepodařilo načíst.</p>;
   if (!data) return <BookSkeleton />;
@@ -124,7 +128,7 @@ export function GuestBook({ slug }: { slug: string }) {
           Kniha ubytovaných zatím nejde použít — v nastavení serveru chybí šifrovací klíč (GUEST_DATA_KEY).
         </p>
       ) : !book ? null : (
-        <div className={`space-y-5 transition-opacity ${loading ? "opacity-50" : ""}`}>
+        <div className={`space-y-5 transition-opacity ${loading && !cached ? "opacity-50" : ""}`}>
           <TaxCard slug={slug} book={book} taxSource={data.taxSource} onRemittance={setRemittance} />
           <CheckinStatus book={book} />
           <PeopleTable rows={book.rows} />

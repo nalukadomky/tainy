@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchJson, fieldSetter, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import { createPortal } from "react-dom";
 import { useAdminData, fmtDate } from "@/lib/admin";
 import { VoucherTabs } from "@/components/VoucherTabs";
@@ -46,23 +47,25 @@ const headOf = (raw: string) => {
 
 export default function GiftVouchersPage() {
   const { slug, site, loading: siteLoading, error: siteError } = useAdminData();
-  const [offers, setOffers] = useState<Offer[] | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
+  const url = slug ? SECTION_URL.gifts(slug) : null;
+  const [data, setData] = useCachedJson<{ offers: Offer[]; orders: Order[] }>(url);
+  const offers = useMemo(
+    () => data?.offers.map((o) => ({ ...cleanGift(o), id: o.id, onSale: o.onSale, sold: o.sold })) ?? null,
+    [data],
+  );
+  const orders = data?.orders ?? [];
+  const setOffers = useMemo(() => fieldSetter(setData, "offers", []), [setData]);
+  const setOrders = useMemo(() => fieldSetter(setData, "orders", []), [setData]);
   const [failed, setFailed] = useState(false);
   const [wizard, setWizard] = useState<Offer | "new" | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
   const load = useCallback(() => {
-    if (!slug) return;
-    fetch(`/api/gifts?site=${slug}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: { offers: Offer[]; orders: Order[] }) => {
-        setOffers(d.offers.map((o) => ({ ...cleanGift(o), id: o.id, onSale: o.onSale, sold: o.sold })));
-        setOrders(d.orders);
-      })
-      .catch(() => setFailed(true));
-  }, [slug]);
+    if (!url) return;
+    fetchJson<{ offers: Offer[]; orders: Order[] }>(url).then((d) => (d ? setData(d) : setFailed(true)));
+  }, [url, setData]);
   useEffect(load, [load]);
 
   if (siteLoading || (!offers && !failed)) return <ListPageSkeleton label="Načítám dárkové poukazy" rows={4} />;
@@ -115,7 +118,7 @@ export default function GiftVouchersPage() {
     setOffers((all) => all!.filter((x) => x.id !== o.id));
     const res = await fetch(`/api/gifts/${o.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
-      setOffers(before);
+      setOffers(before ?? []);
       toast.show("Smazání se nepovedlo.", "error");
     }
   }
@@ -249,7 +252,7 @@ export default function GiftVouchersPage() {
                       {headOf(o.design)} · {czk(o.price)}
                     </span>
                     <span className="block text-xs text-soft">
-                      {o.buyerName} ({o.buyerEmail}){o.recipient && ` · pro ${o.recipient}`} · {fmtDate(o.createdAt)}
+                      {o.buyerName} ({o.buyerEmail}){o.recipient && ` · ${o.recipient}`} · {fmtDate(o.createdAt)}
                       {o.usedFor && ` · uplatněno ${fmtDate(o.usedFor.start)}`}
                       {o.status === "paid" && o.validTo && ` · platí do ${fmtDate(o.validTo)}`}
                     </span>

@@ -117,7 +117,7 @@ export default async function GiftOrderPage({ params, searchParams }: { params: 
               <dl className="space-y-2 rounded-2xl border border-line bg-surface p-5 text-sm">
                 {[
                   ["Poukaz", giftHeadline(d)],
-                  ...(order.recipient ? [["Pro", order.recipient]] : []),
+                  ...(order.recipient ? [["Komu", order.recipient]] : []),
                   ["Platí", `${d.validMonths} měsíců od zaplacení`],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">

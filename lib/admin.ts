@@ -232,6 +232,20 @@ async function firstOwnedSlug(): Promise<string | null> {
 // stránkami se ukážou hned a na pozadí se tiše obnoví — žádné čekání na server.
 let cache: { slug: string; site: Site; reservations: Reservation[]; costs: Cost[]; blackouts: Blackout[] } | null = null;
 const cached = () => (typeof window !== "undefined" && cache && cache.slug === getSiteSlug() ? cache : null);
+// Kdy přišla poslední odpověď ze serveru. Čerstvá data (< 30 s) se při přechodu
+// mezi stránkami znovu nestahují; víc instancí hooku sdílí jeden probíhající požadavek.
+const FRESH_MS = 30_000;
+let fetchedAt = 0;
+let inflight: { slug: string; p: Promise<Response> } | null = null;
+function fetchAdminData(slug: string, shared: boolean): Promise<Response> {
+  if (shared && inflight?.slug === slug) return inflight.p.then((r) => r.clone());
+  const p = fetch(`/api/admin-data?site=${encodeURIComponent(slug)}`);
+  inflight = { slug, p };
+  p.finally(() => {
+    if (inflight?.p === p) inflight = null;
+  }).catch(() => {});
+  return p.then((r) => r.clone());
+}
 
 /** Blokace termínu majitelem; `endDate` je den po posledním blokovaném dni. */
 export type Blackout = {
@@ -273,7 +287,9 @@ export function useAdminData() {
     if (slug && site) cache = { slug, site, reservations, costs, blackouts };
   }, [slug, site, reservations, costs, blackouts]);
 
-  const reload = useCallback(async (s?: string) => {
+  // `shared` = automatické načtení (přechod na stránku, návrat do okna) — připojí se
+  // k už běžícímu požadavku; ruční reload po změně vždy stáhne čerstvá data.
+  const reload = useCallback(async (s?: string, shared = false) => {
     const silent = !!cache && cache.slug === (s ?? getSiteSlug());
     if (!silent) setLoading(true);
     setError("");
@@ -292,7 +308,7 @@ export function useAdminData() {
       setSlug(useSlug);
 
       // Jeden požadavek na všechno — prohlížeč nemá frontu, přechody nečekají.
-      const res = await fetch(`/api/admin-data?site=${encodeURIComponent(useSlug)}`);
+      const res = await fetchAdminData(useSlug, shared);
 
       // Uložený web už není náš (403) nebo neexistuje (404) — zkus první vlastní
       if (!res.ok) {
@@ -309,6 +325,7 @@ export function useAdminData() {
       }
 
       const data: { site: Site; reservations: Reservation[]; costs: Cost[]; blackouts: Blackout[] } = await res.json();
+      fetchedAt = Date.now();
       setSite(data.site);
       setReservations(data.reservations);
       setCosts(data.costs);
@@ -323,7 +340,13 @@ export function useAdminData() {
   }, []);
 
   useEffect(() => {
-    reload();
+    if (!cached() || Date.now() - fetchedAt > FRESH_MS) reload(undefined, true);
+    // Návrat do okna (jiná záložka, telefon z kapsy) — obnovit, pokud jsou data starší
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - fetchedAt > FRESH_MS) reload(undefined, true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [reload]);
 
   // Změna stavu se ukáže hned, ukládá se na pozadí; při chybě se vrátí původní.

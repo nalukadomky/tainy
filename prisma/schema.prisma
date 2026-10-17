@@ -166,6 +166,8 @@ model PriceRule {
   value     Int
   unit      String   @default("pct")
   createdAt DateTime @default(now())
+
+  @@index([siteId])
 }
 
 model Reservation {
@@ -294,6 +296,8 @@ model Cost {
   endDate   DateTime? // poslední den, kdy se opakovaný náklad ještě počítá
   date      DateTime @default(now())
   createdAt DateTime @default(now())
+
+  @@index([siteId, date])
 }
 
 // Slevový kód webu. Použití = nezrušené rezervace se stejným kódem.
@@ -331,6 +335,8 @@ model Cleaner {
   createdAt DateTime   @default(now())
   cleanings Cleaning[]
   todos     Todo[]
+
+  @@index([siteId])
 }
 
 // Úklid: buď po odjezdu hostů z jedné rezervace (vzniká při přiřazení uklízečky),
@@ -358,6 +364,8 @@ model Cleaning {
   amount        Int?        // částka v době zaplacení
   costId        String?     // záznam v Nákladech vytvořený při zaplacení
   createdAt     DateTime    @default(now())
+
+  @@index([siteId, date])
 }
 
 // Úkoly (To-Do) majitele a personálu: Nákupy, Opravy, Provoz. Úkol patří

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { fetchJson, fieldSetter, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import { useAdminData } from "@/lib/admin";
 import { TodoBoard, type Assignee } from "@/components/TodoBoard";
 import { useToast } from "@/components/Toast";
@@ -14,23 +15,26 @@ import { isOpen, type TodoCategory, type TodoItem } from "@/lib/todos";
 
 export default function TodosPage() {
   const { slug } = useAdminData();
-  const [todos, setTodos] = useState<TodoItem[] | null>(null);
-  const [cleaners, setCleaners] = useState<{ id: string; name: string }[]>([]);
+  // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
+  type Data = { todos: TodoItem[]; cleaners: { id: string; name: string }[]; staffSeesOwnerTodos: boolean };
+  const url = slug ? SECTION_URL.todos(slug) : null;
+  const [data, setData] = useCachedJson<Data>(url);
+  const todos = data?.todos ?? null;
+  const cleaners = data?.cleaners ?? [];
   // Vidí personál úkoly, které si majitel zapsal sám pro sebe?
-  const [staffSees, setStaffSees] = useState(true);
+  const staffSees = data?.staffSeesOwnerTodos ?? true;
+  const setTodos = useMemo(() => fieldSetter(setData, "todos", [] as TodoItem[]) as React.Dispatch<React.SetStateAction<TodoItem[] | null>>, [setData]);
+  const setStaffSees = useMemo(() => fieldSetter(setData, "staffSeesOwnerTodos", true), [setData]);
   const toast = useToast();
   const showToast = toast.show;
   const confirmDlg = useConfirm();
 
   const load = useCallback(async () => {
-    if (!slug) return;
-    const res = await fetch(`/api/todos?site=${encodeURIComponent(slug)}`).catch(() => null);
-    if (!res?.ok) return showToast("Úkoly se nepodařilo načíst.");
-    const data = await res.json();
-    setTodos(data.todos);
-    setCleaners(data.cleaners);
-    setStaffSees(data.staffSeesOwnerTodos);
-  }, [slug, showToast]);
+    if (!url) return;
+    const fresh = await fetchJson<Data>(url);
+    if (!fresh) return showToast("Úkoly se nepodařilo načíst.");
+    setData(fresh);
+  }, [url, setData, showToast]);
   useEffect(() => {
     load();
   }, [load]);

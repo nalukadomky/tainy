@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { cachedJson, fetchJson, SECTION_URL, useCachedJson } from "@/lib/section-cache";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { submitOnEnter } from "@/lib/enter";
 import Link from "next/link";
@@ -73,7 +74,9 @@ function describe(d: { kind: VoucherKind; value: number; validFrom: string | nul
 
 export default function VouchersPage() {
   const { slug, site, loading: siteLoading, error: siteError } = useAdminData();
-  const [vouchers, setVouchers] = useState<Voucher[] | null>(null);
+  // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
+  const url = slug ? SECTION_URL.vouchers(slug) : null;
+  const [vouchers, setVouchers] = useCachedJson<Voucher[]>(url);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [formError, setFormError] = useState("");
@@ -87,10 +90,9 @@ export default function VouchersPage() {
   const today = todayISO();
 
   const load = useCallback(async () => {
-    if (!slug) return;
-    const res = await fetch(`/api/vouchers?site=${slug}`);
-    setVouchers(res.ok ? await res.json() : []);
-  }, [slug]);
+    if (!url) return;
+    setVouchers((await fetchJson<Voucher[]>(url)) ?? cachedJson<Voucher[]>(url) ?? []);
+  }, [url, setVouchers]);
 
   useEffect(() => {
     load();

@@ -18,8 +18,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   if (!guard.ok) return deny(guard.status);
   // Odkaz na kalendář webu vznikne při prvním otevření záložky
   // (jen když ještě žádný není — souběžné načtení nesmí vytvořit dva různé)
-  await prisma.site.updateMany({ where: { id: guard.site.id, icalToken: null }, data: { icalToken: newIcalToken() } });
-  const { icalToken } = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id }, select: { icalToken: true } });
+  let { icalToken } = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id }, select: { icalToken: true } });
+  if (!icalToken) {
+    await prisma.site.updateMany({ where: { id: guard.site.id, icalToken: null }, data: { icalToken: newIcalToken() } });
+    ({ icalToken } = await prisma.site.findUniqueOrThrow({ where: { id: guard.site.id }, select: { icalToken: true } }));
+  }
   const [feeds, conflicts] = await Promise.all([
     prisma.calendarFeed.findMany({ where: { siteId: guard.site.id }, orderBy: { createdAt: "asc" }, select: FEED_SELECT }),
     feedConflicts(guard.site.id),

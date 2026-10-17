@@ -133,11 +133,15 @@ export async function buildBook(site: Site, period: string) {
   const from = new Date(`${range.start}T00:00:00.000Z`);
   const to = new Date(`${range.end}T00:00:00.000Z`);
   const today = toISO(new Date());
-  const reservations = await prisma.reservation.findMany({
-    where: { siteId: site.id, status: { not: "cancelled" }, source: { not: "demo" }, startDate: { lt: to }, endDate: { gt: from } },
-    include: { guestRecords: { orderBy: { position: "asc" } } },
-    orderBy: { startDate: "asc" },
-  });
+  // Rezervace i odvod obci za období souběžně (každý dotaz je cesta do databáze)
+  const [reservations, remittance] = await Promise.all([
+    prisma.reservation.findMany({
+      where: { siteId: site.id, status: { not: "cancelled" }, source: { not: "demo" }, startDate: { lt: to }, endDate: { gt: from } },
+      include: { guestRecords: { orderBy: { position: "asc" } } },
+      orderBy: { startDate: "asc" },
+    }),
+    prisma.taxRemittance.findUnique({ where: { siteId_period: { siteId: site.id, period } } }),
+  ]);
   const rate = site.touristTax;
   const rows: BookRow[] = [];
   const stays: BookStay[] = [];
@@ -201,7 +205,6 @@ export async function buildBook(site: Site, period: string) {
     });
   }
 
-  const remittance = await prisma.taxRemittance.findUnique({ where: { siteId_period: { siteId: site.id, period } } });
   const summary = {
     expectedPeople: stays.reduce((sum, x) => sum + x.total, 0),
     people: rows.length,

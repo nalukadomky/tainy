@@ -31,7 +31,10 @@ export async function POST(req: NextRequest) {
   if (recent >= 5) return NextResponse.json({ error: "Objednávek je teď moc. Zkus to prosím za chvíli." }, { status: 429 });
 
   const base = offerDesign(offer);
-  const design = cleanGift({ ...base, message: [recipient && `Pro ${recipient}.`, dedication || base.message].filter(Boolean).join(" ") });
+  // „Bez věnování“: ani předvyplněný text z nabídky
+  const message = body.noMessage === true ? "" : dedication || base.message;
+  // „Komu“ zvlášť (na poukazu tučně nad věnováním), přesně jak ho kupující napsal
+  const design = { ...cleanGift({ ...base, message }), recipient };
   const order = await prisma.giftOrder.create({
     data: {
       publicId: await newGiftPublicId(),

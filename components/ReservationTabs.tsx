@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { prefetchSection } from "@/lib/section-cache";
 
 /** Přepínač nahoře v sekci Rezervace: seznam rezervací | kniha ubytovaných. */
 export function ReservationTabs({ active }: { active: "list" | "book" }) {
@@ -10,7 +13,7 @@ export function ReservationTabs({ active }: { active: "list" | "book" }) {
       <Link href="/admin/rezervace" className={tab(active === "list")} aria-current={active === "list" ? "page" : undefined}>
         Rezervace
       </Link>
-      <Link href="/admin/rezervace/kniha" className={tab(active === "book")} aria-current={active === "book" ? "page" : undefined}>
+      <Link href="/admin/rezervace/kniha" onPointerEnter={() => prefetchSection("/admin/rezervace/kniha")} onTouchStart={() => prefetchSection("/admin/rezervace/kniha")} className={tab(active === "book")} aria-current={active === "book" ? "page" : undefined}>
         <Icon name="clipboard" size={14} />
         Kniha ubytovaných
       </Link>

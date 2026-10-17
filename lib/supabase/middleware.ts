@@ -3,7 +3,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DEV_LOGIN_COOKIE, devLoginEnabled } from "@/lib/dev-login";
 
 // Obnoví Supabase session a ochrání /admin (nepřihlášené přesměruje na /login).
+// Ověření session je síťový dotaz na Supabase Auth — děláme ho jen tam, kde má smysl:
+// API si přihlášení ověřuje samo (a session si v případě potřeby obnoví samo) a host
+// bez přihlašovací cookie (veřejný web, rezervace) žádnou session nemá.
 export async function updateSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/api/")) return NextResponse.next({ request });
+  const hasSession = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+  const devUser = devLoginEnabled() && request.cookies.has(DEV_LOGIN_COOKIE);
+  if (!hasSession) {
+    if (!devUser && pathname.startsWith("/admin")) return toLogin(request);
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -31,16 +43,16 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Vývojové přihlášení: tady stačí přítomnost cookie, účet ověří getUser() v layoutu.
-  const devUser = devLoginEnabled() && request.cookies.has(DEV_LOGIN_COOKIE);
-
-  if (!user && !devUser && request.nextUrl.pathname.startsWith("/admin")) {
-    // Po přihlášení zpět na stejnou stránku i s parametry (např. ?panel=galerie)
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-    return NextResponse.redirect(url);
-  }
+  if (!user && !devUser && pathname.startsWith("/admin")) return toLogin(request);
 
   return response;
+}
+
+// Po přihlášení zpět na stejnou stránku i s parametry (např. ?panel=galerie)
+function toLogin(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+  return NextResponse.redirect(url);
 }

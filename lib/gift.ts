@@ -17,6 +17,8 @@ export type GiftDesign = {
   price: number; // prodejní cena (u „value“ = hodnota)
   headline: string; // vlastní nadpis, prázdné = podle obsahu
   message: string;
+  /** Jen u objednávky: komu je poukaz („Pro Janu a Honzu“), jak to kupující napsal — tučně nad věnováním. */
+  recipient?: string;
   validMonths: number;
   template: GiftTemplate;
   color: string;
