@@ -165,7 +165,10 @@ export function toSiteViewData(site: SiteSource): SiteViewData {
 }
 
 /** Obsah dokumentu pro okno na webu (vlastní znění, PDF, nebo výchozí text). */
-function legalDoc(site: SiteSource, kind: "terms" | "privacy"): LegalDocData | undefined {
+export function legalDoc(
+  site: Pick<SiteSource, "termsPdf" | "termsText" | "termsUpdatedAt" | "privacyPdf" | "privacyText" | "privacyUpdatedAt">,
+  kind: "terms" | "privacy",
+): LegalDocData | undefined {
   const src = site as LegalSource;
   if (!hasDoc(src, kind)) return undefined;
   const own = kind === "terms" ? site.termsPdf || site.termsText?.trim() : site.privacyPdf || site.privacyText?.trim();

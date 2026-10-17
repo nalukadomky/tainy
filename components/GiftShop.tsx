@@ -7,6 +7,7 @@ import { GiftVoucherCard } from "@/components/GiftVoucherCard";
 import { czk } from "@/lib/pricing";
 import { giftHeadline, type GiftDesign } from "@/lib/gift";
 import type { LegalKind } from "@/lib/legal";
+import { LegalModal, type LegalDocData } from "@/components/LegalModal";
 
 // Dárkové poukazy na webu ubytování: nabídka a objednávka. Kupující vyplní,
 // pro koho je poukaz a věnování (hned je vidí na poukazu), a kam ho poslat.
@@ -24,14 +25,22 @@ type Props = {
   /** Ve widgetu na cizím webu: objednávka zůstane v okně, podmínky přes onOpenDoc. */
   embed?: boolean;
   onOpenDoc?: (kind: LegalKind) => void;
+  /** Obsah podmínek a zásad — otevřou se v okně nad stránkou (bez onOpenDoc). */
+  docs?: Partial<Record<LegalKind, LegalDocData>>;
+  slug?: string;
+  provider?: string;
 };
 
-export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy, embed, onOpenDoc }: Props) {
+export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy, embed, onOpenDoc, docs, slug, provider }: Props) {
+  const [docOpen, setDocOpen] = useState<LegalKind | null>(null);
+  const openDoc = onOpenDoc ?? (docs ? setDocOpen : undefined);
+  const doc = docOpen ? docs?.[docOpen] : undefined;
   const [pick, setPick] = useState<string | null>(offers.length === 1 ? offers[0].id : null);
   const offer = offers.find((o) => o.id === pick) ?? null;
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-10 lg:px-8">
+      {docOpen && doc && <LegalModal kind={docOpen} doc={doc} slug={slug} provider={provider} onClose={() => setDocOpen(null)} />}
       {!offer ? (
         <>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">Dárkové poukazy</p>
@@ -59,7 +68,7 @@ export function GiftShop({ siteName, offers, base, hasTerms, hasPrivacy, embed, 
           </div>
         </>
       ) : (
-        <Order offer={offer} siteName={siteName} base={base} hasTerms={hasTerms} hasPrivacy={hasPrivacy} embed={embed} onOpenDoc={onOpenDoc} onBack={offers.length > 1 ? () => setPick(null) : undefined} />
+        <Order offer={offer} siteName={siteName} base={base} hasTerms={hasTerms} hasPrivacy={hasPrivacy} embed={embed} onOpenDoc={openDoc} onBack={offers.length > 1 ? () => setPick(null) : undefined} />
       )}
     </main>
   );

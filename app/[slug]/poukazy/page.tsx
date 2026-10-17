@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { siteWhere } from "@/lib/demo";
 import { themeVars } from "@/lib/theme";
-import { hasDoc } from "@/lib/legal";
+import { hasDoc, providerLine } from "@/lib/legal";
+import { legalDoc } from "@/lib/siteView";
 import { offerDesign } from "@/lib/gift-server";
 import { GiftShop } from "@/components/GiftShop";
 
@@ -39,6 +40,10 @@ export default async function GiftsPage({ params }: { params: Promise<{ slug: st
           base={base}
           hasTerms={hasDoc(site, "terms")}
           hasPrivacy={hasDoc(site, "privacy")}
+          // Podmínky a zásady v okně nad stránkou, ne na nové stránce
+          docs={{ terms: legalDoc(site, "terms"), privacy: legalDoc(site, "privacy") }}
+          slug={site.slug}
+          provider={site.businessName ? providerLine(site) : undefined}
           offers={site.giftOffers.map((o) => ({ ...offerDesign(o), id: o.id }))}
         />
       ) : (
