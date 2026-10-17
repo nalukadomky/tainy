@@ -301,8 +301,7 @@ export default function ReservationsPage() {
           <div className="hidden items-center gap-4 px-5 text-xs font-semibold uppercase tracking-wider text-soft sm:flex">
             <span className="w-16">Příjezd</span>
             <span className="min-w-0 flex-1">Host</span>
-            <span className="w-36" aria-hidden />
-            <span className="w-32">Stav</span>
+            <span className="w-32 pr-2 text-right">Stav</span>
             <span className="w-28 text-right">Cena</span>
             <span className="w-9" aria-hidden />
           </div>
@@ -381,19 +380,22 @@ export default function ReservationsPage() {
                         {/* Host a termín */}
                         <div className="min-w-0 flex-1">
                           {/* Na mobilu má jméno celý řádek — zdroj je v řádku pod ním, úklid ikonou pod datem */}
-                          {/* Štítky v jednom řádku se jménem — při nedostatku místa se zkrátí jméno, ne řádek navíc */}
+                          {/* Štítky v jednom řádku se jménem. Jméno má přednost (zkrátí se, jen když se nevejde
+                              ani samo); štítky, které se vedle něj nevejdou, se schovají celé — nezalomí se. */}
                           <p className="flex items-center gap-x-2 font-semibold leading-snug">
-                            <span className="truncate">{r.guestName}</span>
+                            <span className="max-w-full shrink-0 truncate">{r.guestName}</span>
+                            <span className="flex h-6 min-w-0 flex-wrap items-center gap-x-2 gap-y-8 overflow-hidden">
                             {r.source !== "web" && (
                               <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-soft max-sm:hidden">
                                 {SOURCE_LABEL[r.source] ?? r.source}
                               </span>
                             )}
                             <span className="contents max-sm:hidden">
-                              <VoucherBadge code={r.voucherCode} discount={r.discount} />
+                              <VoucherBadge code={r.voucherCode} discount={r.discount} compact />
                               <CleaningBadge alert={r.cleaningAlert} small />
                             </span>
                             <CheckinBadge r={r} site={site} />
+                            </span>
                           </p>
                           <p className="text-sm text-soft sm:truncate">
                             <span className="sm:hidden">{dayMonthRange(r.startDate, r.endDate)}</span>
@@ -406,7 +408,7 @@ export default function ReservationsPage() {
                           </p>
                         </div>
                         {/* Akce podle situace (počítač) — uprostřed */}
-                        <div className="hidden w-36 shrink-0 justify-center sm:flex">
+                        <div className="hidden shrink-0 sm:flex">
                           {action && (
                             <button
                               type="button"
@@ -419,7 +421,7 @@ export default function ReservationsPage() {
                           )}
                         </div>
                         {/* Stav — klik na štítek ho přepne (počítač) */}
-                        <div className="hidden w-32 shrink-0 sm:block">
+                        <div className="hidden w-32 shrink-0 justify-end sm:flex">
                           <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st).then(notify)} />
                         </div>
                         {/* Cena vpravo; na mobilu pod ní stav */}

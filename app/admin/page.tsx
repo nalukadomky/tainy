@@ -405,20 +405,21 @@ function shortRange(startIso: string, endIso: string): string {
 /** Jeden krok přípravy pobytu v kartě nejbližšího pobytu: hotovo ✓ / čeká ○ / problém. */
 function Step({ state, title, children }: { state: "done" | "wait" | "warn"; title: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 items-start gap-2.5 px-4 py-3.5 sm:px-5">
+    // Úzká karta: krok = řádek (název vlevo, podrobnost vpravo); široká: sloupce vedle sebe
+    <div className="flex min-w-0 items-center gap-2.5 px-4 py-3 @[46rem]:items-start @[46rem]:px-5 @[46rem]:py-3.5">
       {state === "done" ? (
-        <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-pine text-[10px] font-bold text-white" aria-label="Hotovo">
+        <span className="flex h-[18px] w-[18px] shrink-0 @[46rem]:mt-0.5 items-center justify-center rounded-full bg-pine text-[10px] font-bold text-white" aria-label="Hotovo">
           ✓
         </span>
       ) : (
         <span
-          className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-2 ${state === "warn" ? "border-coral" : "border-amber"}`}
+          className={`h-[18px] w-[18px] shrink-0 rounded-full border-2 @[46rem]:mt-0.5 ${state === "warn" ? "border-coral" : "border-amber"}`}
           aria-label={state === "warn" ? "Pozor" : "Čeká"}
         />
       )}
-      <div className="min-w-0 text-sm">
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 text-sm @[46rem]:block">
         <p className="font-semibold">{title}</p>
-        {children && <div className="whitespace-nowrap text-[13px] text-soft">{children}</div>}
+        {children && <div className="text-[13px] text-soft">{children}</div>}
       </div>
     </div>
   );
@@ -566,10 +567,14 @@ function NextStay({
         />
       )}
       {/* Kroky přípravy pobytu */}
-      <div className={`grid divide-line border-t border-line bg-cream max-sm:divide-y sm:divide-x ${
-          steps.length === 4 ? "sm:grid-cols-2 xl:grid-cols-4" : steps.length === 3 ? "sm:grid-cols-3" : steps.length === 2 ? "sm:grid-cols-2" : ""
-        }`}>
-        {steps}
+      <div className="@container border-t border-line bg-cream">
+        <div
+          className={`grid divide-y divide-line @[46rem]:divide-x @[46rem]:divide-y-0 ${
+            steps.length === 4 ? "@[46rem]:grid-cols-4" : steps.length === 3 ? "@[46rem]:grid-cols-3" : steps.length === 2 ? "@[46rem]:grid-cols-2" : ""
+          }`}
+        >
+          {steps}
+        </div>
       </div>
     </div>
   );
