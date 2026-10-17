@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAdminData, fmtDate, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
+import { statusToastText, useAdminData, fmtDate, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
 import { AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
 import { accessCodeMail, fmtSendAt } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
@@ -44,10 +44,12 @@ function Dashboard() {
   const welcome = params.get("vitej") === "1";
   const { site, reservations, costs, loading, error, setStatus, setAccessCode } = useAdminData();
   const toast = useToast();
-  const changeStatus = (id: string, status: Reservation["status"]) =>
-    setStatus(id, status).then((note) => {
-      if (note) toast.show(note, "success");
-    });
+  // Notifikace hned po kliknutí, uložení na pozadí; při chybě se stav vrátí a ozve se proč
+  const changeStatus = async (id: string, status: Reservation["status"]) => {
+    const r = reservations.find((x) => x.id === id);
+    if (r && r.status !== status) toast.show(statusToastText(r, status, site), "success");
+    await setStatus(id, status).catch((e: Error) => toast.show(e.message));
+  };
   function saveAccessCode(r: Reservation, code: string) {
     toast.show(accessCodeSavedMessage(r, code, arrivalDaysOf(site)), "success");
     setAccessCode(r.id, code).catch((e: Error) => toast.show(e.message));

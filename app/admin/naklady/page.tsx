@@ -46,6 +46,7 @@ export default function CostsPage() {
     setCosts((list) => sortCosts([draft, ...list]));
     setLabel("");
     setAmount("");
+    toast.show("Náklad je přidaný.", "success");
     const res = await fetch("/api/costs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,6 +73,7 @@ export default function CostsPage() {
     )
       return;
     setCosts((list) => list.map((x) => (x.id === c.id ? { ...x, endDate } : x)));
+    toast.show(endDate ? `„${c.label}“ je ukončený.` : `„${c.label}“ se zase započítává.`, "success");
     const res = await fetch(`/api/costs/${c.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -98,6 +100,7 @@ export default function CostsPage() {
     );
     if (!ok) return;
     setCosts((list) => list.filter((x) => x.id !== c.id));
+    toast.show("Náklad je smazaný.", "success");
     const res = await fetch(`/api/costs/${c.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
       setCosts((list) => sortCosts([...list, c]));

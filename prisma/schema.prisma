@@ -133,6 +133,8 @@ model Site {
   // Online check-in (kniha ubytovaných): zapnutí (tlačítko u rezervace hosta);
   // e-mail s odkazem je v emailSettings.checkin, ráno v den příjezdu připomínka
   checkinEnabled  Boolean @default(true)
+  // Správa úklidů (sekce Úklid, úklidy po pobytech, odkazy personálu, upozornění na Přehledu)
+  cleaningEnabled Boolean @default(true)
   checkinReminder Boolean @default(true)
   // Ubyport (hlášení cizinců): identifikátor ubytovatele a zkratka od policie
   ubyportIdub     String  @default("")

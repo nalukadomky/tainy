@@ -10,6 +10,7 @@ import {
   SOURCE_LABEL,
   type Blackout,
   type Reservation,
+  statusToastText,
 } from "@/lib/admin";
 import { czk, plural } from "@/lib/pricing";
 import { addDays, isTime, nightsOf, stayTimes, todayISO } from "@/lib/stay";
@@ -47,10 +48,12 @@ export default function CalendarPage() {
   const [cursor, setCursor] = useState(currentMonth);
   const toast = useToast();
   const confirmDlg = useConfirm();
-  const changeStatus = (id: string, status: Reservation["status"]) =>
-    setStatus(id, status).then((note) => {
-      if (note) toast.show(note, "success");
-    });
+  // Notifikace hned po kliknutí, uložení na pozadí; při chybě se stav vrátí a ozve se proč
+  const changeStatus = async (id: string, status: Reservation["status"]) => {
+    const r = reservations.find((x) => x.id === id);
+    if (r && r.status !== status) toast.show(statusToastText(r, status, site), "success");
+    await setStatus(id, status).catch((e: Error) => toast.show(e.message));
+  };
 
   // Blokace se v kalendáři ukáže hned, uloží se na pozadí. Když termín mezitím
   // obsadila rezervace (server vrátí 409), blokace zmizí a ozve se proč.

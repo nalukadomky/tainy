@@ -31,11 +31,13 @@ async function cleanerByToken(token: string) {
           cleanerFields: true,
           cleaningChecklist: true,
           staffSeesOwnerTodos: true,
+          cleaningEnabled: true,
         },
       },
     },
   });
-  return cleaner?.active ? cleaner : null;
+  // Vypnutá správa úklidů = odkazy personálu nefungují
+  return cleaner?.active && cleaner.site.cleaningEnabled ? cleaner : null;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {

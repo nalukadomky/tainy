@@ -14,6 +14,7 @@ import {
   STATUS_STYLE,
   type Reservation,
   type Site,
+  statusToastText,
 } from "@/lib/admin";
 import { czk, nightsBetween, plural } from "@/lib/pricing";
 import { addDays, stayTimes, todayISO } from "@/lib/stay";
@@ -103,15 +104,14 @@ export default function ReservationsPage() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const notify = (note: string | null) => {
-    if (note) toast.show(note, "success");
-  };
 
+  // Notifikace hned po kliknutí, uložení na pozadí; při chybě se stav vrátí a ozve se proč
   async function setStatus(id: string, status: Reservation["status"]) {
+    const r = reservations.find((x) => x.id === id);
+    if (r && r.status !== status) toast.show(statusToastText(r, status, site), "success");
     setBusy(id);
     try {
-      const note = await saveStatus(id, status);
-      if (note) toast.show(note, "success");
+      await saveStatus(id, status);
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Změna selhala.");
     }
@@ -340,7 +340,6 @@ export default function ReservationsPage() {
                     onPay={() => {
                       const back = r.status === "paid";
                       setStatus(r.id, back ? "pending" : "paid");
-                      toast.show(`${r.guestName}: ${back ? "vráceno na nezaplaceno" : "zaplaceno"}`, "success");
                     }}
                   >
                     <div
@@ -422,13 +421,13 @@ export default function ReservationsPage() {
                         </div>
                         {/* Stav — klik na štítek ho přepne (počítač) */}
                         <div className="hidden w-32 shrink-0 justify-end sm:flex">
-                          <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st).then(notify)} />
+                          <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => setStatus(r.id, st)} />
                         </div>
                         {/* Cena vpravo; na mobilu pod ní stav */}
                         <div className="shrink-0 text-right sm:w-28">
                           <p className="font-semibold tabular-nums">{czk(r.totalPrice)}</p>
                           <div className="mt-0.5 sm:hidden">
-                            <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => saveStatus(r.id, st).then(notify)} />
+                            <StatusMenu status={r.status} guestName={r.guestName} onChange={(st) => setStatus(r.id, st)} />
                           </div>
                         </div>
                         <div className="w-9 shrink-0">
@@ -443,10 +442,7 @@ export default function ReservationsPage() {
                               r.status === "paid" && {
                                 label: "Vrátit na nezaplaceno",
                                 icon: "card",
-                                run: () => {
-                                  setStatus(r.id, "pending");
-                                  toast.show(`${r.guestName}: vráceno na nezaplaceno`, "success");
-                                },
+                                run: () => setStatus(r.id, "pending"),
                               },
                               editable(r) && { label: "Doplnit údaje", icon: "pen", run: () => setEditing(r) },
                               r.status !== "cancelled" && !r.feedId && { label: "Změnit termín", icon: "calendar", run: () => setRescheduling(r) },

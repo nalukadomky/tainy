@@ -5,8 +5,8 @@ import { TODO_INCLUDE, cleanCategory, cleanTitle, toTodoItem } from "@/lib/todos
 // Uklízečka přidá úkol pro sebe, nebo pro majitele (např. „došel prášek“).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const cleaner = await prisma.cleaner.findUnique({ where: { token } });
-  if (!cleaner?.active) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
+  const cleaner = await prisma.cleaner.findUnique({ where: { token }, include: { site: { select: { cleaningEnabled: true } } } });
+  if (!cleaner?.active || !cleaner.site.cleaningEnabled) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
   const body = await req.json();
   const title = cleanTitle(body.title);
   if (!title) return NextResponse.json({ error: "Napiš, co je potřeba udělat." }, { status: 400 });

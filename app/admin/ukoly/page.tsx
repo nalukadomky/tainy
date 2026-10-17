@@ -46,6 +46,8 @@ export default function TodosPage() {
   /** Změna hned na obrazovce; při chybě se vrátí původní stav. */
   async function change(t: TodoItem, patch: Partial<TodoItem>, body: Record<string, unknown>) {
     replace(t.id, { ...t, ...patch });
+    if (patch.done !== undefined && patch.done !== t.done) toast.show(patch.done ? `Hotovo: ${t.title}` : `Úkol je zase otevřený: ${t.title}`, "success");
+    else if (patch.urgent !== undefined && patch.urgent !== t.urgent) toast.show(patch.urgent ? "Úkol je označený jako urgentní." : "Úkol už není urgentní.", "success");
     const res = await fetch(`/api/todos/${t.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -77,6 +79,7 @@ export default function TodosPage() {
       createdAt: new Date().toISOString(),
     };
     setTodos((list) => [...(list ?? []), tmp]);
+    toast.show("Úkol je přidaný.", "success");
     const res = await fetch("/api/todos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -94,6 +97,7 @@ export default function TodosPage() {
   async function remove(t: TodoItem) {
     if (t.id.startsWith("tmp-")) return;
     replace(t.id, t.done ? null : { ...t, deletedAt: new Date().toISOString() });
+    toast.show(t.done ? "Úkol je smazaný." : "Úkol je smazaný — vrátit ho jde ze Smazaných.", "success");
     const res = await fetch(`/api/todos/${t.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
       setTodos((l) => (l ?? []).some((x) => x.id === t.id) ? (l ?? []).map((x) => (x.id === t.id ? t : x)) : [...(l ?? []), t]);

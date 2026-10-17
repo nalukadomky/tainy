@@ -95,6 +95,8 @@ export type Site = {
   geo: string;
   /** Online check-in (kniha ubytovaných) a připomínka v den příjezdu. */
   checkinEnabled: boolean;
+  /** Správa úklidů zapnutá (sekce Úklid, upozornění, kroky na Přehledu). */
+  cleaningEnabled?: boolean;
   checkinReminder: boolean;
   /** Ubyport: identifikátor ubytovatele a zkratka od cizinecké policie. */
   ubyportIdub: string;
@@ -194,6 +196,26 @@ export type Reservation = {
 
 /** Přiděluje se kód k zámku ke každé rezervaci zvlášť — jen pak má smysl kód u rezervace. */
 export const usesLockCodes = (site: Pick<Site, "keyHandover" | "locks"> | null | undefined) => needsStayCode(site);
+
+/**
+ * Notifikace ke změně stavu rezervace — ukazuje se hned po kliknutí (uložení běží na
+ * pozadí, při chybě se stav vrátí a ozve se chyba). Přidá i upozornění na e-mail hostovi.
+ */
+export function statusToastText(r: Reservation, status: Reservation["status"], site: Pick<Site, "emailSettings"> | null): string {
+  const name = r.guestName.startsWith("Host z ") ? "Rezervace" : r.guestName;
+  const what =
+    r.status === "cancelled" && status !== "cancelled"
+      ? status === "paid"
+        ? "obnoveno jako zaplacené"
+        : "rezervace obnovena"
+      : status === "paid"
+        ? "označeno jako zaplacené"
+        : status === "pending"
+          ? "vráceno na nezaplacené"
+          : "rezervace zrušena";
+  const note = statusMailNote(r, status, site);
+  return `${name}: ${what}.${note ? ` ${note}` : ""}`;
+}
 
 /** Hláška po změně stavu, že hostovi za chvíli odejde e-mail (stejné podmínky jako lib/guest-mails.ts). */
 export function statusMailNote(r: Reservation, status: Reservation["status"], site: Pick<Site, "emailSettings"> | null): string | null {

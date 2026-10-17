@@ -6,8 +6,8 @@ import { TODO_INCLUDE, cleanCategory, cleanTitle, cleanerCanRemove, toTodoItem }
 // smazat jen úkol, který sama přidala.
 
 async function load(token: string, id: string) {
-  const cleaner = await prisma.cleaner.findUnique({ where: { token } });
-  if (!cleaner?.active) return null;
+  const cleaner = await prisma.cleaner.findUnique({ where: { token }, include: { site: { select: { cleaningEnabled: true } } } });
+  if (!cleaner?.active || !cleaner.site.cleaningEnabled) return null;
   const todo = await prisma.todo.findUnique({ where: { id } });
   if (!todo || todo.siteId !== cleaner.siteId) return null;
   // Úkoly ostatních uklízeček vůbec nevidí

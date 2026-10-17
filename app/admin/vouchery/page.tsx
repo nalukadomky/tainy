@@ -233,6 +233,7 @@ export default function VouchersPage() {
     const setActive = (value: boolean) =>
       setVouchers((list) => list?.map((x) => (x.id === v.id ? { ...x, active: value } : x)) ?? list);
     setActive(active);
+    toast.show(active ? `Kód ${v.code} je zapnutý.` : `Kód ${v.code} je vypnutý.`, "success");
     try {
       const res = await fetch(`/api/vouchers/${v.id}`, {
         method: "PATCH",
@@ -240,7 +241,6 @@ export default function VouchersPage() {
         body: JSON.stringify({ active }),
       });
       if (!res.ok) throw new Error();
-      toast.show(active ? `Voucher ${v.code} je zapnutý.` : `Voucher ${v.code} je vypnutý.`, "success");
     } catch {
       setActive(v.active);
       toast.show("Změnu se nepodařilo uložit. Zkus to znovu.");
@@ -251,6 +251,7 @@ export default function VouchersPage() {
     if (v.id.startsWith("tmp-")) return; // ještě se ukládá
     if (!(await confirmDlg.ask({ title: `Smazat voucher ${v.code}?`, message: "Kód přestane platit. Už uplatněné slevy v rezervacích zůstanou.", confirmLabel: "Smazat voucher" }))) return;
     setVouchers((list) => list?.filter((x) => x.id !== v.id) ?? list);
+    toast.show(`Kód ${v.code} je smazaný.`, "success");
     const res = await fetch(`/api/vouchers/${v.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
       const data = await res?.json().catch(() => ({}));

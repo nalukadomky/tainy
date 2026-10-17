@@ -116,6 +116,7 @@ export default function GiftVouchersPage() {
 
   async function toggle(o: Offer) {
     setOffers((all) => all!.map((x) => (x.id === o.id ? { ...x, onSale: !o.onSale } : x)));
+    toast.show(!o.onSale ? "Poukaz je v nabídce." : "Poukaz je skrytý z nabídky.", "success");
     const res = await fetch(`/api/gifts/${o.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ onSale: !o.onSale }) }).catch(() => null);
     if (!res?.ok) {
       setOffers((all) => all!.map((x) => (x.id === o.id ? o : x)));
@@ -133,6 +134,7 @@ export default function GiftVouchersPage() {
     if (!ok) return;
     const before = offers;
     setOffers((all) => all!.filter((x) => x.id !== o.id));
+    toast.show("Poukaz je smazaný z nabídky.", "success");
     const res = await fetch(`/api/gifts/${o.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
       setOffers(before ?? []);
@@ -144,6 +146,15 @@ export default function GiftVouchersPage() {
     if (action === "cancel" && !(await confirm.ask({ title: `Zrušit objednávku ${label(o.publicId)}?`, message: "Kupující poukaz nedostane.", confirmLabel: "Zrušit objednávku", tone: "danger" }))) return;
     const before = orders;
     if (action !== "resend") setOrders((all) => all.map((x) => (x.id === o.id ? { ...x, status: action === "paid" ? "paid" : "cancelled" } : x)));
+    // Notifikace hned, odeslání e-mailu s poukazem běží na pozadí
+    toast.show(
+      action === "paid"
+        ? `${o.buyerName}: označeno jako zaplacené — poukaz odchází na ${o.buyerEmail}.`
+        : action === "cancel"
+          ? `Objednávka ${label(o.publicId)} je zrušená.`
+          : `Poukaz odchází znovu na ${o.buyerEmail}.`,
+      "success",
+    );
     const res = await fetch(`/api/gift-orders/${o.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) }).catch(() => null);
     const data = await res?.json().catch(() => null);
     if (!res?.ok) {
@@ -153,9 +164,8 @@ export default function GiftVouchersPage() {
     }
     if (action === "paid") {
       setOrders((all) => all.map((x) => (x.id === o.id ? { ...x, status: "paid", code: data.code } : x)));
-      toast.show(`Zaplaceno — poukaz s kódem ${data.code} odešel na ${o.buyerEmail}.`, "success");
       load();
-    } else if (action === "resend") toast.show(`Poukaz odešel znovu na ${o.buyerEmail}.`, "success");
+    }
   }
 
   async function copy(text: string) {

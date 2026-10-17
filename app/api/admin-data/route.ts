@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
     }),
   ]);
   // Úklid hlídáme jen u webů, které sekci Úklid používají (mají personál nebo ruční úklid)
-  const usesCleaning = cleaners > 0 || manual.length > 0 || rows.some((r) => r.cleaning);
+  // Vypnutá správa úklidů = žádná upozornění ani kroky úklidu
+  const usesCleaning = site.cleaningEnabled !== false && (cleaners > 0 || manual.length > 0 || rows.some((r) => r.cleaning));
   const alerts = usesCleaning ? cleaningAlerts(rows, manual, today) : {};
   // Stav úklidu před příjezdem u nadcházejících pobytů (karta na Přehledu)
   const before = usesCleaning ? cleaningBefore(rows, manual, today) : {};

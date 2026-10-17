@@ -27,6 +27,7 @@ import { SwipeToPay } from "@/components/SwipeToPay";
 import { createPortal } from "react-dom";
 import { BadgeMenu } from "@/components/StatusMenu";
 import { HelpTip } from "@/components/HelpTip";
+import { Switch } from "@/components/AutomationSettings";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
 // správa uklízeček a jejich odkazů a nastavení, co uklízečky uvidí.
@@ -86,6 +87,8 @@ const cleanerLink = (token: string) =>
 export default function CleaningPage() {
   const { slug, site, setSite, loading, error } = useAdminData();
   const [tab, setTab] = useState<Tab>("uklidy");
+  // Potvrzení vypnutí správy úklidů
+  const [turnOff, setTurnOff] = useState(false);
   // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
   const cleanersUrl = slug ? SECTION_URL.cleaners(slug) : null;
   const itemsUrl = slug ? SECTION_URL.cleanings(slug) : null;
@@ -201,21 +204,78 @@ export default function CleaningPage() {
   if (loading || !site) return <CardsPageSkeleton label="Načítám úklidy" />;
 
   const toPay = (items ?? []).filter((i) => i.cleaning?.status === "done" && !i.cleaning.paid).length;
+  const enabled = site.cleaningEnabled !== false;
+
+  // Zapnutí / vypnutí správy úklidů: přepne se hned, uloží na pozadí
+  async function setEnabled(on: boolean) {
+    if (!site) return;
+    setSite({ ...site, cleaningEnabled: on });
+    setTurnOff(false);
+    toast.show(on ? "Správa úklidů je zapnutá." : "Správa úklidů je vypnutá.", "success");
+    const res = await fetch(`/api/sites/${site.slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cleaningEnabled: on }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setSite({ ...site, cleaningEnabled: !on });
+      toast.show("Změnu se nepodařilo uložit. Zkus to znovu.");
+    }
+  }
+
+  const header = (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <Link href="/admin/kalendar" className="text-sm font-medium text-soft hover:text-ink">
+          ← Kalendář
+        </Link>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+          Úklid
+          <HelpTip>Úklidy po odjezdu hostů. Každý člen personálu má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.</HelpTip>
+        </h1>
+      </div>
+      <label className="flex cursor-pointer items-center gap-3 rounded-full border border-line bg-surface py-1.5 pl-4 pr-2 text-sm font-medium">
+        Správa úklidů
+        <Switch on={enabled} label="Správa úklidů" onChange={(on) => (on ? setEnabled(true) : setTurnOff(true))} />
+      </label>
+      {turnOff && (
+        <ConfirmDialog
+          title="Vypnout správu úklidů?"
+          confirmLabel="Vypnout"
+          onCancel={() => setTurnOff(false)}
+          onConfirm={() => setEnabled(false)}
+        >
+          <p>
+            Úklidy se přestanou propisovat z rezervací, odkazy personálu přestanou fungovat a Přehled přestane hlídat, jestli je
+            uklizeno. Personál, úklidy ani historie se nesmažou — po zapnutí bude všechno zase tady.
+          </p>
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+
+  if (!enabled)
+    return (
+      <div className="space-y-5">
+        {toast.node}
+        {header}
+        <div className="rounded-2xl border border-dashed border-line bg-surface p-8 text-center">
+          <p className="font-semibold">Správa úklidů je vypnutá</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-soft">
+            Po zapnutí se k úklidu samy propíšou odjezdy hostů, personál dostane svůj odkaz s úklidy a na Přehledu uvidíš, jestli je
+            před příjezdem uklizeno.
+          </p>
+          <button type="button" onClick={() => setEnabled(true)} className="btn-primary mt-4 !px-5 !py-2 text-sm">
+            Zapnout správu úklidů
+          </button>
+        </div>
+      </div>
+    );
 
   return (
     <div className="space-y-5">
       {toast.node}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Link href="/admin/kalendar" className="text-sm font-medium text-soft hover:text-ink">
-            ← Kalendář
-          </Link>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
-            Úklid
-            <HelpTip>Úklidy po odjezdu hostů. Každý člen personálu má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.</HelpTip>
-          </h1>
-        </div>
-      </div>
+      {header}
 
       <div className="flex rounded-2xl border border-line bg-bg p-1" role="tablist" aria-label="Části úklidu">
         {(

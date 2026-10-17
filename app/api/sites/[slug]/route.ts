@@ -214,6 +214,7 @@ export async function PATCH(
   if (body.keyHandover === "code" || body.keyHandover === "key") data.keyHandover = body.keyHandover;
   // Check-in, Ubyport a odvod poplatku z pobytu
   if (typeof body.checkinEnabled === "boolean") data.checkinEnabled = body.checkinEnabled;
+  if (typeof body.cleaningEnabled === "boolean") data.cleaningEnabled = body.cleaningEnabled;
   if (typeof body.checkinReminder === "boolean") data.checkinReminder = body.checkinReminder;
   if (typeof body.ubyportIdub === "string") data.ubyportIdub = body.ubyportIdub.replace(/[^0-9A-Za-z-]/g, "").slice(0, 20);
   if (typeof body.ubyportAbbr === "string") data.ubyportAbbr = body.ubyportAbbr.replace(/[|\r\n]/g, "").trim().slice(0, 10);

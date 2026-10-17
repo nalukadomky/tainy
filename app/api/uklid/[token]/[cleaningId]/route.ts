@@ -9,8 +9,8 @@ export async function PATCH(
   { params }: { params: Promise<{ token: string; cleaningId: string }> }
 ) {
   const { token, cleaningId } = await params;
-  const cleaner = await prisma.cleaner.findUnique({ where: { token }, select: { id: true, active: true } });
-  if (!cleaner || !cleaner.active) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
+  const cleaner = await prisma.cleaner.findUnique({ where: { token }, select: { id: true, active: true, site: { select: { cleaningEnabled: true } } } });
+  if (!cleaner || !cleaner.active || !cleaner.site.cleaningEnabled) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
 
   const body = await req.json();
 
@@ -76,8 +76,8 @@ export async function DELETE(
   { params }: { params: Promise<{ token: string; cleaningId: string }> }
 ) {
   const { token, cleaningId } = await params;
-  const cleaner = await prisma.cleaner.findUnique({ where: { token }, select: { id: true, active: true } });
-  if (!cleaner || !cleaner.active) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
+  const cleaner = await prisma.cleaner.findUnique({ where: { token }, select: { id: true, active: true, site: { select: { cleaningEnabled: true } } } });
+  if (!cleaner || !cleaner.active || !cleaner.site.cleaningEnabled) return NextResponse.json({ error: "Odkaz neplatí." }, { status: 404 });
   const cleaning = await prisma.cleaning.findUnique({ where: { id: cleaningId } });
   if (!cleaning || cleaning.cleanerId !== cleaner.id) return NextResponse.json({ error: "Úklid nenalezen." }, { status: 404 });
   if (cleaning.createdBy !== "cleaner" || cleaning.reservationId) {

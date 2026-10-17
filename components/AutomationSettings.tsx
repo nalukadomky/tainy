@@ -231,7 +231,7 @@ function Section({ title, hint, children }: { title: string; hint: string; child
   );
 }
 
-function Switch({
+export function Switch({
   on,
   onChange,
   label,
