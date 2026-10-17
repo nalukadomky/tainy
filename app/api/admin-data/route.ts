@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureGeo } from "@/lib/geocode";
 import { getUser, deny } from "@/lib/auth";
-import { cleaningAlerts } from "@/lib/cleaning";
+import { cleaningAlerts, cleaningBefore } from "@/lib/cleaning";
 import { addDays, fromISO, todayISO } from "@/lib/stay";
 
 // Všechna data administrace jedním požadavkem: web, rezervace, náklady a blokace.
@@ -32,19 +32,23 @@ export async function GET(req: NextRequest) {
     prisma.cost.findMany({ where: { siteId: site.id }, orderBy: { date: "desc" } }),
     prisma.blackout.findMany({ where: { siteId: site.id }, orderBy: { startDate: "asc" } }),
     prisma.cleaner.count({ where: { siteId: site.id, active: true } }),
-    // Ruční úklidy (bez rezervace) z posledních 14 dní a nejbližších dní
+    // Ruční úklidy (bez rezervace) z posledních 14 dní a nejbližších 2 měsíců (úklid před příjezdem)
     prisma.cleaning.findMany({
-      where: { siteId: site.id, reservationId: null, date: { gte: fromISO(addDays(today, -14)), lte: fromISO(addDays(today, 1)) } },
+      where: { siteId: site.id, reservationId: null, date: { gte: fromISO(addDays(today, -14)), lte: fromISO(addDays(today, 60)) } },
       select: { ...cleaningSelect, date: true, title: true },
     }),
   ]);
   // Úklid hlídáme jen u webů, které sekci Úklid používají (mají personál nebo ruční úklid)
-  const alerts = cleaners || manual.length ? cleaningAlerts(rows, manual, today) : {};
+  const usesCleaning = cleaners > 0 || manual.length > 0 || rows.some((r) => r.cleaning);
+  const alerts = usesCleaning ? cleaningAlerts(rows, manual, today) : {};
+  // Stav úklidu před příjezdem u nadcházejících pobytů (karta na Přehledu)
+  const before = usesCleaning ? cleaningBefore(rows, manual, today) : {};
   // Z check-inu jen počet vyplněných osob — údaje samotné se načítají zvlášť (šifrované)
   const reservations = rows.map(({ cleaning: _cleaning, _count, checkinNonce: _nonce, ...r }) => ({
     ...r,
     checkinCount: _count.guestRecords,
     cleaningAlert: alerts[r.id] ?? null,
+    cleaningBefore: before[r.id] ?? null,
   }));
   return NextResponse.json({ site: { ...site, geo }, reservations, costs, blackouts });
 }

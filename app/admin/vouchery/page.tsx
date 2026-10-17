@@ -21,6 +21,8 @@ import {
 } from "@/lib/voucher";
 import { ListPageSkeleton } from "@/components/Skeleton";
 import { VoucherTabs } from "@/components/VoucherTabs";
+import { HelpTip } from "@/components/HelpTip";
+import { Sheet } from "@/components/Sheet";
 
 type Voucher = {
   id: string;
@@ -77,6 +79,12 @@ export default function VouchersPage() {
   // Z mezipaměti hned (i přednačtené z menu), obnova na pozadí
   const url = slug ? SECTION_URL.vouchers(slug) : null;
   const [vouchers, setVouchers] = useCachedJson<Voucher[]>(url);
+  // Odznak u záložky Dárkové poukazy: objednávky čekající na zaplacení
+  const giftsUrl = slug ? SECTION_URL.gifts(slug) : null;
+  const [gifts, setGifts] = useCachedJson<{ orders: { status: string }[] }>(giftsUrl);
+  useEffect(() => {
+    if (giftsUrl) fetchJson<{ orders: { status: string }[] }>(giftsUrl).then((d) => d && setGifts(d));
+  }, [giftsUrl, setGifts]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [formError, setFormError] = useState("");
@@ -109,6 +117,9 @@ export default function VouchersPage() {
       (!query.trim() || norm(`${v.code} ${v.note}`).includes(norm(query.trim())))
   );
 
+  // Upravovaný kód (kvůli „Smazat“ v okně — jen dosud nepoužitý)
+  const editingVoucher = editing && editing !== "new" ? (vouchers ?? []).find((v) => v.id === editing) : undefined;
+
   const stats = {
     active: withStatus.filter((v) => v.status === "active").length,
     uses: withStatus.reduce((s, v) => s + v.uses, 0),
@@ -136,7 +147,7 @@ export default function VouchersPage() {
     });
     setEditing(v.id);
     setFormError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setInvalid(null);
   }
 
   const draftValue = Number(draft.value);
@@ -266,17 +277,17 @@ export default function VouchersPage() {
     <div className="space-y-5">
       {toast.node}
       {confirmDlg.node}
-      <VoucherTabs active="codes" />
+      <VoucherTabs active="codes" giftsBadge={gifts?.orders.filter((o) => o.status === "pending").length ?? 0} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Slevové kódy</h1>
-          <p className="mt-1 text-sm text-soft">Kódy na slevu, které hosté zadají při rezervaci.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Slevové kódy
+            <HelpTip>Kódy na slevu, které hosté zadají při rezervaci.</HelpTip>
+          </h1>
         </div>
-        {editing === null && (
-          <button type="button" className="btn-primary h-10 !px-4 !py-0 text-sm" onClick={startNew}>
-            + Nový kód
-          </button>
-        )}
+        <button type="button" className="btn-primary h-10 !px-4 !py-0 text-sm" onClick={startNew}>
+          + Nový kód
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -293,10 +304,33 @@ export default function VouchersPage() {
       </div>
 
       {editing !== null && (
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-5" onKeyDown={submitOnEnter(save)}>
-          <h2 className="font-display text-lg font-semibold">
-            {editing === "new" ? "Nový voucher" : `Upravit ${draft.code}`}
-          </h2>
+        <Sheet
+          title={editing === "new" ? "Nový slevový kód" : `Upravit ${draft.code}`}
+          onClose={() => setEditing(null)}
+          footer={
+            <>
+              <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" onClick={save}>
+                {editing === "new" ? "Vytvořit kód" : "Uložit změny"}
+              </button>
+              <button type="button" className="btn-ghost h-10 !px-4 !py-0 text-sm" onClick={() => setEditing(null)}>
+                Zrušit
+              </button>
+              {editingVoucher && editingVoucher.uses === 0 && (
+                <button
+                  type="button"
+                  className="ml-auto text-sm font-medium text-soft hover:text-coral"
+                  onClick={() => {
+                    setEditing(null);
+                    remove(editingVoucher);
+                  }}
+                >
+                  Smazat kód
+                </button>
+              )}
+            </>
+          }
+        >
+        <div className="space-y-4" onKeyDown={submitOnEnter(save)}>
 
           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
             <label className="block">
@@ -475,16 +509,8 @@ export default function VouchersPage() {
           )}
 
           {formError && <p className="text-sm font-medium text-coral">{formError}</p>}
-
-          <div className="flex gap-2">
-            <button type="button" className="btn-primary h-10 !px-5 !py-0 text-sm" onClick={save}>
-              {editing === "new" ? "Vytvořit voucher" : "Uložit změny"}
-            </button>
-            <button type="button" className="btn-ghost h-10 !px-4 !py-0 text-sm" onClick={() => setEditing(null)}>
-              Zrušit
-            </button>
-          </div>
         </div>
+        </Sheet>
       )}
 
       {withStatus.length > 0 && (
@@ -511,7 +537,7 @@ export default function VouchersPage() {
       )}
 
       <div className="space-y-2">
-        {withStatus.length === 0 && editing === null && (
+        {withStatus.length === 0 && (
           <div className="rounded-2xl border-2 border-dashed border-line bg-surface p-8 text-center">
             <p className="font-semibold">Zatím žádné slevové kódy</p>
             <p className="mt-1 text-sm text-soft">
@@ -531,13 +557,24 @@ export default function VouchersPage() {
         {shown.map((v) => {
           const expanded = open === v.id;
           return (
-            <div key={v.id} className={`rounded-2xl border border-line bg-surface ${v.status === "active" ? "" : "opacity-80"}`}>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+            <div key={v.id} className={`rounded-2xl border border-line bg-surface transition hover:border-pine/40 ${v.status === "active" ? "" : "opacity-80"}`}>
+              {/* Klik na kartu otevře úpravu v okně (jako u rezervací a poukazů) */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Upravit ${v.code}`}
+                onClick={() => startEdit(v)}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), startEdit(v))}
+                className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl p-4"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => copy(v.code)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copy(v.code);
+                      }}
                       title="Zkopírovat kód"
                       className="rounded-lg bg-bg px-2 py-0.5 font-mono text-[15px] font-semibold tracking-wide transition hover:bg-line/60"
                     >
@@ -551,7 +588,7 @@ export default function VouchersPage() {
                   <p className="mt-1 text-sm text-soft">{describe(v)}</p>
                   {v.note && <p className="mt-0.5 text-xs text-soft">{v.note}</p>}
                 </div>
-                <div className="flex shrink-0 items-center gap-4">
+                <div className="flex shrink-0 items-center gap-4" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => setOpen(expanded ? null : v.id)}
@@ -570,17 +607,6 @@ export default function VouchersPage() {
                     <span className="relative h-6 w-10 rounded-full bg-line transition peer-checked:bg-pine after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-4" />
                   </label>
                 </div>
-              </div>
-
-              <div className="flex gap-4 border-t border-line px-4 py-2 text-sm">
-                <button type="button" className="font-medium text-soft hover:text-ink" onClick={() => startEdit(v)}>
-                  Upravit
-                </button>
-                {v.uses === 0 && (
-                  <button type="button" className="font-medium text-soft hover:text-coral" onClick={() => remove(v)}>
-                    Smazat
-                  </button>
-                )}
               </div>
 
               {expanded && (

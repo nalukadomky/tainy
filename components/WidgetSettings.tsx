@@ -8,6 +8,7 @@ import { Icon } from "@/components/Icon";
 import { useToast } from "@/components/Toast";
 import { ThemePicker } from "@/components/ThemePicker";
 import Link from "next/link";
+import { HelpTip } from "@/components/HelpTip";
 
 // Nastavení → Widget na web: pro majitele, kteří mají vlastní web a chtějí
 // jen rezervace. Vzhled plovoucího tlačítka, živý náhled a kód k vložení.
@@ -92,11 +93,11 @@ export function WidgetSettings({ form, set }: { form: Site; set: SetField }) {
         </div>
       )}
       <div className="rounded-2xl border border-line bg-surface p-5">
-        <h2 className="font-display text-lg font-semibold">Rezervace na tvém vlastním webu</h2>
-        <p className="mt-1 text-sm text-soft">
-          Hosté si rezervují přímo na tvém webu a všechno ostatní — kalendář, platby, e-maily i kódy k zámku — běží dál tady v tainy. Když
-          prodáváš dárkové poukazy, přibude i záložka Dárkový poukaz.
-        </p>
+        <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+          Rezervace na tvém vlastním webu
+          <HelpTip>Hosté si rezervují přímo na tvém webu a všechno ostatní — kalendář, platby, e-maily i kódy k zámku — běží dál tady v tainy. Když
+          prodáváš dárkové poukazy, přibude i záložka Dárkový poukaz.</HelpTip>
+        </h2>
       </div>
 
       {/* Plovoucí tlačítko, nebo sekce přímo ve stránce */}

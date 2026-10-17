@@ -5,6 +5,7 @@ import type { Site } from "@/lib/admin";
 import { Icon } from "@/components/Icon";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { HelpTip } from "@/components/HelpTip";
 
 // Nastavení → Web a doména: kde si hosté rezervují — celý web v tainy, nebo
 // jen widget na vlastním webu majitele. Přepnutí se uloží hned a menu se
@@ -131,10 +132,10 @@ export function BookingMode({ form }: { form: Site }) {
     <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
       {toast.node}
       {confirmDlg.node}
-      <h2 className="font-display text-xl font-semibold">Kde si hosté rezervují</h2>
-      <p className="mt-1 text-sm text-soft">
-        Rezervace, platby, e-maily, check-in i dárkové poukazy fungují stejně v obou případech — liší se jen to, kde je hosté uvidí.
-      </p>
+      <h2 className="font-display text-xl font-semibold flex flex-wrap items-center">
+        Kde si hosté rezervují
+        <HelpTip>Rezervace, platby, e-maily, check-in i dárkové poukazy fungují stejně v obou případech — liší se jen to, kde je hosté uvidí.</HelpTip>
+      </h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Kde si hosté rezervují">
         <Option
           on={!form.widgetOnly}

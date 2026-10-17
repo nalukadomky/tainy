@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { CardsPageSkeleton } from "@/components/Skeleton";
 import { isOpen, type TodoCategory, type TodoItem } from "@/lib/todos";
+import { HelpTip } from "@/components/HelpTip";
 
 // Úkoly (To-Do) majitele a personálu: Nákupy, Opravy, Provoz. Majitel spravuje
 // všechno — přidá, přeřadí, odškrtne i smaže cokoli. Změny se ukážou hned,
@@ -150,7 +151,6 @@ export default function TodosPage() {
 
   const assignees: Assignee[] = [{ id: null, label: "Já" }, ...cleaners.map((c) => ({ id: c.id, label: c.name }))];
   const open = todos.filter(isOpen);
-  const mine = open.filter((t) => !t.cleanerId).length;
 
   return (
     <div className="space-y-5">
@@ -158,11 +158,10 @@ export default function TodosPage() {
       {confirmDlg.node}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Úkoly</h1>
-          <p className="mt-1 text-sm text-soft">
-            {open.length ? `${open.length} otevřených · ${mine} pro tebe.` : "Všechno je hotové."} Personál vidí své úkoly
-            {staffSees ? " i tvoje" : ""} a může ti sem psát, co je potřeba.
-          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Úkoly
+            <HelpTip>Personál vidí své úkoly{staffSees ? " i tvoje" : ""} a může ti sem psát, co je potřeba.</HelpTip>
+          </h1>
         </div>
         {cleaners.length > 0 && (
           <div className="flex items-center gap-2 rounded-full border border-line bg-surface py-1.5 pl-4 pr-2">

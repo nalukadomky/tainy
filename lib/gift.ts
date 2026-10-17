@@ -27,6 +27,13 @@ export type GiftDesign = {
 
 export const WEEKEND_NIGHTS = 2;
 
+/** E-mail vypadá skutečně: jmeno@domena.cz (bez mezer, dvou teček za sebou, s koncovkou z písmen). */
+export const isLikelyEmail = (v: string) =>
+  /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i.test(v.trim());
+
+/** Jméno i příjmení — aspoň dvě slova. */
+export const isFullName = (v: string) => v.trim().split(/\s+/).filter((w) => w.length >= 1).length >= 2 && v.trim().length >= 4;
+
 export const GIFT_TEMPLATES: { key: GiftTemplate; label: string }[] = [
   { key: "klasik", label: "Klasik" },
   { key: "fotka", label: "Fotka" },

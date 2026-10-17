@@ -42,7 +42,8 @@ function store(key: string, value: string) {
   } catch {}
 }
 
-export function SourceMix({ reservations }: { reservations: Reservation[] }) {
+/** `compact` = úzký boční sloupec Přehledu: menší nadpis, období pod ním, bez sloupce tržeb. */
+export function SourceMix({ reservations, compact = false }: { reservations: Reservation[]; compact?: boolean }) {
   const [open, setOpen] = useState(true);
   const [period, setPeriod] = useState<Period>("year");
   useEffect(() => {
@@ -91,12 +92,17 @@ export function SourceMix({ reservations }: { reservations: Reservation[] }) {
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <button type="button" onClick={toggle} aria-expanded={open} className="group flex w-full min-w-0 items-start gap-2 text-left sm:w-auto sm:flex-1">
+    <div className={`rounded-2xl border border-line bg-surface ${compact ? "p-4" : "p-5"}`}>
+      <div className={`flex flex-wrap items-start justify-between ${compact ? "gap-2.5" : "gap-3"}`}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className={`group flex w-full min-w-0 items-start gap-2 text-left ${compact ? "px-1" : "sm:w-auto sm:flex-1"}`}
+        >
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2 font-display text-lg font-semibold">
-              Odkud přicházejí rezervace
+            <span className={`flex items-center gap-2 ${compact ? "text-[15px] font-semibold" : "font-display text-lg font-semibold"}`}>
+              {compact ? "Odkud rezervace" : "Odkud přicházejí rezervace"}
               <span
                 aria-hidden
                 className="text-sm text-soft transition-transform group-hover:text-ink"
@@ -118,7 +124,7 @@ export function SourceMix({ reservations }: { reservations: Reservation[] }) {
           </span>
         </button>
         {open && (
-          <div className="flex w-full shrink-0 rounded-xl bg-bg p-1 sm:w-auto" role="radiogroup" aria-label="Období">
+          <div className={`flex w-full shrink-0 rounded-xl bg-bg p-1 ${compact ? "" : "sm:w-auto"}`} role="radiogroup" aria-label="Období">
             {PERIODS.map((p) => (
               <button
                 key={p}
@@ -129,7 +135,7 @@ export function SourceMix({ reservations }: { reservations: Reservation[] }) {
                   setPeriod(p);
                   store("tainy.sources-period", p);
                 }}
-                className={`flex-1 rounded-lg px-3 py-1 text-sm font-medium transition sm:flex-none ${
+                className={`flex-1 rounded-lg px-3 py-1 text-sm font-medium transition ${compact ? "" : "sm:flex-none"} ${
                   period === p ? "bg-surface text-ink shadow-sm" : "text-soft hover:text-ink"
                 }`}
               >
@@ -145,21 +151,23 @@ export function SourceMix({ reservations }: { reservations: Reservation[] }) {
           <p className="mt-4 text-sm text-soft">Za tohle období tu zatím nejsou žádné rezervace.</p>
         ) : (
           <>
-            <div className="mt-5">{bar(14)}</div>
-            <ul className="mt-4 divide-y divide-line">
+            <div className={compact ? "mt-4" : "mt-5"}>{bar(compact ? 10 : 14)}</div>
+            <ul className={`divide-y divide-line ${compact ? "mt-2" : "mt-4"}`}>
               {mix.list.map((s) => (
                 <li key={s.key} className="flex items-center gap-3 py-2.5 text-sm">
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: COLOR[s.key] }} aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="font-semibold">{SOURCE_LABEL[s.key]}</span>
                     {(s.key === "web" || s.key === "widget") && <span className="ml-2 text-xs text-soft">bez provize</span>}
-                    <span className="block text-xs text-soft sm:inline sm:before:content-['_·_']">
+                    <span className={`block text-xs text-soft ${compact ? "" : "sm:inline sm:before:content-['_·_']"}`}>
                       {s.count} {plural(s.count, "rezervace", "rezervace", "rezervací")} · {s.nights}{" "}
                       {plural(s.nights, "noc", "noci", "nocí")}
                     </span>
                   </span>
-                  <span className="hidden w-28 text-right text-soft sm:block">{czk(s.revenue)}</span>
-                  <span className="w-14 text-right font-display text-lg font-semibold tabular-nums">{pct(s.share)}</span>
+                  {!compact && <span className="hidden w-28 text-right text-soft sm:block">{czk(s.revenue)}</span>}
+                  <span className={`w-14 text-right font-display font-semibold tabular-nums ${compact ? "text-base" : "text-lg"}`} title={czk(s.revenue)}>
+                    {pct(s.share)}
+                  </span>
                 </li>
               ))}
             </ul>

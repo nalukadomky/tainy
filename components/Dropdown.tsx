@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 // Výběr s nabídkou vždy pod polem. Nativní <select> na macOS otevírá
 // nabídku přes pole se zvolenou položkou na jeho místě, což v liště filtrů působí zmateně.
 
-export type DropdownItem = { value: string; label: string } | { group: string };
+export type DropdownItem = { value: string; label: string; badge?: number } | { group: string };
 
 export function Dropdown({
   value,
@@ -15,6 +15,8 @@ export function Dropdown({
   align = "left",
   size = "md",
   actions,
+  badge = 0,
+  badgeTitle,
 }: {
   value: string;
   items: DropdownItem[];
@@ -26,6 +28,9 @@ export function Dropdown({
   size?: "md" | "sm";
   /** Akce pod seznamem (např. „+ Přidat nemovitost“). */
   actions?: { label: string; onClick: () => void }[];
+  /** Číselný odznak na poli (např. upozornění u ostatních nemovitostí). */
+  badge?: number;
+  badgeTitle?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,11 +64,20 @@ export function Dropdown({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={`control control-select w-full text-left ${
-          size === "sm" ? "!h-8 max-w-44 truncate !pl-3 !text-xs font-semibold sm:max-w-60" : ""
-        } ${open ? "border-pine ring-2 ring-pine/15" : ""}`}
+          size === "sm" ? `!h-8 truncate !pl-3 !text-xs font-semibold ${badge > 0 ? "max-w-52 sm:max-w-72" : "max-w-44 sm:max-w-60"}` : ""
+        } ${badge > 0 ? "!border-amber/70 !bg-amber/10 !pr-14" : ""} ${open ? "border-pine ring-2 ring-pine/15" : ""}`}
       >
         {current}
       </button>
+      {/* Odznak uvnitř pole před šipkou; pole se jemně podbarví */}
+      {badge > 0 && (
+        <span
+          title={badgeTitle}
+          className="pointer-events-none absolute right-7 top-1/2 min-w-[18px] -translate-y-1/2 rounded-full bg-amber px-1.5 text-center text-[11px] font-semibold leading-[18px] text-ink tabular-nums"
+        >
+          {badge}
+        </span>
+      )}
       {open && (
         <div
           ref={listRef}
@@ -96,7 +110,14 @@ export function Dropdown({
                 }`}
               >
                 {item.label}
-                {item.value === value && <span aria-hidden>✓</span>}
+                <span className="flex items-center gap-2">
+                  {!!item.badge && (
+                    <span className="min-w-[18px] rounded-full bg-amber px-1 text-center text-[11px] font-semibold leading-[18px] text-ink tabular-nums">
+                      {item.badge}
+                    </span>
+                  )}
+                  {item.value === value && <span aria-hidden>✓</span>}
+                </span>
               </button>
             )
           )}

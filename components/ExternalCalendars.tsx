@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
 import { plural } from "@/lib/pricing";
 import { Icon } from "@/components/Icon";
+import { HelpTip } from "@/components/HelpTip";
 
 // Nastavení → Externí rezervace: výměna obsazenosti s Airbnb, Booking.com
 // a dalšími portály přes iCal (zdarma). Odkaz na kalendář webu pro portály,
@@ -193,11 +194,11 @@ export function ExternalCalendars() {
       <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-soft">Krok 1 · z tainy do portálů</p>
-          <h2 className="font-display text-lg font-semibold">Tvůj kalendář pro portály</h2>
-          <p className="text-sm text-soft">
-            Vlož tenhle odkaz do Airbnb a Bookingu. Uvidí v něm termíny obsazené přes tvůj web, ruční blokace i rezervace
-            z ostatních portálů — jen jako „Obsazeno“, bez jmen hostů.
-          </p>
+          <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+            Tvůj kalendář pro portály
+            <HelpTip>Vlož tenhle odkaz do Airbnb a Bookingu. Uvidí v něm termíny obsazené přes tvůj web, ruční blokace i rezervace
+            z ostatních portálů — jen jako „Obsazeno“, bez jmen hostů.</HelpTip>
+          </h2>
         </div>
         {token ? <CopyField value={exportUrl} /> : <Skeleton className="h-12 w-full rounded-xl" />}
         <Guide title="Jak odkaz vložit do Airbnb">
@@ -229,11 +230,11 @@ export function ExternalCalendars() {
       <section className="space-y-4 rounded-2xl border border-line bg-surface p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-soft">Krok 2 · z portálů do tainy</p>
-          <h2 className="font-display text-lg font-semibold">Kalendáře z portálů</h2>
-          <p className="text-sm text-soft">
-            Vlož odkaz na kalendář z Airbnb nebo Bookingu. Obsazené termíny se zablokují na tvém webu a uvidíš je
-            v Kalendáři. Rezervace z Airbnb se objeví i v Rezervacích — jméno a cenu jim doplníš jedním klikem.
-          </p>
+          <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+            Kalendáře z portálů
+            <HelpTip>Vlož odkaz na kalendář z Airbnb nebo Bookingu. Obsazené termíny se zablokují na tvém webu a uvidíš je
+            v Kalendáři. Rezervace z Airbnb se objeví i v Rezervacích — jméno a cenu jim doplníš jedním klikem.</HelpTip>
+          </h2>
         </div>
 
         {feeds === null ? (

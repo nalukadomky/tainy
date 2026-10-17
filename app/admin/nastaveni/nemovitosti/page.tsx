@@ -13,6 +13,7 @@ import { useToast } from "@/components/Toast";
 import { Skeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
 import { SITES_CHANGED } from "@/components/AdminNav";
+import { HelpTip } from "@/components/HelpTip";
 
 // Nastavení → Nemovitosti: všechny nemovitosti účtu v kartách — otevřít,
 // upravit web, přejmenovat a změnit adresu, duplikovat, smazat, přidat další.
@@ -121,14 +122,12 @@ export default function PropertiesPage() {
               ← Nastavení
             </Link>
           )}
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
             {choosing ? "Kterou nemovitost chceš spravovat?" : "Nemovitosti"}
-          </h1>
-          <p className="mt-1 text-sm text-soft">
-            {choosing
+            <HelpTip>{choosing
               ? "Vyber nemovitost — mezi ostatními pak přepneš kdykoli v horní liště."
-              : "Každá nemovitost má vlastní web, rezervace a nastavení."}
-          </p>
+              : "Každá nemovitost má vlastní web, rezervace a nastavení."}</HelpTip>
+          </h1>
         </div>
         <button
           type="button"

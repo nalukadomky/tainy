@@ -25,6 +25,7 @@ import { CardsPageSkeleton, CardsSkeleton } from "@/components/Skeleton";
 import { Icon } from "@/components/Icon";
 import { SwipeToPay } from "@/components/SwipeToPay";
 import { createPortal } from "react-dom";
+import { HelpTip } from "@/components/HelpTip";
 
 // Úklidy po odjezdu hostů: přiřazení uklízečkám, úkoly, zaplacení (→ Náklady),
 // správa uklízeček a jejich odkazů a nastavení, co uklízečky uvidí.
@@ -208,10 +209,10 @@ export default function CleaningPage() {
           <Link href="/admin/kalendar" className="text-sm font-medium text-soft hover:text-ink">
             ← Kalendář
           </Link>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Úklid</h1>
-          <p className="mt-1 text-sm text-soft">
-            Úklidy po odjezdu hostů. Každý člen personálu má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.
-          </p>
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Úklid
+            <HelpTip>Úklidy po odjezdu hostů. Každý člen personálu má svůj odkaz, kde vidí jen své úklidy — nikdy ceny pobytů.</HelpTip>
+          </h1>
         </div>
       </div>
 
@@ -1165,10 +1166,10 @@ function Settings({
     <div className="space-y-5">
       <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
         <div>
-          <h2 className="font-display text-lg font-semibold">Výchozí úkoly</h2>
-          <p className="text-sm text-soft">
-            Zkopírují se do každého nového úklidu. K jednotlivému úklidu můžeš přidat úkol navíc.
-          </p>
+          <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+            Výchozí úkoly
+            <HelpTip>Zkopírují se do každého nového úklidu. K jednotlivému úklidu můžeš přidat úkol navíc.</HelpTip>
+          </h2>
         </div>
         <ul className="space-y-2">
           {tasks.map((t, i) => (
@@ -1213,8 +1214,10 @@ function Settings({
 
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
         <div>
-          <h2 className="font-display text-lg font-semibold">Co personál uvidí</h2>
-          <p className="text-sm text-soft">Termíny a časy příjezdů a odjezdů vidí vždy. O hostech jen to, co tu zaškrtneš.</p>
+          <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+            Co personál uvidí
+            <HelpTip>Termíny a časy příjezdů a odjezdů vidí vždy. O hostech jen to, co tu zaškrtneš.</HelpTip>
+          </h2>
         </div>
         {CLEANER_FIELDS.map((f) => (
           <label key={f.key} className="flex cursor-pointer items-center gap-3 text-sm">

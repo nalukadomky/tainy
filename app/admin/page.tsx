@@ -3,9 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAdminData, fmtDate, fmtStay, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
-import { AccessCode, accessCodeSavedMessage } from "@/components/AccessCode";
-import { accessCodeMail } from "@/lib/access-code";
+import { useAdminData, fmtDate, usesLockCodes, type Reservation, type Site } from "@/lib/admin";
+import { AccessCodeDialog, accessCodeSavedMessage } from "@/components/AccessCode";
+import { accessCodeMail, fmtSendAt } from "@/lib/access-code";
 import { arrivalDaysOf } from "@/lib/email-templates";
 import { useToast } from "@/components/Toast";
 import { StatusMenu } from "@/components/StatusMenu";
@@ -19,7 +19,7 @@ import { CleaningAlerts, CleaningBadge } from "@/components/CleaningAlert";
 import { UbyportAlert } from "@/components/UbyportAlert";
 import { SourceMix } from "@/components/SourceMix";
 import { Icon } from "@/components/Icon";
-import { TodoSummary } from "@/components/TodoSummary";
+import { ActionInbox } from "@/components/ActionInbox";
 import { siteUrl } from "@/lib/domains";
 
 function monthKey(d: Date) {
@@ -173,6 +173,16 @@ function Dashboard() {
       </div>
     );
 
+  const next = stats.upcoming[0];
+  const later = stats.upcoming.slice(1);
+  const inbox = (
+    <ActionInbox
+      slug={site.slug}
+      pending={{ ...stats.pending, first: reservations.find((r) => r.status === "pending")?.guestName }}
+      missing={missing}
+    />
+  );
+
   return (
     <div className="space-y-6">
       {toast.node}
@@ -193,221 +203,179 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Přehled</h1>
-          <p className="mt-1 text-sm text-soft">
-            {site.name}
-            {!site.widgetOnly && (
-              <>
-                {" "}
-                ·{" "}
-                <Link className="underline decoration-line underline-offset-4 hover:text-ink" href={siteUrl(site)} target="_blank">
-                  {site.customDomain && site.domainStatus === "active" ? site.customDomain : `/${site.slug}`} ↗
-                </Link>
-              </>
-            )}
-          </p>
+          <p className="mt-1 text-sm text-soft">{site.name}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/kalendar" className="btn-ghost !px-4 !py-2 text-sm">
+            Kalendář
+          </Link>
+          {!site.widgetOnly && (
+            <Link href={siteUrl(site)} target="_blank" className="btn-ghost !px-4 !py-2 text-sm">
+              {site.customDomain && site.domainStatus === "active" ? site.customDomain : "Můj web"} ↗
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Úklid po předchozím pobytu není hotový a dnes/zítra přijíždějí další hosté */}
+      {/* Úklid po předchozím pobytu není hotový a dnes/zítra přijíždějí další hosté — výjimečné a naléhavé, proto přes celou šířku */}
       <CleaningAlerts reservations={reservations} />
       <UbyportAlert slug={site?.slug ?? null} />
 
-      {/* Otevřené úkoly (To-Do) majitele a personálu */}
-      <TodoSummary slug={site.slug} />
+      {/* Na telefonu: co čeká na majitele jako první */}
+      <div className="lg:hidden">{inbox}</div>
 
-      {/* Chybějící údaje webu (provozovatel, podmínky, účet pro platby) */}
-      {missing.length > 0 && (
-        <Link
-          href="/admin/nastaveni?sekce=pravni"
-          className="flex items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber/10 p-4 transition hover:bg-amber/15"
-        >
-          <span>
-            <span className="block text-sm font-semibold text-ink">Doplň údaje pro rezervace</span>
-            <span className="block text-sm text-soft">
-              Chybí {missing.length > 1 ? `${missing.slice(0, -1).join(", ")} a ${missing.at(-1)}` : missing[0]}.
-            </span>
-          </span>
-          <span className="shrink-0 text-sm font-semibold text-pine">Doplnit →</span>
-        </Link>
-      )}
-
-      {/* KPI dlaždice */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Tržby tento měsíc", value: czk(stats.revenueThisMonth) },
-          { label: "Obsazenost měsíce", value: `${stats.occupancy} %` },
-          { label: "Tržby celkem", value: czk(stats.totalRevenue) },
-          {
-            label: "Bilance (tržby − náklady)",
-            value: czk(stats.totalRevenue - stats.totalCosts),
-          },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-line bg-surface p-4">
-            <p className="text-xs font-medium text-soft">{kpi.label}</p>
-            <p className="mt-1.5 font-display text-xl font-semibold sm:text-2xl">{kpi.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Nejbližší pobyt a platby, které čekají */}
-      {(stats.upcoming.length > 0 || stats.pending.count > 0) && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {stats.upcoming[0] && (
-            <div className={stats.pending.count > 0 ? "sm:col-span-2" : "sm:col-span-3"}>
-              <NextStay
-                r={stats.upcoming[0]}
-                site={site}
-                onStatus={(s) => changeStatus(stats.upcoming[0].id, s)}
-                onAccessCode={(code) => saveAccessCode(stats.upcoming[0], code)}
-              />
+      {/* Dvousloupcový pult: vlevo pobyty a tržby, vpravo co čeká a čísla měsíce */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
+          {next ? (
+            <NextStay
+              r={next}
+              site={site}
+              onStatus={(s) => changeStatus(next.id, s)}
+              onAccessCode={(code) => saveAccessCode(next, code)}
+            />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center text-sm text-soft">
+              Žádné nadcházející pobyty. Pošli hostům odkaz na svůj web!
             </div>
           )}
-          {stats.pending.count > 0 && (
-            <Link
-              href="/admin/rezervace?stav=pending"
-              className={`group flex flex-col rounded-2xl border border-line bg-surface p-5 transition hover:border-amber ${
-                stats.upcoming[0] ? "" : "sm:col-span-3"
-              }`}
-            >
-              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-soft">
-                <span className="h-2 w-2 rounded-full bg-amber" aria-hidden />
-                Čeká na platbu
-              </span>
-              {/* Stejné rozložení jako Nejbližší pobyt: počet vlevo, částka vpravo, odkaz vpravo dole */}
-              <span className="mt-2 flex items-start justify-between gap-4">
-                <span className="min-w-0">
-                  <span className="block font-display text-2xl font-semibold leading-tight">
-                    {stats.pending.count} {plural(stats.pending.count, "rezervace", "rezervace", "rezervací")}
-                  </span>
-                  {stats.pending.overdue > 0 && (
-                    <span className="mt-1 block text-sm text-coral">
-                      {stats.pending.overdue === stats.pending.count ? "všechny" : stats.pending.overdue} po lhůtě na zaplacení
+
+          {/* Nadcházející pobyty (bez nejbližšího, ten je nahoře) */}
+          {later.length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface">
+              <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                <h2 className="font-display text-lg font-semibold">Nadcházející pobyty</h2>
+                <Link href="/admin/rezervace" className="text-sm font-medium text-pine hover:underline">
+                  Všechny →
+                </Link>
+              </div>
+              <div className="divide-y divide-line">
+                {later.map((r) => {
+                  const d = new Date(r.startDate);
+                  return (
+                    <div key={r.id} className="flex items-center gap-4 px-5 py-3">
+                      <span className="w-11 shrink-0 text-center leading-tight">
+                        <span className="block text-[11px] font-semibold uppercase text-soft">{MONTHS_CS[d.getMonth()]}</span>
+                        <span className="font-display text-xl font-semibold">{d.getDate()}</span>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex flex-wrap items-center gap-2 truncate font-medium">
+                          {r.guestName} <CleaningBadge alert={r.cleaningAlert} />
+                        </p>
+                        <p className="truncate text-sm text-soft">
+                          {shortRange(r.startDate, r.endDate)} · {nightsBetween(new Date(r.startDate), new Date(r.endDate))}{" "}
+                          {plural(nightsBetween(new Date(r.startDate), new Date(r.endDate)), "noc", "noci", "nocí")} · {r.guests}{" "}
+                          {plural(r.guests, "host", "hosté", "hostů")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-4">
+                        <span className="font-semibold tabular-nums">{czk(r.totalPrice)}</span>
+                        <StatusMenu status={r.status} guestName={r.guestName} onChange={(s) => changeStatus(r.id, s)} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Graf tržeb */}
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <button type="button" onClick={toggleChart} aria-expanded={chartOpen} className="group flex items-start gap-2 text-left">
+                <span>
+                  <span className="flex items-center gap-2 font-display text-lg font-semibold">
+                    Tržby
+                    <span
+                      aria-hidden
+                      className="text-sm text-soft transition-transform group-hover:text-ink"
+                      style={{ transform: chartOpen ? "rotate(180deg)" : "none", display: "inline-block" }}
+                    >
+                      ▾
                     </span>
-                  )}
+                  </span>
+                  <span className="block text-sm text-soft">
+                    {RANGE_LABEL[range]}: <strong className="font-semibold text-ink">{czk(chart.total)}</strong>
+                  </span>
                 </span>
-                <span className="shrink-0 font-display text-xl font-semibold">{czk(stats.pending.total)}</span>
-              </span>
-              <span className="mt-auto self-end pt-4 text-sm font-medium text-pine group-hover:underline">Zobrazit →</span>
-            </Link>
-          )}
-        </div>
-      )}
-
-      {/* Graf tržeb */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <button
-            type="button"
-            onClick={toggleChart}
-            aria-expanded={chartOpen}
-            className="group flex items-start gap-2 text-left"
-          >
-            <span>
-              <span className="flex items-center gap-2 font-display text-lg font-semibold">
-                Tržby
-                <span
-                  aria-hidden
-                  className="text-sm text-soft transition-transform group-hover:text-ink"
-                  style={{ transform: chartOpen ? "rotate(180deg)" : "none", display: "inline-block" }}
-                >
-                  ▾
-                </span>
-              </span>
-              <span className="block text-sm text-soft">
-                {RANGE_LABEL[range]}: <strong className="font-semibold text-ink">{czk(chart.total)}</strong>
-              </span>
-            </span>
-          </button>
-          {chartOpen && (
-          <Dropdown
-            label="Období grafu"
-            value={range}
-            onChange={(v) => setRange(v as Range)}
-            align="right"
-            items={(Object.keys(RANGE_LABEL) as Range[]).map((r) => ({ value: r, label: RANGE_LABEL[r] }))}
-          />
-          )}
-        </div>
-        {chartOpen && (
-        <>
-        <div className={`mt-5 flex h-44 items-end border-b border-line ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
-          {chart.months.map((m) => (
-            <div
-              key={m.key}
-              className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
-              title={`${m.title}: ${czk(m.revenue)}`}
-            >
-              <span className="pointer-events-none absolute -top-1 whitespace-nowrap rounded-md bg-ink px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
-                {czk(m.revenue)}
-              </span>
-              <div
-                className={`w-full max-w-12 rounded-t-[4px] transition group-hover:bg-pine-dark ${m.current ? "bg-pine" : "bg-pine/75"}`}
-                style={{ height: `${Math.max(2, (m.revenue / chart.max) * 150)}px` }}
-              />
+              </button>
+              {chartOpen && (
+                <Dropdown
+                  label="Období grafu"
+                  value={range}
+                  onChange={(v) => setRange(v as Range)}
+                  align="right"
+                  items={(Object.keys(RANGE_LABEL) as Range[]).map((r) => ({ value: r, label: RANGE_LABEL[r] }))}
+                />
+              )}
             </div>
-          ))}
-        </div>
-        <div className={`mt-2 flex ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
-          {chart.months.map((m, i) => (
-            <span
-              key={m.key}
-              className={`min-w-0 flex-1 truncate text-center text-xs ${m.current ? "font-semibold text-ink" : "text-soft"} ${
-                // U dlouhého období popisek jen u každého druhého měsíce
-                chart.months.length > 12 && i % 2 === 1 ? "invisible" : ""
-              }`}
-            >
-              {m.label}
-            </span>
-          ))}
-        </div>
-        </>
-        )}
-      </div>
-
-      {/* Poměr rezervací z vlastního webu a z portálů */}
-      <SourceMix reservations={reservations} />
-
-      {/* Nadcházející rezervace */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Nadcházející pobyty</h2>
-          <div className="flex gap-4">
-            <Link href="/admin/kalendar" className="text-sm font-medium text-pine hover:underline">
-              Kalendář →
-            </Link>
-            <Link href="/admin/rezervace" className="text-sm font-medium text-pine hover:underline">
-              Všechny →
-            </Link>
+            {chartOpen && (
+              <>
+                <div className={`mt-5 flex h-44 items-end border-b border-line ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
+                  {chart.months.map((m) => (
+                    <div
+                      key={m.key}
+                      className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                      title={`${m.title}: ${czk(m.revenue)}`}
+                    >
+                      <span className="pointer-events-none absolute -top-1 whitespace-nowrap rounded-md bg-ink px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                        {czk(m.revenue)}
+                      </span>
+                      <div
+                        className={`w-full max-w-12 rounded-t-[4px] transition group-hover:bg-pine-dark ${m.current ? "bg-pine" : "bg-pine/75"}`}
+                        style={{ height: `${Math.max(2, (m.revenue / chart.max) * 150)}px` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className={`mt-2 flex ${chart.months.length > 12 ? "gap-1" : "gap-2 sm:gap-3"}`}>
+                  {chart.months.map((m, i) => (
+                    <span
+                      key={m.key}
+                      className={`min-w-0 flex-1 truncate text-center text-xs ${m.current ? "font-semibold text-ink" : "text-soft"} ${
+                        // U dlouhého období popisek jen u každého druhého měsíce
+                        chart.months.length > 12 && i % 2 === 1 ? "invisible" : ""
+                      }`}
+                    >
+                      {m.label}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
-        <div className="mt-3 divide-y divide-line">
-          {stats.upcoming.length === 0 && (
-            <p className="py-4 text-sm text-soft">Žádné nadcházející pobyty. Pošli hostům odkaz na svůj web!</p>
-          )}
-          {stats.upcoming.length === 1 && (
-            <p className="py-4 text-sm text-soft">Další pobyty zatím nejsou — nejbližší je nahoře.</p>
-          )}
-          {stats.upcoming.slice(1).map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-3 py-3">
-              <div>
-                <p className="flex flex-wrap items-center gap-2 font-medium">
-                  {r.guestName} <CleaningBadge alert={r.cleaningAlert} />
-                </p>
-                <p className="text-sm text-soft">
-                  {fmtStay(r, site)} · {r.guests}{" "}
-                  {r.guests === 1 ? "host" : r.guests < 5 ? "hosté" : "hostů"}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold">{czk(r.totalPrice)}</p>
-                <StatusMenu status={r.status} guestName={r.guestName} onChange={(s) => changeStatus(r.id, s)} />
-              </div>
+
+        {/* Pravý sloupec; na telefonu je „K vyřízení“ úplně nahoře (viz výše) a zbytek pod pobyty */}
+        <aside className="min-w-0 space-y-5">
+          <div className="hidden lg:block">{inbox}</div>
+
+          {/* Čísla měsíce */}
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <h2 className="px-1 text-[15px] font-semibold first-letter:uppercase">
+              {new Date().toLocaleDateString("cs-CZ", { month: "long" })}
+            </h2>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-4 px-1">
+              {[
+                { label: "Tržby", value: czk(stats.revenueThisMonth), big: true },
+                { label: "Obsazenost", value: `${stats.occupancy} %`, big: true },
+                { label: "Tržby celkem", value: czk(stats.totalRevenue) },
+                { label: "Bilance", value: czk(stats.totalRevenue - stats.totalCosts), title: "Tržby celkem − náklady" },
+              ].map((k) => (
+                <div key={k.label} title={k.title}>
+                  <p className="text-xs text-soft">{k.label}</p>
+                  <p className={`mt-0.5 font-display font-semibold ${k.big ? "text-xl" : "text-base"}`}>{k.value}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+
+          {/* Poměr rezervací z vlastního webu a z portálů */}
+          <SourceMix reservations={reservations} compact />
+        </aside>
       </div>
     </div>
   );
@@ -434,7 +402,32 @@ function shortRange(startIso: string, endIso: string): string {
   return `${sd}. ${sm}. ${sy} – ${ed}. ${em}. ${ey}`;
 }
 
-/** Karta s nejbližším (nebo právě probíhajícím) pobytem — klik otevře detail rezervace. */
+/** Jeden krok přípravy pobytu v kartě nejbližšího pobytu: hotovo ✓ / čeká ○ / problém. */
+function Step({ state, title, children }: { state: "done" | "wait" | "warn"; title: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5 px-4 py-3.5 sm:px-5">
+      {state === "done" ? (
+        <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-pine text-[10px] font-bold text-white" aria-label="Hotovo">
+          ✓
+        </span>
+      ) : (
+        <span
+          className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-2 ${state === "warn" ? "border-coral" : "border-amber"}`}
+          aria-label={state === "warn" ? "Pozor" : "Čeká"}
+        />
+      )}
+      <div className="min-w-0 text-sm">
+        <p className="font-semibold">{title}</p>
+        {children && <div className="whitespace-nowrap text-[13px] text-soft">{children}</div>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Karta s nejbližším (nebo právě probíhajícím) pobytem — nahoře host, termín a cena,
+ * dole kroky přípravy (platba, kód k zámku, check-in / úklid). Klik otevře detail rezervace.
+ */
 function NextStay({
   r,
   site,
@@ -449,6 +442,89 @@ function NextStay({
   const router = useRouter();
   const c = countdown(r);
   const times = site ? stayTimes(r, site) : r;
+  const now = new Date();
+  const overdue = r.status === "pending" && !!r.expiresAt && new Date(r.expiresAt) <= now;
+  const lock = r.status !== "cancelled" && usesLockCodes(site);
+  const mail = accessCodeMail(r, arrivalDaysOf(site));
+  const checkin = r.checkinDoneAt || r.checkinMailAt;
+  const [codeOpen, setCodeOpen] = useState(false);
+  const steps = [
+    <Step
+      key="pay"
+      state={r.status === "paid" ? "done" : overdue ? "warn" : "wait"}
+      title={r.status === "paid" ? "Zaplaceno" : overdue ? "Platba po lhůtě" : "Čeká na platbu"}
+    >
+      {r.status === "paid"
+        ? r.paidAt
+          ? `${czk(r.totalPrice)} · ${fmtDate(r.paidAt)}`
+          : czk(r.totalPrice)
+        : r.expiresAt
+          ? `splatné do ${fmtDate(r.expiresAt)}`
+          : czk(r.totalPrice)}
+    </Step>,
+    // Kód k zámku: kód + kdy hostovi odejde; klik otevře úpravu kódu
+    lock && (
+      <Step
+        key="code"
+        state={r.accessCode ? (mail?.sent ? "done" : "wait") : "warn"}
+        title={
+          <button type="button" onClick={() => setCodeOpen(true)} className="text-left hover:text-pine">
+            {r.accessCode ? (
+              <>
+                Kód <span className="font-mono tracking-wider">{r.accessCode}</span>
+              </>
+            ) : (
+              "Chybí kód k zámku"
+            )}
+          </button>
+        }
+      >
+        <button type="button" onClick={() => setCodeOpen(true)} className="text-left hover:text-ink">
+          {!r.accessCode ? (
+            <span className="font-medium text-pine">Doplnit kód →</span>
+          ) : mail ? (
+            mail.sent ? `odesláno ${fmtSendAt(mail.at)}` : `pošle se ${fmtSendAt(mail.at)}`
+          ) : (
+            "upravit"
+          )}
+        </button>
+      </Step>
+    ),
+    // Úklid před příjezdem (po předchozích hostech / ručně naplánovaný)
+    r.cleaningAlert ? (
+      <Step key="clean" state="warn" title="Úklid není hotový">
+        <CleaningBadge alert={r.cleaningAlert} withLink />
+      </Step>
+    ) : r.cleaningBefore ? (
+      <Step
+        key="clean"
+        state={r.cleaningBefore.state === "done" ? "done" : r.cleaningBefore.state === "unassigned" ? "warn" : "wait"}
+        title={r.cleaningBefore.state === "done" ? "Uklizeno" : r.cleaningBefore.state === "unassigned" ? "Úklid nikdo nemá" : "Úklid čeká"}
+      >
+        {r.cleaningBefore.state === "unassigned" ? (
+          <Link href="/admin/kalendar/uklid" className="font-medium text-pine hover:underline">
+            Přiřadit úklid →
+          </Link>
+        ) : (
+          [
+            r.cleaningBefore.cleaner,
+            fmtDate(r.cleaningBefore.date),
+            r.cleaningBefore.state === "todo" && r.cleaningBefore.total > 0 && `${r.cleaningBefore.done}/${r.cleaningBefore.total} hotovo`,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        )}
+      </Step>
+    ) : null,
+    checkin ? (
+      <Step key="checkin" state={r.checkinDoneAt ? "done" : "wait"} title={r.checkinDoneAt ? "Check-in hotový" : "Check-in čeká"}>
+        {r.checkinDoneAt
+          ? `${r.checkinCount ?? 0} ${plural(r.checkinCount ?? 0, "osoba", "osoby", "osob")} v knize`
+          : `odkaz odešel ${fmtDate(r.checkinMailAt!)}`}
+      </Step>
+    ) : null,
+  ].filter(Boolean);
+
   return (
     <div
       // Klik na kartu otevře detail rezervace v Rezervacích (kromě tlačítek a oken)
@@ -457,19 +533,14 @@ function NextStay({
         if ((e.target as HTMLElement).closest("button, a, input, [role=menu], [role=dialog]")) return;
         router.push(`/admin/rezervace?detail=${r.id}`);
       }}
-      className="group flex h-full cursor-pointer flex-col rounded-2xl border border-line bg-surface p-5 transition hover:border-pine/40"
+      className="group cursor-pointer overflow-hidden rounded-[22px] border border-line bg-surface transition hover:border-pine/40"
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-soft">
-        Nejbližší pobyt · <span className={c.now ? "text-pine" : "text-ink"}>{c.label.toLowerCase()}</span>
-      </p>
-      <div className="mt-2 flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 p-5 sm:p-6">
         <div className="min-w-0">
-          <p className="truncate font-display text-2xl font-semibold leading-tight">{r.guestName}</p>
-          {r.cleaningAlert && (
-            <p className="mt-1.5">
-              <CleaningBadge alert={r.cleaningAlert} withLink />
-            </p>
-          )}
+          <p className="text-xs font-semibold uppercase tracking-wide text-soft">
+            {c.now ? "Nejbližší pobyt" : "Nejbližší příjezd"} · <span className="text-pine">{c.label.toLowerCase()}</span>
+          </p>
+          <p className="mt-1.5 truncate font-display text-2xl font-semibold leading-tight sm:text-[28px]">{r.guestName}</p>
           <p className="mt-1 text-sm text-soft">
             {shortRange(r.startDate, r.endDate)}
             {times.checkInTime && times.checkOutTime && ` · ${times.checkInTime} → ${times.checkOutTime}`} · {r.guests}{" "}
@@ -477,24 +548,28 @@ function NextStay({
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="font-display text-xl font-semibold">{czk(r.totalPrice)}</p>
-          <StatusMenu status={r.status} guestName={r.guestName} onChange={onStatus} />
+          <p className="whitespace-nowrap font-display text-xl font-semibold sm:text-2xl">{czk(r.totalPrice)}</p>
+          <div className="mt-1">
+            <StatusMenu status={r.status} guestName={r.guestName} onChange={onStatus} />
+          </div>
         </div>
       </div>
-      <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-        {r.status !== "cancelled" && usesLockCodes(site) ? (
-          <AccessCode
-            compact
-            key={r.accessCode}
-            code={r.accessCode}
-            mail={accessCodeMail(r, arrivalDaysOf(site))}
-            context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
-            onSave={onAccessCode}
-          />
-        ) : (
-          <span />
-        )}
-        <span className="shrink-0 text-sm font-medium text-pine group-hover:underline">Detail →</span>
+      {codeOpen && (
+        <AccessCodeDialog
+          code={r.accessCode}
+          context={`${r.guestName} · ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}
+          onClose={() => setCodeOpen(false)}
+          onSave={(next) => {
+            setCodeOpen(false);
+            if (next !== r.accessCode) onAccessCode(next);
+          }}
+        />
+      )}
+      {/* Kroky přípravy pobytu */}
+      <div className={`grid divide-line border-t border-line bg-cream max-sm:divide-y sm:divide-x ${
+          steps.length === 4 ? "sm:grid-cols-2 xl:grid-cols-4" : steps.length === 3 ? "sm:grid-cols-3" : steps.length === 2 ? "sm:grid-cols-2" : ""
+        }`}>
+        {steps}
       </div>
     </div>
   );

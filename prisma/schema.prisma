@@ -537,6 +537,11 @@ model GiftOrder {
   price       Int
   buyerName   String
   buyerEmail  String
+  /// Fakturační údaje kupujícího
+  buyerPhone  String    @default("")
+  buyerStreet String    @default("")
+  buyerCity   String    @default("")
+  buyerZip    String    @default("")
   recipient   String    @default("")
   dedication  String    @default("")
   status      String    @default("pending") // pending | paid | cancelled

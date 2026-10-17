@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DNS_RECORDS } from "@/lib/domains";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
+import { HelpTip } from "@/components/HelpTip";
 
 // Vlastní doména webu: průvodce na tři kroky — zadat doménu, nastavit DNS
 // u registrátora, počkat na ověření a certifikát (kontroluje se samo).
@@ -117,11 +118,11 @@ export function DomainSettings({
       {confirmDlg.node}
       <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
         <div>
-          <h2 className="font-display text-lg font-semibold">Vlastní doména</h2>
-          <p className="text-sm text-soft">
-            Web může běžet na tvé doméně, např. <strong className="font-medium text-ink">chata-olinka.cz</strong>, místo tainy.cz/{slug}.
-            Doménu si koupíš u libovolného registrátora a tady ji připojíš.
-          </p>
+          <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+            Vlastní doména
+            <HelpTip>Web může běžet na tvé doméně, např. <strong className="font-medium text-ink">chata-olinka.cz</strong>, místo tainy.cz/{slug}.
+            Doménu si koupíš u libovolného registrátora a tady ji připojíš.</HelpTip>
+          </h2>
         </div>
 
         {state && !state.enabled && (

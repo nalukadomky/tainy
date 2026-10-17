@@ -88,9 +88,10 @@ export function GiftVoucherCard({
 
           <div className="max-w-[78%]">
             <p className="font-display text-[9cqw] font-semibold leading-[0.95] tracking-tight">{head}</p>
-            {d.recipient && <p className="mt-[2.4cqw] text-[3.1cqw] font-semibold leading-snug">{d.recipient}</p>}
+            {/* Věnování max. 4 řádky do zhruba půlky karty, dlouhá slova se zalomí */}
+            {d.recipient && <p className="mt-[2.4cqw] max-w-[62cqw] truncate text-[3.1cqw] font-semibold leading-snug">{d.recipient}</p>}
             {d.message && (
-              <p className={`${d.recipient ? "mt-[0.8cqw]" : "mt-[2cqw]"} whitespace-pre-line text-[2.5cqw] leading-snug`} style={{ color: soft }}>
+              <p className={`${d.recipient ? "mt-[0.8cqw]" : "mt-[2cqw]"} line-clamp-4 max-w-[58cqw] whitespace-pre-line text-[2.5cqw] leading-snug [overflow-wrap:anywhere]`} style={{ color: soft }}>
                 {d.message}
               </p>
             )}

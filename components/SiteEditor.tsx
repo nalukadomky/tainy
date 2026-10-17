@@ -32,6 +32,7 @@ import { Icon } from "@/components/Icon";
 import { DomainSettings } from "@/components/DomainSettings";
 import { WidgetSettings } from "@/components/WidgetSettings";
 import { BookingMode } from "@/components/BookingMode";
+import { HelpTip } from "@/components/HelpTip";
 
 type Tab = "zakladni" | "cenik" | "pravni" | "domena" | "portaly" | "automatizace" | "widget";
 const TABS: Record<Tab, { label: string; short: string; hint: string }> = {
@@ -310,17 +311,19 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
       {!widgetPage && !widgetOnly && <LivePreview site={form} dirty={dirty} focus={focus} />}
       {widgetPage ? (
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Widget na web</h1>
-          <p className="mt-1 text-sm text-soft">Rezervace na tvém vlastním webu — plovoucí tlačítko, nebo sekce přímo ve stránce.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Widget na web
+            <HelpTip>Rezervace na tvém vlastním webu — plovoucí tlačítko, nebo sekce přímo ve stránce.</HelpTip>
+          </h1>
         </div>
       ) : (
       <>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Nastavení</h1>
-          <p className="mt-1 text-sm text-soft">
-            Ceny a pravidla pobytu, údaje o firmě, platby, dokumenty a e-maily hostům.
-          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Nastavení
+            <HelpTip>Ceny a pravidla pobytu, údaje o firmě, platby, dokumenty a e-maily hostům.</HelpTip>
+          </h1>
         </div>
         <Link href="/admin/nastaveni/nemovitosti" className="btn-ghost !px-4 !py-2 text-sm">
           Spravovat nemovitosti →
@@ -363,10 +366,10 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
       {tab === "zakladni" ? (
         <div id="pole-kontakt" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
           <div>
-            <h2 className="font-display text-lg font-semibold">Název a kontakt</h2>
-            <p className="text-sm text-soft">
-              Jak se ubytování jmenuje a jak se ti hosté ozvou — ukáže se na webu, v rezervacích i e-mailech.
-            </p>
+            <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+              Název a kontakt
+              <HelpTip>Jak se ubytování jmenuje a jak se ti hosté ozvou — ukáže se na webu, v rezervacích i e-mailech.</HelpTip>
+            </h2>
           </div>
           <label className="block" {...watch("uvod")}>
             <span className="mb-1.5 block text-sm font-medium">Název</span>
@@ -434,8 +437,10 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           {/* Ceník */}
           <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
             <div>
-              <h2 className="font-display text-lg font-semibold">Ceník</h2>
-              <p className="text-sm text-soft">Cena se počítá noc po noci — procenta víkendu a sezón se sčítají.</p>
+              <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+                Ceník
+                <HelpTip>Cena se počítá noc po noci — procenta víkendu a sezón se sčítají.</HelpTip>
+              </h2>
             </div>
 
             <div>
@@ -586,11 +591,11 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           {/* Skladba hostů */}
           <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
             <div>
-              <h2 className="font-display text-lg font-semibold">Skladba hostů</h2>
-              <p className="text-sm text-soft">
-                Buď se hosté nedělí a host zadá jen počet osob, nebo si vybere po kategoriích a každá může mít vlastní
-                cenu.
-              </p>
+              <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+                Skladba hostů
+                <HelpTip>Buď se hosté nedělí a host zadá jen počet osob, nebo si vybere po kategoriích a každá může mít vlastní
+                cenu.</HelpTip>
+              </h2>
             </div>
 
             <div id="pole-luzka" className="scroll-mt-24 rounded-xl">
@@ -705,10 +710,10 @@ export function SiteEditor({ area = "settings" }: { area?: EditorArea }) {
           {/* Pravidla pobytu a poplatky */}
           <div id="pole-pravidla" className="scroll-mt-24 space-y-4 rounded-2xl border border-line bg-surface p-5">
             <div>
-              <h2 className="font-display text-lg font-semibold">Pravidla pobytu a poplatky</h2>
-              <p className="text-sm text-soft">
-                Podle tohohle nastavení hosté vidí konečnou cenu a nemůžou rezervovat termín, který ti nevyhovuje.
-              </p>
+              <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+                Pravidla pobytu a poplatky
+                <HelpTip>Podle tohohle nastavení hosté vidí konečnou cenu a nemůžou rezervovat termín, který ti nevyhovuje.</HelpTip>
+              </h2>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

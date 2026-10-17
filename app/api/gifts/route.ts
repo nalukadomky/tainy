@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
         price: o.price,
         buyerName: o.buyerName,
         buyerEmail: o.buyerEmail,
+        buyerPhone: o.buyerPhone,
+        buyerAddress: [o.buyerStreet, [o.buyerZip, o.buyerCity].filter(Boolean).join(" ")].filter(Boolean).join(", "),
         recipient: o.recipient,
         status: stay ? "used" : o.status,
         code: o.code,

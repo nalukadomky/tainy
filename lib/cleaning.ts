@@ -264,3 +264,58 @@ export function cleaningAlerts(stays: AlertStay[], manual: AlertManual[], today:
   }
   return out;
 }
+
+/**
+ * Úklid před příjezdem u nadcházejících pobytů (karta nejbližšího pobytu na Přehledu):
+ * hotový, rozpracovaný / nepřiřazený, nebo bez úklidu (žádný předchozí pobyt v posledních 14 dnech).
+ * Stejná pravidla jako `cleaningAlerts`, jen bez omezení na dnešní a zítřejší příjezdy.
+ */
+export type CleaningBefore = {
+  state: "done" | "todo" | "unassigned";
+  cleaner: string;
+  done: number;
+  total: number;
+  /** Den úklidu (odjezd předchozích hostů, nebo naplánovaný ruční úklid). */
+  date: string;
+};
+
+export function cleaningBefore(stays: AlertStay[], manual: AlertManual[], today: string): Record<string, CleaningBefore> {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  const holds = stays.filter((r) => r.status === "paid" || (r.status !== "cancelled" && (!r.expiresAt || r.expiresAt > now)));
+  const manuals = manual.filter((c) => c.date).map((c) => ({ ...c, day: iso(c.date!) }));
+  const progress = (c: AlertCleaning) => {
+    const list = parseChecklist(c.checklist);
+    return { cleaner: c.cleaner?.name ?? "", done: list.filter((i) => i.done).length, total: list.length };
+  };
+  const out: Record<string, CleaningBefore> = {};
+  for (const a of holds) {
+    const start = iso(a.startDate);
+    if (start < today) continue;
+    const [y, m, d] = start.split("-").map(Number);
+    const recent = new Date(Date.UTC(y, m - 1, d - 14)).toISOString().slice(0, 10);
+    const prev = holds
+      .filter((r) => r.id !== a.id && iso(r.endDate) <= start)
+      .sort((p, q) => iso(q.endDate).localeCompare(iso(p.endDate)))[0];
+    const since = prev && iso(prev.endDate) > recent ? iso(prev.endDate) : recent;
+    const between = manuals.filter((c) => c.day >= since && c.day <= start);
+    const pending = between.filter((c) => c.status !== "done").sort((p, q) => q.day.localeCompare(p.day))[0];
+    if (pending) {
+      out[a.id] = { state: pending.cleaner ? "todo" : "unassigned", date: pending.day, ...progress(pending) };
+      continue;
+    }
+    const doneManual = between.find((c) => c.status === "done");
+    if (doneManual) {
+      out[a.id] = { state: "done", date: doneManual.day, ...progress(doneManual) };
+      continue;
+    }
+    if (!prev || iso(prev.endDate) < recent) continue;
+    const c = prev.cleaning;
+    out[a.id] = {
+      state: c?.status === "done" ? "done" : c ? "todo" : "unassigned",
+      date: iso(prev.endDate),
+      ...(c ? progress(c) : { cleaner: "", done: 0, total: 0 }),
+    };
+  }
+  return out;
+}

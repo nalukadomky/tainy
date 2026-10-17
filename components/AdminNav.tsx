@@ -39,7 +39,7 @@ const MORE: Item[] = [
 export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [sites, setSites] = useState<{ slug: string; name: string; widgetOnly?: boolean }[]>([]);
+  const [sites, setSites] = useState<{ slug: string; name: string; widgetOnly?: boolean; alerts?: number }[]>([]);
   const [current, setCurrent] = useState<string>("");
   const [menu, setMenu] = useState<"more" | "burger" | "mobile" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -199,7 +199,10 @@ export function AdminNav() {
                 // Uložená nemovitost už nemusí existovat (změna adresy, smazání) — pak první
                 value={sites.some((s) => s.slug === current) ? current : sites[0]?.slug}
                 onChange={switchSite}
-                items={sites.map((s) => ({ value: s.slug, label: s.name }))}
+                items={sites.map((s) => ({ value: s.slug, label: s.name, badge: s.alerts }))}
+                // Na poli: co čeká u ostatních nemovitostí (u aktuální to ukazuje Přehled)
+                badge={sites.filter((s) => s.slug !== current).reduce((n, s) => n + (s.alerts ?? 0), 0)}
+                badgeTitle="Nezaplacené rezervace a poukazy u ostatních nemovitostí"
                 actions={[
                   { label: "+ Přidat nemovitost", onClick: () => router.push("/onboarding?nova=1") },
                   { label: "Spravovat nemovitosti", onClick: () => router.push("/admin/nastaveni/nemovitosti") },

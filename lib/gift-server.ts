@@ -99,13 +99,21 @@ export async function sendGiftOrderMail(order: GiftOrder, site: Site, d: GiftDes
   return send({ to: order.buyerEmail, subject: `Dárkový poukaz ${site.name} — ${orderLabel(order.publicId)}`, html, replyTo: site.contactEmail });
 }
 
+/** Fakturační údaje kupujícího (telefon, adresa) — starší objednávky je nemají. */
+function buyerDetails(order: GiftOrder) {
+  const address = [order.buyerStreet, [order.buyerZip, order.buyerCity].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  if (!order.buyerPhone && !address) return "";
+  return `<p style="${P}">${[order.buyerPhone && `Telefon: ${esc(order.buyerPhone)}`, address && `Adresa: ${esc(address)}`].filter(Boolean).join("<br>")}</p>`;
+}
+
 /** Majiteli: nová objednávka poukazu (označí zaplaceno v administraci). */
 export async function sendGiftOwnerMail(order: GiftOrder, site: Site, d: GiftDesign) {
   if (!site.contactEmail) return false;
   const html = layout(
     `<p style="${P}"><strong>${esc(order.buyerName)}</strong> (${esc(order.buyerEmail)}) objednal(a) poukaz <strong>${esc(giftHeadline(d))}</strong> za ${czk(order.price)}.</p>
+     ${buyerDetails(order)}
      <p style="${P}">Až platba dorazí, označ ji v administraci jako zaplacenou — kupujícímu se poukaz pošle sám.</p>
-     ${button(`${appUrl()}/admin/vouchery/poukazy`, "Otevřít dárkové poukazy")}`,
+     ${button(`${appUrl()}/admin/vouchery/poukazy`, "Otevřít prodané poukazy")}`,
     "Nová objednávka poukazu",
   );
   return send({ to: site.contactEmail, subject: `Objednávka poukazu ${orderLabel(order.publicId)} — ${czk(order.price)}`, html, replyTo: order.buyerEmail });

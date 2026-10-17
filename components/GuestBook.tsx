@@ -10,6 +10,7 @@ import { countryName, docTypeShort, periodLabel, periodRange } from "@/lib/guest
 import type { BookRow, BookStay, PendingForeigner } from "@/lib/guestbook-server";
 import { addDays, todayISO } from "@/lib/stay";
 import type { TaxSource } from "@/lib/tourist-tax";
+import { HelpTip } from "@/components/HelpTip";
 
 // Kniha ubytovaných: poplatek z pobytu za období (vybráno / k odvodu /
 // odvedeno), stav check-inů a osoby v knize, cizinci k nahlášení a exporty.
@@ -91,8 +92,10 @@ export function GuestBook({ slug }: { slug: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Kniha ubytovaných</h1>
-          <p className="mt-1 text-sm text-soft">Údaje hostů z check-inu (šifrované) a poplatek z pobytu pro obec.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex flex-wrap items-center">
+            Kniha ubytovaných
+            <HelpTip>Údaje hostů z check-inu (šifrované) a poplatek z pobytu pro obec.</HelpTip>
+          </h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <select className="control !py-2 text-sm font-semibold" value={current} onChange={(e) => setPeriod(e.target.value)} aria-label="Období">

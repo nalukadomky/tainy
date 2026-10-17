@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { GiftVoucherCard } from "@/components/GiftVoucherCard";
 import { czk } from "@/lib/pricing";
-import { giftHeadline, type GiftDesign } from "@/lib/gift";
+import { giftHeadline, isFullName, isLikelyEmail, type GiftDesign } from "@/lib/gift";
 import type { LegalKind } from "@/lib/legal";
 import { LegalModal, type LegalDocData } from "@/components/LegalModal";
+import { PhoneInput, isPhoneComplete } from "@/components/PhoneInput";
+
+/** Věnování se na poukaz vejde na max. 4 řádky (zhruba do půlky karty). */
+const DEDICATION_MAX = 140;
+const EMAIL_BAD = "E-mail není správně vyplněný — zkontroluj ho, ať ti poukaz dorazí.";
 
 // Dárkové poukazy na webu ubytování: nabídka a objednávka. Kupující vyplní,
 // pro koho je poukaz a věnování (hned je vidí na poukazu), a kam ho poslat.
@@ -103,7 +108,15 @@ function Order({
   const who = noRecipient ? "" : recipient.trim();
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  // E-mail se kontroluje po opuštění pole; při opravě chyba hned zmizí
+  const [emailBad, setEmailBad] = useState(false);
+  const [buyerStreet, setBuyerStreet] = useState("");
+  const [buyerCity, setBuyerCity] = useState("");
+  const [buyerZip, setBuyerZip] = useState("");
   const [terms, setTerms] = useState(false);
+  // Krok 1: co bude na poukazu, krok 2: údaje kupujícího a objednání (formulář se tak neroztáhne)
+  const [step, setStep] = useState<1 | 2>(1);
   const [company, setCompany] = useState(""); // past na roboty
   const [error, setError] = useState<{ text: string; field?: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -117,15 +130,27 @@ function Order({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (buyerName.trim().length < 2) return setError({ text: "Doplň své jméno.", field: "buyerName" });
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(buyerEmail.trim())) return setError({ text: "Zkontroluj e-mail.", field: "buyerEmail" });
+    if (step === 1) {
+      setError(null);
+      setStep(2);
+      return;
+    }
+    if (!isFullName(buyerName)) return setError({ text: "Doplň jméno i příjmení.", field: "buyerName" });
+    if (!isLikelyEmail(buyerEmail)) {
+      setEmailBad(true);
+      return setError({ text: EMAIL_BAD, field: "buyerEmail" });
+    }
+    if (!isPhoneComplete(buyerPhone)) return setError({ text: "Zkontroluj telefon.", field: "buyerPhone" });
+    if (buyerStreet.trim().length < 3) return setError({ text: "Doplň ulici a číslo domu.", field: "buyerStreet" });
+    if (buyerCity.trim().length < 2) return setError({ text: "Doplň město.", field: "buyerCity" });
+    if (!/\d/.test(buyerZip) || buyerZip.trim().length < 3) return setError({ text: "Zkontroluj PSČ.", field: "buyerZip" });
     if (!terms) return setError({ text: "Potvrď prosím souhlas s podmínkami.", field: "terms" });
     setError(null);
     setSending(true);
     const res = await fetch("/api/gift-orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ offerId: offer.id, recipient: who, dedication: noMessage ? "" : dedication, noMessage, buyerName, buyerEmail, terms, company }),
+      body: JSON.stringify({ offerId: offer.id, recipient: who, dedication: noMessage ? "" : dedication, noMessage, buyerName, buyerEmail, buyerPhone, buyerStreet, buyerCity, buyerZip, terms, company }),
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
     if (!res?.ok || !data?.token) {
@@ -187,7 +212,13 @@ function Order({
         )}
 
         <div className="mt-6 space-y-4">
-          <p className="text-sm font-semibold">Na poukaz napíšeme</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold">{step === 1 ? "Na poukaz napíšeme" : "Tvoje údaje"}</p>
+            <span className="text-xs font-medium tabular-nums text-soft">Krok {step} ze 2</span>
+          </div>
+          <input type="text" tabIndex={-1} autoComplete="off" aria-hidden value={company} onChange={(e) => setCompany(e.target.value)} className="absolute -left-[9999px] h-0 w-0 opacity-0" name="company" />
+          {step === 1 && (
+            <>
           <div>
             <div className="mb-1 flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-soft">Komu</span>
@@ -221,25 +252,76 @@ function Order({
               <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-sm text-soft">Na poukazu nebude žádný text, jen {who ? "komu je určený" : "částka a kód"}.</p>
             ) : (
               <>
-                <textarea className="field min-h-20" maxLength={240} placeholder={offer.message} value={dedication} onChange={(e) => setDedication(e.target.value)} />
-                {offer.message && !dedication.trim() && (
-                  <p className="mt-1 text-xs text-soft">Když nic nenapíšeš, na poukazu bude text výše.</p>
-                )}
+                <textarea
+                  className="field min-h-20"
+                  maxLength={DEDICATION_MAX}
+                  placeholder={offer.message}
+                  value={dedication}
+                  onChange={(e) => setDedication(e.target.value.split("\n").slice(0, 4).join("\n"))}
+                />
+                <div className="mt-1 flex justify-between gap-3 text-xs text-soft">
+                  <span>{offer.message && !dedication.trim() ? "Když nic nenapíšeš, na poukazu bude text výše." : ""}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {dedication.length}/{DEDICATION_MAX}
+                  </span>
+                </div>
               </>
             )}
           </div>
-          <p className="pt-2 text-sm font-semibold">Kam poslat poukaz</p>
+            </>
+          )}
+          {step === 2 && (
+            <>
+          <p className="-mt-2 text-xs text-soft">Poukaz pošleme na e-mail, adresa a telefon jsou pro doklad o platbě.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-soft">Tvoje jméno</span>
+              <span className="mb-1 block text-xs font-medium text-soft">Jméno a příjmení</span>
               <input className={`field ${bad("buyerName")}`} autoComplete="name" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-soft">E-mail</span>
-              <input type="email" inputMode="email" autoComplete="email" className={`field ${bad("buyerEmail")}`} value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                aria-invalid={emailBad}
+                className={`field ${emailBad ? "!border-coral ring-2 ring-coral/15" : bad("buyerEmail")}`}
+                value={buyerEmail}
+                onChange={(e) => {
+                  setBuyerEmail(e.target.value);
+                  if (emailBad && isLikelyEmail(e.target.value)) {
+                    setEmailBad(false);
+                    if (error?.field === "buyerEmail") setError(null);
+                  }
+                }}
+                onBlur={() => setEmailBad(buyerEmail.trim() !== "" && !isLikelyEmail(buyerEmail))}
+              />
+              {emailBad && (
+                <span className="mt-1 flex items-start gap-1 text-xs text-coral" role="alert">
+                  <Icon name="alert" size={13} className="mt-px shrink-0" />
+                  E-mail není správně vyplněný.
+                </span>
+              )}
             </label>
           </div>
-          <input type="text" tabIndex={-1} autoComplete="off" aria-hidden value={company} onChange={(e) => setCompany(e.target.value)} className="absolute -left-[9999px] h-0 w-0 opacity-0" name="company" />
+          <div className={error?.field === "buyerPhone" ? "[&_.field]:!border-coral" : ""}>
+            <span className="mb-1 block text-xs font-medium text-soft">Telefon</span>
+            <PhoneInput value={buyerPhone} onChange={setBuyerPhone} />
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-soft">Ulice a číslo domu</span>
+            <input className={`field ${bad("buyerStreet")}`} autoComplete="street-address" value={buyerStreet} onChange={(e) => setBuyerStreet(e.target.value)} />
+          </label>
+          <div className="grid grid-cols-[1fr_8rem] gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-soft">Město</span>
+              <input className={`field ${bad("buyerCity")}`} autoComplete="address-level2" value={buyerCity} onChange={(e) => setBuyerCity(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-soft">PSČ</span>
+              <input className={`field ${bad("buyerZip")}`} autoComplete="postal-code" inputMode="numeric" value={buyerZip} onChange={(e) => setBuyerZip(e.target.value)} />
+            </label>
+          </div>
           <label className={`flex cursor-pointer items-start gap-2.5 text-sm text-soft ${error?.field === "terms" ? "text-coral" : ""}`}>
             <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--pine)]" />
             <span>
@@ -247,6 +329,8 @@ function Order({
               {hasPrivacy && <> a beru na vědomí {doc("ochrana-udaju", "zásady ochrany osobních údajů")}</>}.
             </span>
           </label>
+            </>
+          )}
         </div>
         {error && (
           <p className="mt-4 text-sm text-coral" role="alert">
@@ -254,8 +338,13 @@ function Order({
           </p>
         )}
         <button type="submit" disabled={sending} className="btn-primary mt-6 w-full">
-          {sending ? "Odesílám…" : `Objednat za ${czk(offer.price)}`}
+          {step === 1 ? "Pokračovat" : sending ? "Odesílám…" : `Objednat za ${czk(offer.price)}`}
         </button>
+        {step === 2 && (
+          <button type="button" onClick={() => (setStep(1), setError(null))} className="mt-3 block w-full text-center text-sm font-medium text-soft hover:text-ink">
+            ← Zpět na text poukazu
+          </button>
+        )}
         <p className="mt-3 text-center text-xs text-soft">Platba převodem přes QR kód, bez poplatků.</p>
       </form>
     </div>

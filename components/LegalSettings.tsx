@@ -21,6 +21,7 @@ import {
   type LegalKind,
 } from "@/lib/legal";
 import { Icon } from "@/components/Icon";
+import { HelpTip } from "@/components/HelpTip";
 
 // Záložka „Provozovatel a podmínky" v editoru webu: identifikace podnikatele
 // (s doplněním z ARES) a obchodní podmínky + zásady ochrany osobních údajů.
@@ -141,10 +142,10 @@ function ProviderCard({
   return (
     <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       <div>
-        <h2 className="font-display text-lg font-semibold">Provozovatel</h2>
-        <p className="text-sm text-soft">
-          Kdo ubytování pronajímá. Zákon vyžaduje, aby to hosté na webu viděli — ukáže se v patičce a v podmínkách.
-        </p>
+        <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+          Provozovatel
+          <HelpTip>Kdo ubytování pronajímá. Zákon vyžaduje, aby to hosté na webu viděli — ukáže se v patičce a v podmínkách.</HelpTip>
+        </h2>
       </div>
 
       <div>
@@ -258,8 +259,10 @@ function PaymentCard({ form, set }: { form: Site; set: <K extends keyof Site>(ke
     <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
       {lawOpen && <VatLawDialog onClose={() => setLawOpen(false)} />}
       <div>
-        <h2 className="font-display text-lg font-semibold">Platby a DPH</h2>
-        <p className="text-sm text-soft">Kam ti hosté pošlou peníze a jak se u ceny uvádí DPH.</p>
+        <h2 className="font-display text-lg font-semibold flex flex-wrap items-center">
+          Platby a DPH
+          <HelpTip>Kam ti hosté pošlou peníze a jak se u ceny uvádí DPH.</HelpTip>
+        </h2>
       </div>
 
       <label className="block">

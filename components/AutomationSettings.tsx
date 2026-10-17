@@ -30,6 +30,7 @@ import { EmailCanvas, EmailTextEditor, SubjectField } from "@/components/EmailEd
 import { AddressInput } from "@/components/AddressInput";
 import { Icon } from "@/components/Icon";
 import { KeyIcon } from "@/components/AccessCode";
+import { HelpTip } from "@/components/HelpTip";
 
 // Nastavení → Automatizace: e-maily hostům (informativní / komerční / pro tebe),
 // kódy k zámkům a informace k příjezdu. Ukládá se společným tlačítkem editoru.
@@ -220,8 +221,10 @@ function Section({ title, hint, children }: { title: string; hint: string; child
   return (
     <section className="space-y-3">
       <div className="px-1">
-        <h2 className="font-display text-xl font-semibold">{title}</h2>
-        <p className="text-sm text-soft">{hint}</p>
+        <h2 className="font-display text-xl font-semibold flex flex-wrap items-center">
+          {title}
+          <HelpTip>{hint}</HelpTip>
+        </h2>
       </div>
       {children}
     </section>
