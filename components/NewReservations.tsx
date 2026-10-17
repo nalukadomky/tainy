@@ -84,29 +84,47 @@ export function NewReservations({
   const n = fresh.length;
   const title = `Od minula ${plural(n, "přišla", "přišly", "přišlo")} ${n} ${plural(n, "nová rezervace", "nové rezervace", "nových rezervací")}`;
 
+  const avatars = (
+    <div className="flex shrink-0 pl-2" aria-hidden>
+      {fresh.slice(0, 3).map((r) => (
+        <span
+          key={r.id}
+          className="-ml-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-pine text-xs font-bold text-pine"
+          style={{ background: "#e9f0ea" }}
+        >
+          {initials(r.guestName)}
+        </span>
+      ))}
+    </div>
+  );
+  const summary = (
+    <>
+      <span className="block font-semibold">{title}</span>
+      <span className="block text-[13px] text-white/75">
+        {nameList}
+        {total > 0 && ` · ${czk(total)}`}
+        {pending > 0 && ` · ${pending} ${plural(pending, "čeká", "čekají", "čeká")} na platbu`} · naposledy jsi tu byl {whenLabel(seenAt)}
+      </span>
+    </>
+  );
+  const close = (
+    <button
+      type="button"
+      onClick={markSeen}
+      aria-label="Skrýt — rezervace jsem viděl"
+      className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-white/70 transition hover:bg-white/10 hover:text-white"
+    >
+      ×
+    </button>
+  );
+
   return (
     <>
-      {/* Počítač: kolečka · text · Zobrazit · ×. Telefon: text nahoře (× v pravém horním rohu),
-          dole kolečka vlevo a Zobrazit vpravo. */}
-      <div className="relative grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 rounded-2xl bg-pine px-5 py-4 text-white [grid-template-areas:'text_text'_'avatars_show'] sm:grid-cols-[auto_1fr_auto_auto] sm:[grid-template-areas:'avatars_text_show_close']">
-        <div className="flex pl-2 [grid-area:avatars]" aria-hidden>
-          {fresh.slice(0, 3).map((r) => (
-            <span
-              key={r.id}
-              className="-ml-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-pine text-xs font-bold text-pine"
-              style={{ background: "#e9f0ea" }}
-            >
-              {initials(r.guestName)}
-            </span>
-          ))}
-        </div>
-        <button type="button" onClick={() => setOpen(true)} className="min-w-0 pr-8 text-left [grid-area:text] sm:pr-0">
-          <span className="block font-semibold">{title}</span>
-          <span className="block text-[13px] text-white/75">
-            {nameList}
-            {total > 0 && ` · ${czk(total)}`}
-            {pending > 0 && ` · ${pending} ${plural(pending, "čeká", "čekají", "čeká")} na platbu`} · naposledy jsi tu byl {whenLabel(seenAt)}
-          </span>
+      {/* Telefon: text nahoře (× v pravém horním rohu), dole kolečka vlevo a Zobrazit vpravo */}
+      <div className="relative grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 rounded-2xl bg-pine px-5 py-4 text-white [grid-template-areas:'text_text'_'avatars_show'] sm:hidden">
+        <div className="[grid-area:avatars]">{avatars}</div>
+        <button type="button" onClick={() => setOpen(true)} className="min-w-0 pr-8 text-left [grid-area:text]">
+          {summary}
         </button>
         <button
           type="button"
@@ -115,14 +133,21 @@ export function NewReservations({
         >
           Zobrazit
         </button>
-        <button
-          type="button"
-          onClick={markSeen}
-          aria-label="Skrýt — rezervace jsem viděl"
-          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-xl text-white/70 transition hover:bg-white/10 hover:text-white sm:static sm:[grid-area:close]"
-        >
-          ×
+        <span className="absolute right-2 top-2">{close}</span>
+      </div>
+
+      {/* Počítač: kolečka · text · Zobrazit · × */}
+      <div className="hidden flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-pine px-5 py-4 text-white sm:flex">
+        {avatars}
+        <button type="button" onClick={() => setOpen(true)} className="min-w-0 flex-1 basis-40 text-left">
+          {summary}
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={() => setOpen(true)} className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-cream">
+            Zobrazit
+          </button>
+          {close}
+        </div>
       </div>
 
       {open && (
